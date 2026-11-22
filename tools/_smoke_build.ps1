@@ -3,6 +3,9 @@ $html = [IO.File]::ReadAllText((Join-Path $PWD 'index.html'), [Text.Encoding]::U
 $pre = @'
 <script>
 window.__smokeErrors = [];
+// Чистое хранилище: выдвижные панели помнят выбор игрока, а проверки должны
+// стартовать с состоянием по умолчанию (обе панели открыты).
+try { localStorage.removeItem('harmonia.drawers.v1'); } catch (e) {}
 window.addEventListener('error', function (e) {
   window.__smokeErrors.push('error: ' + (e.message || e.type) + (e.filename ? ' @ ' + e.filename + ':' + e.lineno : ''));
 });
@@ -109,6 +112,52 @@ $post = @'
     }
   });
 
+  step('drawers-intro', function () {
+    // Проба пальцев: меню не нужно, сцена занимает экран. Табы панелей тоже
+    // спрятаны — во время знакомства с клавишами открывать нечего.
+    if (!document.body.classList.contains('intro')) throw new Error('body.intro is missing before the drill');
+    if (!HARMONIA.drawerIntro()) throw new Error('drawer intro mode is off before the drill');
+    if (window.getComputedStyle($('topbar')).display !== 'none') throw new Error('topbar is visible on the intro screen');
+    if (window.getComputedStyle($('panel')).display !== 'none') throw new Error('panel is visible on the intro screen');
+    if (window.getComputedStyle($('status-row')).display !== 'none') {
+      throw new Error('status row is visible on the intro screen');
+    }
+    if ($('topbarTab').classList.contains('show')) throw new Error('topbar tab must stay hidden during the drill');
+    if ($('panelTab').classList.contains('show')) throw new Error('panel tab must stay hidden during the drill');
+  });
+
+  step('intro-drill', function () {
+    var overlay = $('startOverlay');
+    if (!overlay || overlay.style.display === 'none') throw new Error('start overlay must be visible before start');
+    if (HARMONIA.state.started) throw new Error('session must not start before the finger drill');
+    if (HARMONIA.INTRO_KEYS.length !== 10) throw new Error('intro drill must ask for ten keys');
+    if (document.querySelectorAll('#startOverlay .kb-key[data-key]').length !== 10) {
+      throw new Error('intro keyboard does not mark ten playable keys');
+    }
+    if (document.querySelectorAll('#introDots .ip-dot').length !== 10) {
+      throw new Error('intro progress track must show ten keys');
+    }
+    if (!$('startBtn').disabled) throw new Error('start button must stay disabled before the drill');
+    HARMONIA.INTRO_KEYS.slice(0, 9).forEach(function (code) { HARMONIA.introPress(code); });
+    var st = HARMONIA.introState();
+    if (st.done || st.count !== 9) throw new Error('drill counted ' + st.count + ' instead of 9 keys');
+    if (!$('startBtn').disabled) throw new Error('start button unlocked before the last key');
+    HARMONIA.introPress(HARMONIA.INTRO_KEYS[0]);
+    if (HARMONIA.introState().count !== 9) throw new Error('a repeated key must not count twice');
+    HARMONIA.introPress(HARMONIA.INTRO_KEYS[9]);
+    st = HARMONIA.introState();
+    if (!st.done || st.count !== 10) throw new Error('drill did not finish after ten keys');
+    if ($('startBtn').disabled) throw new Error('start button must unlock after the drill');
+    if (!overlay.classList.contains('fade')) throw new Error('start overlay must fade after the drill');
+    if (document.querySelectorAll('#startOverlay .kb-key.hit').length !== 10) {
+      throw new Error('pressed keys are not marked on the keyboard');
+    }
+    if (document.querySelectorAll('#introDots .ip-dot.done').length !== 10) {
+      throw new Error('progress track did not fill');
+    }
+    if (HARMONIA.state.started) throw new Error('drill started the session before the fade');
+  });
+
   step('form-before-start', function () {
     $('formBtn').click();
     if (!HARMONIA.state.started || !HARMONIA.state.running) throw new Error('form button did not start the session');
@@ -119,10 +168,49 @@ $post = @'
   });
 
   step('free-jam-start', function () {
-    if (!HARMONIA.state.started) $('startBtn').click();
+    if (!HARMONIA.state.started) HARMONIA.beginFromOverlay();
     if (!HARMONIA.state.started || !HARMONIA.state.running) throw new Error('session did not start');
     if (HARMONIA.state.form.enabled) throw new Error('form enabled itself in free jam');
     if ($('formHud').classList.contains('on')) throw new Error('form HUD visible in free jam');
+  });
+
+  step('drawers-after-start', function () {
+    // Старт возвращает меню: проба пальцев их только прятала, не выключала.
+    if (document.body.classList.contains('intro')) throw new Error('intro chrome is still on after the start');
+    if (HARMONIA.drawerIntro()) throw new Error('drawer intro mode is still on after the start');
+    if (window.getComputedStyle($('topbar')).display === 'none') throw new Error('topbar did not come back after the start');
+    if (window.getComputedStyle($('panel')).display === 'none') throw new Error('panel did not come back after the start');
+    if (window.getComputedStyle($('status-row')).display === 'none') throw new Error('status row did not come back');
+    if ($('topbarTab').classList.contains('show')) throw new Error('topbar tab is visible while the menu is open');
+    if ($('panelTab').classList.contains('show')) throw new Error('panel tab is visible while the panel is open');
+  });
+
+  step('drawers-toggle', function () {
+    var stage = $('game-container');
+    var wide = window.innerWidth >= 1120;
+    var before = stage.style.transform;
+    $('panelHide').click();
+    if (!$('panel').classList.contains('closed')) throw new Error('panel hide button did not close the panel');
+    if (window.getComputedStyle($('panel')).display !== 'none') throw new Error('closed panel still takes space');
+    if (!$('panelTab').classList.contains('show')) throw new Error('panel tab did not appear');
+    if ($('panelHide').getAttribute('aria-expanded') !== 'false') throw new Error('panel aria-expanded did not flip');
+    if (wide && stage.style.transform === before) throw new Error('stage did not grow into the freed panel space');
+    $('panelTab').click();
+    if ($('panel').classList.contains('closed')) throw new Error('panel tab did not reopen the panel');
+    if ($('panelTab').classList.contains('show')) throw new Error('panel tab stayed visible after reopening');
+    if (wide && stage.style.transform !== before) throw new Error('stage size did not return with the panel');
+    var top = $('topbar');
+    $('topbarHide').click();
+    if (!top.classList.contains('closed')) throw new Error('topbar hide button did not close the menu');
+    if (window.getComputedStyle(top).display !== 'none') throw new Error('closed topbar still takes space');
+    if (!$('topbarTab').classList.contains('show')) throw new Error('topbar tab did not appear');
+    $('topbarTab').click();
+    if (top.classList.contains('closed')) throw new Error('topbar tab did not reopen the menu');
+    if ($('topbarTab').classList.contains('show')) throw new Error('topbar tab stayed visible after reopening');
+    var saved = JSON.parse(localStorage.getItem('harmonia.drawers.v1') || '{}');
+    if (saved.topbar !== true || saved.panel !== true) {
+      throw new Error('drawer choice was not remembered: ' + JSON.stringify(saved));
+    }
   });
 
   step('space-combo-advance', function () {

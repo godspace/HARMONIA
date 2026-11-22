@@ -97,8 +97,10 @@
     <button id="muteBtn" class="ctl" aria-pressed="false" title="Звук (M)">🔊 Звук: вкл</button>
     <button id="pauseBtn" class="ctl" title="Пауза (Esc)">⏸ Пауза</button>
     <button id="restartBtn" class="ctl" title="Сессия заново (0)">↺ Сессия заново</button>
+    <button id="topbarHide" class="ctl ctl-icon" type="button" aria-controls="topbar" aria-expanded="true" title="Свернуть верхнее меню — сцена займёт всё место">⌃</button>
   </div>
 </div>
+<button id="topbarTab" type="button" aria-controls="topbar" aria-expanded="false" title="Показать верхнее меню">⌄ Меню</button>
 
 <div id="layout">
   <div id="stage-wrap">
@@ -173,13 +175,17 @@
       <div id="startOverlay" class="scrim">
         <h1>HARMONIA — симулятор гармонии · 24 комбо</h1>
         <div class="intro-copy">
-          <b>Одна клавиатура — две руки.</b>
-          Левая держит гармонию, правая ведёт мелодию. В умном режиме пять нот
-          правой руки сами собираются вокруг текущего аккорда и избегают острых
-          столкновений. Кнопка <b>Умное переключение</b> в панели <b>Звук</b>
-          переключает его на пять фиксированных корней; там же сдвиг октавы.
+          <b>Положите пальцы на десять игровых клавиш и нажмите их.</b>
+          Левая рука — <b>Q W E R F</b> (аккорды), правая — <b>J I O P [</b>
+          (ноты). Порядок любой: каждая клавиша отвечает звуком, а когда нажаты
+          все десять, окно затухает и начинается симулятор.
         </div>
-        <div class="intro-keyboard" role="img" aria-label="Раскладка компьютерной клавиатуры: Q W E R F — левая рука, J I O P [ — правая, Space — новое комбо после 1000, Enter и стрелки — команды">
+        <div class="intro-drill">
+          <span class="ip-kicker">Проба пальцев</span>
+          <div class="ip-track" id="introDots" aria-hidden="true"></div>
+          <span class="ip-count" id="introCount" aria-live="polite">0 / 10</span>
+        </div>
+        <div class="intro-keyboard" role="group" aria-label="Раскладка компьютерной клавиатуры: Q W E R F — левая рука, J I O P [ — правая. Нажмите эти десять клавиш, чтобы начать; Space — новое комбо после 1000, Enter и стрелки — команды">
           <div class="kb-hands">
             <span class="kb-hand lh"><i></i>Левая рука · Q W E R F</span>
             <span class="kb-hand rh"><i></i>Правая рука · J I O P [</span>
@@ -187,17 +193,17 @@
           <div class="kb-board">
             <div class="kb-row kb-top">
               <span class="kb-key dim kb-tab">Tab</span>
-              <span class="kb-key lh on home" style="--i:0" title="Q · II — супертоника"><b>Q</b><span>II</span></span>
-              <span class="kb-key lh on" style="--i:1" title="W · IV — субдоминанта"><b>W</b><span>IV</span></span>
-              <span class="kb-key lh on" style="--i:2" title="E · V — доминанта"><b>E</b><span>V</span></span>
-              <span class="kb-key lh on" style="--i:3" title="R · VI — субмедианта"><b>R</b><span>VI</span></span>
+              <span class="kb-key lh on need home" data-key="KeyQ" style="--i:0" title="Q · II — супертоника"><b>Q</b><span>II</span></span>
+              <span class="kb-key lh on need" data-key="KeyW" style="--i:1" title="W · IV — субдоминанта"><b>W</b><span>IV</span></span>
+              <span class="kb-key lh on need" data-key="KeyE" style="--i:2" title="E · V — доминанта"><b>E</b><span>V</span></span>
+              <span class="kb-key lh on need" data-key="KeyR" style="--i:3" title="R · VI — субмедианта"><b>R</b><span>VI</span></span>
               <span class="kb-key dim">T</span>
               <span class="kb-key dim">Y</span>
               <span class="kb-key dim">U</span>
-              <span class="kb-key rh on" style="--i:5" title="I · нота 2"><b>I</b><span>2</span></span>
-              <span class="kb-key rh on" style="--i:6" title="O · нота 3"><b>O</b><span>3</span></span>
-              <span class="kb-key rh on" style="--i:7" title="P · нота 4"><b>P</b><span>4</span></span>
-              <span class="kb-key rh on" style="--i:8" title="[ · нота 5"><b>[</b><span>5</span></span>
+              <span class="kb-key rh on need" data-key="KeyI" style="--i:5" title="I · нота 2"><b>I</b><span>2</span></span>
+              <span class="kb-key rh on need" data-key="KeyO" style="--i:6" title="O · нота 3"><b>O</b><span>3</span></span>
+              <span class="kb-key rh on need" data-key="KeyP" style="--i:7" title="P · нота 4"><b>P</b><span>4</span></span>
+              <span class="kb-key rh on need" data-key="BracketLeft" style="--i:8" title="[ · нота 5"><b>[</b><span>5</span></span>
               <span class="kb-key dim">]</span>
             </div>
             <div class="kb-row kb-home">
@@ -205,10 +211,10 @@
               <span class="kb-key dim">A</span>
               <span class="kb-key dim">S</span>
               <span class="kb-key dim">D</span>
-              <span class="kb-key lh on home" style="--i:4" title="F · I — тоника"><b>F</b><span>I</span></span>
+              <span class="kb-key lh on need home" data-key="KeyF" style="--i:4" title="F · I — тоника"><b>F</b><span>I</span></span>
               <span class="kb-key dim">G</span>
               <span class="kb-key dim">H</span>
-              <span class="kb-key rh on home" style="--i:9" title="J · нота 1"><b>J</b><span>1</span></span>
+              <span class="kb-key rh on need home" data-key="KeyJ" style="--i:9" title="J · нота 1"><b>J</b><span>1</span></span>
               <span class="kb-key dim">K</span>
               <span class="kb-key dim">L</span>
               <span class="kb-key dim">;</span>
@@ -244,9 +250,13 @@
             </div>
           </div>
         </div>
+        <div class="intro-sub">В умном режиме пять нот правой руки сами собираются вокруг текущего
+          аккорда и избегают острых столкновений. Кнопка <b>Умное переключение</b> в панели
+          <b>Звук</b> переключает их на пять фиксированных корней; там же сдвиг октавы.</div>
         <div class="intro-note"><kbd>1</kbd>–<kbd>3</kbd> — визуализация · <kbd>←</kbd><kbd>→</kbd> — лад · <kbd>↑</kbd><kbd>↓</kbd> — комбо · <kbd>Space</kbd> — новое комбо после 1000 · <kbd>Esc</kbd> — пауза · <kbd>M</kbd> — звук</div>
 
-        <div class="btnrow"><button id="startBtn" class="big-btn">Запустить симулятор</button></div>
+        <div class="btnrow"><button id="startBtn" class="big-btn" disabled>Осталось нажать: 10</button></div>
+        <div class="intro-hint">Клавиши можно нажимать и на схеме — мышкой или пальцем.</div>
       </div>
 
       <div id="modal" class="scrim">
@@ -262,6 +272,10 @@
   </div>
 
   <div id="panel">
+    <div id="panelHead">
+      <span class="ph-title">Панель настроек</span>
+      <button id="panelHide" class="drawer-close" type="button" aria-controls="panel" aria-expanded="true" title="Свернуть панель — сцена станет шире">›</button>
+    </div>
     <div class="pg">
       <h3>Комбо · кварто-квинтовый круг</h3>
       <svg id="fifthsWheel" viewBox="0 0 260 260" role="group" aria-label="Выбор комбо по кругу тональностей"></svg>
@@ -382,6 +396,7 @@
       </div>
     </details>
   </div>
+  <button id="panelTab" type="button" aria-controls="panel" aria-expanded="false" title="Показать панель настроек">⚙ Настройки</button>
 </div>
 
 <div id="status-row">
@@ -406,6 +421,7 @@
   <script src="js/ui-hud.js"></script>
   <script src="js/recorder.js"></script>
   <script src="js/ui-panel.js"></script>
+  <script src="js/ui-drawers.js"></script>
   <script src="js/ui-compose.js"></script>
   <script src="js/input.js"></script>
   <script src="js/midi.js"></script>

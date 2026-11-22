@@ -14,7 +14,8 @@ function runCommand(id) {
     case 'mute': toggleMute(); break;
     case 'pause': setPaused(!state.paused); break;
     case 'clear': clearPen(); toast('След очищен'); break;
-    case 'restart': initAudio(); startSession(); break;
+    // «Сессия заново» до старта не обходит пробу пальцев: окно ещё открыто.
+    case 'restart': if (state.started) { initAudio(); startSession(); } break;
     case 'pedal': togglePedal(); break;
     case 'octDown': shiftNoteOctave(-1); break;
     case 'octUp': shiftNoteOctave(1); break;
@@ -28,6 +29,9 @@ function runCommand(id) {
 window.addEventListener('keydown', (e) => {
   // Ctrl/⌘/Alt + клавиша — команда браузера, а не игра (Ctrl+R, Ctrl+M, ⌘Q…).
   if (e.ctrlKey || e.metaKey || e.altKey) return;
+  // Стартовый экран: пока сессия не начата, десять игровых клавиш — это проба
+  // пальцев. Остальные клавиши и раньше ничего не делали до старта.
+  if (!state.started && !e.repeat && introPress(e.code)) return;
   // Пока открыт результат пьесы, игровые команды спят: кнопки диалога
   // активируются браузером сами, а Space/Enter/Esc не меняют сцену за ним.
   const formResult = document.getElementById('formResult');
@@ -102,7 +106,11 @@ window.addEventListener('pointercancel', releasePointerNote);
 $('muteBtn').addEventListener('click', () => { initAudio(); toggleMute(); });
 $('soundChip').addEventListener('click', () => { initAudio(); toggleSound(true); });
 $('pauseBtn').addEventListener('click', () => setPaused(!state.paused));
-$('restartBtn').addEventListener('click', () => { initAudio(); startSession(); });
+$('restartBtn').addEventListener('click', () => {
+  if (!state.started) return;
+  initAudio();
+  startSession();
+});
 $('modeSel').addEventListener('change', (e) => setMode(e.target.value));
 $('comboSel').addEventListener('change', (e) => {
   loadCombo(parseInt(e.target.value, 10), true);
@@ -114,13 +122,132 @@ $('pPrevCombo').addEventListener('click', prevCombo);
 $('pNextCombo').addEventListener('click', nextCombo);
 $('spaceNext').addEventListener('click', () => advanceCombo());
 function beginFromOverlay() {
+  // Единственная точка входа в сессию из стартового окна. Её же зовут MIDI-нота,
+  // запись и пьеса, поэтому окно закрывается и там, где клик по кнопке не нужен.
+  if (state.started) return;
+  clearIntroTimer();
   initAudio();
-  $('startOverlay').style.display = 'none';
+  const overlay = $('startOverlay');
+  if (overlay) {
+    overlay.style.display = 'none';
+    overlay.classList.remove('fade');
+  }
   state.started = true;
   startSession();
 }
-$('startBtn').addEventListener('click', (e) => { e.stopPropagation(); beginFromOverlay(); });
-$('startOverlay').addEventListener('click', beginFromOverlay);
+// ===== Стартовый экран: проба десяти клавиш =====
+// Сессия начинается не по клику, а после того, как игрок положил пальцы на
+// десять игровых клавиш и нажал их. Порядок любой — важна каждая клавиша:
+// Q W E R F держат гармонию, J I O P [ ведут мелодию. Проба учит раскладку до
+// старта и заодно даёт браузеру жест, после которого разрешён звук.
+const INTRO_KEYS = CHORD_CODES.concat(NOTE_KEYS);
+const intro = { hit: {}, count: 0, total: INTRO_KEYS.length, done: false, timer: 0 };
+function clearIntroTimer() {
+  if (!intro.timer) return;
+  clearTimeout(intro.timer);
+  intro.timer = 0;
+}
+function introKeyEl(code) {
+  return document.querySelector('#startOverlay .kb-key[data-key="' + code + '"]');
+}
+function introDotEl(code) {
+  return document.querySelector('#introDots .ip-dot[data-key="' + code + '"]');
+}
+function syncIntroDrill() {
+  const left = intro.total - intro.count;
+  const count = $('introCount');
+  if (count) count.textContent = intro.count + ' / ' + intro.total;
+  const btn = $('startBtn');
+  if (btn) {
+    btn.disabled = left > 0;
+    btn.classList.toggle('ready', left === 0);
+    btn.textContent = left > 0 ? 'Осталось нажать: ' + left : 'Поехали — начинаем';
+  }
+}
+// Точки прогресса собираются из самой разметки клавиш: подписи берутся у
+// `<b>` на схеме, поэтому новая раскладка не требует второй таблицы.
+function buildIntroDrill() {
+  const track = $('introDots');
+  if (track) {
+    track.innerHTML = '';
+    INTRO_KEYS.forEach((code) => {
+      const key = introKeyEl(code);
+      const cap = key && key.querySelector('b');
+      const dot = document.createElement('span');
+      dot.className = 'ip-dot';
+      dot.dataset.key = code;
+      dot.textContent = cap ? cap.textContent : code;
+      track.appendChild(dot);
+    });
+  }
+  syncIntroDrill();
+}
+// Отклик на каждую нажатую клавишу: аккорд звучит подложкой, нота — колоколом.
+// Это не игра: ни очков, ни шагов, ни записи — только проверка «клавиша слышна».
+function introPreview(code) {
+  initAudio();
+  const chordIdx = INPUT.chordIndex(code);
+  if (chordIdx !== -1) {
+    const h = harmonicChords()[chordIdx];
+    if (h) playChordAudio(h, 0.5);
+    return;
+  }
+  const noteIdx = INPUT.noteIndex(code);
+  if (noteIdx === -1) return;
+  const ballIdx = handNoteBalls()[noteIdx];
+  const b = ballIdx == null ? null : balls[ballIdx];
+  const midi = (b ? b.midi : rootMidi()) + (P.noteOct || 0) * 12;
+  bell(midi, 0.7, 0, null, 'note', P.sustain ? 0.5 : 0);
+}
+// Одна клавиша пробы. Повторное нажатие звучит, но счёт не двигает: считаются
+// именно десять разных клавиш. Возвращает true, если клавиша принадлежит пробе.
+function introPress(code) {
+  if (intro.done || INTRO_KEYS.indexOf(code) === -1) return false;
+  const overlay = $('startOverlay');
+  if (!overlay || overlay.style.display === 'none') return false;
+  introPreview(code);
+  if (intro.hit[code]) return true;
+  intro.hit[code] = true;
+  intro.count += 1;
+  const key = introKeyEl(code);
+  if (key) {
+    key.classList.add('hit');
+    key.classList.remove('need');
+  }
+  const dot = introDotEl(code);
+  if (dot) dot.classList.add('done');
+  syncIntroDrill();
+  if (intro.count >= intro.total) introFinish();
+  return true;
+}
+// Проба пройдена: окно гаснет, и только после паузы начинается сессия —
+// последняя клавиша успевает вспыхнуть до того, как сцена займёт экран.
+function introFinish() {
+  if (intro.done) return;
+  intro.done = true;
+  syncIntroDrill();
+  const overlay = $('startOverlay');
+  if (overlay) overlay.classList.add('fade');
+  intro.timer = setTimeout(beginFromOverlay, CFG.introFadeMs);
+}
+function introState() {
+  return {
+    count: intro.count, total: intro.total, done: intro.done,
+    hit: INTRO_KEYS.filter(code => intro.hit[code])
+  };
+}
+buildIntroDrill();
+$('startBtn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  // Кнопка — индикатор пробы: до последней клавиши она выключена, а после
+  // пробы её нажатие только ускоряет уже начавшееся затухание.
+  if (intro.count >= intro.total) beginFromOverlay();
+});
+$('startOverlay').addEventListener('click', (e) => {
+  // Клик мимо клавиш ничего не запускает: вход — только через пробу.
+  const key = e.target.closest ? e.target.closest('.kb-key[data-key]') : null;
+  if (key) introPress(key.dataset.key);
+});
 $('mResume').addEventListener('click', () => setPaused(false));
 $('mRestart').addEventListener('click', () => { initAudio(); startSession(); });
 

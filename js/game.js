@@ -243,6 +243,9 @@ function startSession() {
   state.played.major = state.played.major.map(() => false);
   state.played.minor = state.played.minor.map(() => false);
   state.running = true; state.paused = false;
+  // Стартовый экран прятал меню: возвращаем хром в том виде, в каком игрок его
+  // оставил (проба пальцев панели не открывает насильно).
+  if (typeof setDrawerIntro === 'function') setDrawerIntro(false);
   $('modal').style.display = 'none';
   $('pauseBtn').textContent = '⏸ Пауза';
   loadCombo(0, false);

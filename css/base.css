@@ -59,6 +59,36 @@ body {
 button.ctl { cursor: pointer; transition: transform 0.12s, border-color 0.12s, background 0.12s; }
 button.ctl:hover { transform: translateY(-1px); border-color: rgba(107, 223, 255, 0.55); background: rgba(107, 223, 255, 0.12); }
 button.ctl:active { transform: translateY(0) scale(0.97); }
+.ctl-icon { padding: 6px 9px; font-weight: 800; color: #9aa4c2; }
+/* ===== Выдвижные панели =====
+   Верхнее меню и панель настроек — ящики: закрытая панель не занимает место,
+   на её краю остаётся таб, который её возвращает. Сцену под новую ширину и
+   высоту пересчитывает fitStage() (js/render.js). */
+#topbar.closed { display: none; }
+#topbarTab {
+  display: none; align-items: center; gap: 4px;
+  font-family: inherit; font-size: 11px; font-weight: 800; letter-spacing: 0.4px;
+  color: #9aa4c2; background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(107, 223, 255, 0.24); border-radius: 10px;
+  padding: 3px 12px 4px; cursor: pointer;
+  transition: color 0.12s, border-color 0.12s, background 0.12s, transform 0.12s;
+}
+#topbarTab.show { display: inline-flex; animation: drawerTabIn 0.22s ease-out; }
+#topbarTab:hover {
+  color: #d0d7ee; border-color: rgba(107, 223, 255, 0.55);
+  background: rgba(107, 223, 255, 0.1); transform: translateY(-1px);
+}
+@keyframes drawerTabIn {
+  from { opacity: 0; transform: translateY(-5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+/* Проба пальцев: на стартовом экране меню не нужно — сцена получает весь экран.
+   Класс intro ставит setDrawerIntro() (js/ui-drawers.js). */
+body.intro #topbar,
+body.intro #topbarTab,
+body.intro #panel,
+body.intro #panelTab,
+body.intro #status-row { display: none; }
 #muteBtn[aria-pressed="true"] { color: #ff8fa3; border-color: rgba(255, 21, 65, 0.5); background: rgba(255, 21, 65, 0.12); }
 /* Звук нот MIDI: «Пианино» — приложение молчит, поэтому кнопка тёплая, а не красная. */
 #soundChip[aria-pressed="false"] { color: #ffd166; border-color: rgba(255, 209, 102, 0.45); background: rgba(255, 209, 102, 0.1); }

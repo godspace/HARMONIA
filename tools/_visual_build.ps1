@@ -3,7 +3,10 @@ $html = [IO.File]::ReadAllText((Join-Path $PWD 'index.html'), [Text.Encoding]::U
 $post = @'
 <script>
 (function () {
-  document.getElementById('startBtn').click();
+  // Стартовое окно открывается пробой десяти клавиш, поэтому скриншот делает
+  // тот же путь, что и игра: клавиши пробы нажимаются, затем сессия стартует.
+  HARMONIA.INTRO_KEYS.forEach(function (code) { HARMONIA.introPress(code); });
+  HARMONIA.beginFromOverlay();
   var st = HARMONIA.state;
   // Показываем smart-окно от доминанты, как после сыгранного V.
   HARMONIA.setAdaptiveAnchor(4);

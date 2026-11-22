@@ -10,6 +10,62 @@
 #panel::-webkit-scrollbar { width: 6px; }
 #panel::-webkit-scrollbar-thumb { border-width: 1px; }
 #layout:not(.side) #panel { width: min(800px, calc(100vw - 20px)); flex: none; }
+/* Панель — выдвижной ящик: закрытая не занимает ни пикселя, а её таб остаётся
+   у края сцены. Слева — закреплённая шапка со сворачиванием, чтобы кнопка была
+   под рукой и при прокрутке длинного списка настроек. */
+#panel.closed { display: none; }
+#panelHead {
+  position: sticky; top: -8px; z-index: 2;
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  margin: -8px -10px 8px; padding: 6px 8px 6px 10px;
+  background: rgba(11, 13, 21, 0.94); backdrop-filter: blur(7px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 12px 12px 0 0;
+}
+.ph-title {
+  font-size: 9.5px; font-weight: 800; letter-spacing: 1.2px;
+  text-transform: uppercase; color: #7e88a6;
+}
+.drawer-close {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 21px; height: 21px; flex: none; padding: 0;
+  font-family: inherit; font-size: 13px; font-weight: 800; line-height: 1;
+  color: #9aa4c2; background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.16); border-radius: 6px;
+  cursor: pointer;
+  transition: color 0.12s, border-color 0.12s, background 0.12s, transform 0.12s;
+}
+.drawer-close:hover {
+  color: #6bdfff; border-color: rgba(107, 223, 255, 0.55);
+  background: rgba(107, 223, 255, 0.12); transform: translateY(-1px);
+}
+/* Таб закрытой панели: в строке — вертикальная плашка у правого края сцены,
+   в колонке (узкий экран) — горизонтальная пилюля под сценой. */
+#panelTab {
+  display: none; flex: none; align-self: flex-start;
+  align-items: center; justify-content: center; gap: 6px;
+  width: 30px; height: 132px; margin-top: 34px; padding: 6px 0;
+  writing-mode: vertical-rl;
+  font-family: inherit; font-size: 10.5px; font-weight: 800; letter-spacing: 0.6px;
+  color: #9aa4c2; background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(164, 85, 227, 0.32); border-radius: 10px;
+  cursor: pointer;
+  transition: color 0.12s, border-color 0.12s, background 0.12s;
+}
+#panelTab.show { display: inline-flex; animation: drawerTabIn 0.22s ease-out; }
+#panelTab:hover {
+  color: #d0d7ee; border-color: rgba(164, 85, 227, 0.65);
+  background: rgba(164, 85, 227, 0.14);
+}
+#layout:not(.side) #panelTab {
+  align-self: center; width: auto; height: auto; margin: 0;
+  padding: 5px 12px; writing-mode: horizontal-tb;
+}
+/* Меньше движения: сцена меняет размер мгновенно, табы появляются без слайда. */
+@media (prefers-reduced-motion: reduce) {
+  #stage-wrap, #game-container { transition: none; }
+  #topbarTab.show, #panelTab.show { animation: none; }
+}
 .pg { margin-bottom: 12px; }
 .pg:last-child { margin-bottom: 2px; }
 .pg h3 {

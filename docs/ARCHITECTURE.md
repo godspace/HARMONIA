@@ -21,7 +21,7 @@
                                        viz ─────┤
                                                 │
                  transport ── composition ── ui-compose
-                        game ── listen ── ui-hud ── recorder ── ui-panel ── input
+                        game ── listen ── ui-hud ── recorder ── ui-panel ── ui-drawers ── input
                           │        │          │
                         midi ──────┴── render ─┴── main
 ```
@@ -43,8 +43,9 @@
 | `ui-hud` | отображение состояния | `updateHUD`, `updateHomeIndicator`, `renderPalette`, `renderHint`, `updateHeardChip`, `paintSoundChip` |
 | `recorder` | запись и прослушивание | `recordChord/Note`, `startRecording`, `stopRecording`, `playSelected`, `deleteSelectedRecording` |
 | `ui-panel` | настройки | `bindRange`, `bindSelect`, `bindToggle`, `syncAll`, `togglePedal` |
+| `ui-drawers` | выдвижные панели | `drawers`, `drawerOpen`, `drawerIntro`, `setDrawer`, `toggleDrawer`, `setDrawerIntro`, `initDrawers` |
 | `ui-compose` | HUD/панель формы и результат | `buildFormHud`, `updateFormHUD`, `resetFormHud`, `setFormEnabled`, `showFormResult`, `initCompose` |
-| `input` | физический ввод | `runCommand`, `beginFromOverlay`, стрелки `←/→` → `setMode`, `↑/↓` → комбо |
+| `input` | физический ввод | `runCommand`, `beginFromOverlay`, стартовая проба `INTRO_KEYS`/`introPress`/`introState`, стрелки `←/→` → `setMode`, `↑/↓` → комбо |
 | `midi` | Web MIDI | `Midi`, `MIDI_CONTROLLER`/`MIDI_PIANO`, `resolveEcho` |
 | `render` | кадр | `render`, `fitStage` |
 | `main` | запуск | boot + `window.HARMONIA` |
@@ -92,6 +93,25 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
   Аккорд не «расходуется» и не переключает комбо сам.
 - `playable()` — единственная проверка «можно играть» (старт + запущено + не пауза).
   Ею пользуются клавиатура, MIDI, пэд, `playHarmonic` и `triggerBall`.
+- `state.started` поднимает только `beginFromOverlay()`: стартовое окно нельзя
+  закрыть кликом мимо клавиш. Пока оно открыто, клавиатура отдаёт десять
+  `INTRO_KEYS` пробе `introPress()` (повтор не считается, каждая клавиша отвечает
+  звуком до старта); десятая вызывает `introFinish()` — окно получает класс
+  `fade`, и через `CFG.introFadeMs` стартует сессия. Клик по клавише на схеме
+  идёт тем же путём, поэтому проба работает и без физической клавиатуры.
+  MIDI-нота, запись и пьеса тоже входят через `beginFromOverlay()` — это
+  единственная точка старта сессии. `startSession()` при этом снимает режим
+  пробы: `setDrawerIntro(false)` возвращает хром.
+- `drawers` (`ui-drawers.js`) — единственный источник правды о выдвижных панелях:
+  `topbar`/`panel` хранят выбор игрока, `intro` — режим стартового экрана.
+  Читать состояние можно только через `drawerOpen(name)` / `drawerIntro()`:
+  во время пробы закрыто всё, даже если игрок оставлял панель открытой. Пишут
+  только `setDrawer()` и `setDrawerIntro()` — они же красят классы, табы и
+  `aria-expanded` в `paintDrawers()` и зовут `fitStage()`. Закрытая панель
+  получает `display: none`, поэтому `fitStage()` считает место по
+  `drawerOpen()`, а не по фиксированным 288 px: освободившиеся пиксели уходят
+  в масштаб сцены. Режим `body.intro` (CSS) прячет ещё и статус-строку.
+  Выбор лежит в `localStorage` (`harmonia.drawers.v1`).
 - `releaseAllHolds()` вызывается на паузе, смене комбо, старте сессии и выключении
   sustain: снимает удержания шаров, таймер повтора карточки и педальные хвосты
   (`dampPedalVoices()`), чтобы выключение педали было слышно сразу.
@@ -294,7 +314,7 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
   событие остаётся визуальным (кольцо, вспышка и постоянный индикатор HUD).
 
 Браузеры запускают AudioContext только после жеста, поэтому `initAudio()` вызывается
-из `beginFromOverlay`, кнопок и первого note-on.
+из стартовой пробы (`introPreview`), `beginFromOverlay`, кнопок и первого note-on.
 
 ## Запись и прослушивание
 
@@ -339,6 +359,7 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
 | Новая палитра | `PALETTES` + `<option>` в `index.html` |
 | Новая визуализация | `VIZ` + `VIZ_ORDER` (`project/guides/center/ball/ring`) — меню и цифры `1`–`3` строятся сами |
 | Порог Space-перехода | `CFG.comboAdvanceAt` + `advanceCombo()` / `updateSpaceNext()` |
+| Состав стартовой пробы | `INTRO_KEYS` + `introPress()` + `data-key` на клавишах в `index.html` |
 | Веса красоты переходов/фраз | `CFG.beauty` + `harmonyTransitionBeauty()`, `harmonyPhraseBeauty()` |
 | Громкость нот/аккордов | `P.noteVol`/`P.chordVol` + `noteGain`/`chordGain` в `audio.js` |
 | Новый параметр панели | `DEFAULTS` → разметка `.prow` → `bindRange/bindToggle` |
@@ -358,12 +379,17 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
 - Консоль: `HARMONIA.state`, `HARMONIA.diatonicPalette()`, `HARMONIA.describeTriad([0,4,7])`,
   `HARMONIA.Midi.noteOn(60, 0.9)`, `HARMONIA.Heard.pcs()`, `HARMONIA.harmonyDebug()`,
   `HARMONIA.vizDebug()`, `HARMONIA.setViz('spectrum')`, `HARMONIA.cycleViz()`.
-- Headless-прогон (Chrome): открыть `index.html`, нажать старт, проверить
-  `HARMONIA.state.visited`, `score`, число `.chord-card`, отсутствие ошибок в консоли;
+- Headless-прогон (Chrome): открыть `index.html`, пройти пробу
+  (`HARMONIA.INTRO_KEYS.forEach(code => HARMONIA.introPress(code))`) или вызвать
+  `HARMONIA.beginFromOverlay()`, проверить `HARMONIA.state.visited`, `score`,
+  число `.chord-card`, отсутствие ошибок в консоли;
   затем `Midi.noteOn(60/64/67)` → `state.heard.triad.degree === 'I'`.
-- `tools/_smoke_build.ps1` собирает `smoke.html` с шагами boot/free-jam/форма/
-  запись/smart-раскладка; headless Chrome с `--dump-dom` оставляет в
-  `<pre id="smoke-result">` строку `ok:true`. Шаги `default-sound`, `melody-layout`,
+- `tools/_smoke_build.ps1` собирает `smoke.html` с шагами boot/intro-drill/
+  free-jam/форма/запись/smart-раскладка; headless Chrome с `--dump-dom` оставляет в
+  `<pre id="smoke-result">` строку `ok:true`. Шаг `intro-drill` держит стартовое
+  окно открытым, пока не нажаты десять клавиш: кнопка старта выключена, повтор
+  не двигает счёт, после десятой появляется класс `fade`. Шаги `default-sound`,
+  `melody-layout`,
   `space-combo-advance`, `smart-hand-window`, `smart-resume-window`,
   `diminished-anchor`, `smart-form-target`, `adaptive-defer` и
   `note-chord-harmony` проверяют стартовые настройки звука и педали, два режима

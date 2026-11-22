@@ -15,12 +15,15 @@ syncParticles();
 updateHUD();
 applyMute();
 Midi.init();
+initDrawers();
 fitStage();
 // Публичный отладочный API: консоль, автотесты, будущие харнессы.
 window.HARMONIA = {
   state, P, CFG, COMBOS, ORDER, INPUT, Midi, VIZ, viz, Heard,
   Transport, Composition, setFormEnabled, updateFormHUD,
   harmonicChords, updateHUD, playHarmonic, chordEvent, pressCode, releaseCode, runCommand, loadCombo, setMode, startSession,
+  beginFromOverlay, INTRO_KEYS, introPress, introState,
+  drawers, drawerOpen, drawerIntro, setDrawer, toggleDrawer, setDrawerIntro, initDrawers,
   togglePedal, updateSpaceNext, advanceCombo, canAdvanceCombo, comboAdvanceReady,
   nextCombo, prevCombo, nextComboTarget, prevComboTarget,
   diatonicPalette, chordOnDegree, classifyTriad, describeTriad, noteRole, scaleNoteNames, harmonyDebug,

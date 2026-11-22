@@ -138,30 +138,64 @@ function render() {
   requestAnimationFrame(render);
 }
 
+// Хром интерфейса в пикселях: номинальная высота верхнего меню и его таба,
+// статус-строка снизу, ширина панели и её таба. Сцена не заходит на эти полосы,
+// а закрытые панели (и стартовая проба) отдают свои пиксели сцене.
+const FIT_TOP = 62, FIT_TAB = 32, FIT_BOTTOM = 58;
+const FIT_PANEL = 288, FIT_PANEL_TAB = 30, FIT_PANEL_BELOW = 210;
+
 function fitStage() {
   const wide = window.innerWidth >= 1120;
   const layout = $('layout');
   layout.classList.toggle('side', wide);
-  // Сцена растёт до 1.5×: на широком экране 800×540 больше не подвешивает
-  // интерфейс в центре с большими полями. Панель остаётся читаемой колонкой.
-  const gap = 12, panelW = 288;
-  const sideW = wide ? panelW + gap : 0;
+  // Проба пальцев прячет весь хром, поэтому сцена получает почти весь экран.
+  const intro = typeof drawerIntro === 'function' && drawerIntro();
+  const topOpen = typeof drawerOpen === 'function' ? drawerOpen('topbar') : true;
+  const panelOpen = typeof drawerOpen === 'function' ? drawerOpen('panel') : true;
+  const gap = 12;
+  // В строке панель стоит справа от сцены: открытая — колонка, закрытая — таб.
+  const sideW = wide && !intro ? (panelOpen ? FIT_PANEL + gap : FIT_PANEL_TAB + gap) : 0;
   const availW = window.innerWidth - 20 - sideW;
-  const availH = window.innerHeight - (wide ? 120 : 330);
-  const s = Math.max(0.34, Math.min(1.5, availW / 800, availH / 540));
-  const stageW = 800 * s, stageH = 540 * s;
-  // Рабочая область ровно по сцене и панели: топбар и статус не шире и не уже.
-  const shellW = wide
-    ? Math.min(window.innerWidth - 20, stageW + sideW)
-    : window.innerWidth - 20;
-  $('stage-wrap').style.width = stageW + 'px';
-  $('stage-wrap').style.height = stageH + 'px';
-  $('game-container').style.transform = `scale(${s})`;
-  layout.style.width = shellW + 'px';
-  $('topbar').style.width = shellW + 'px';
-  $('status-row').style.width = shellW + 'px';
-  $('panel').style.maxHeight = wide
-    ? stageH + 'px'
-    : Math.max(150, window.innerHeight - stageH - 150) + 'px';
+  // Снизу: статус-строка, а в узком режиме ещё и панель под сценой (её высоту
+  // ограничивает maxHeight). Закрытая оставляет только таб в одну строку.
+  const below = wide ? 0 : (panelOpen ? FIT_PANEL_BELOW : FIT_PANEL_TAB + gap);
+  // Верхняя полоса: сначала номинальная высота, потом реальная. В узкой
+  // оболочке кнопки топбара переносятся на вторую строку, а подсказки внизу —
+  // на вторую-третью, и без этой поправки сцена заходила бы на хром.
+  // Двух проходов обычно хватает, три — страховка от третьей строки.
+  let topH = topOpen ? FIT_TOP : FIT_TAB;
+  let bottomH = FIT_BOTTOM;
+  for (let pass = 0; pass < 3; pass++) {
+    const availH = intro
+      ? window.innerHeight - 20
+      : window.innerHeight - topH - bottomH - below;
+    // Сцена растёт до 1.5×: панель остаётся читаемой колонкой, а закрытые меню
+    // не оставляют вокруг сцены пустых полей.
+    const s = Math.max(0.34, Math.min(1.5, availW / 800, availH / 540));
+    const stageW = 800 * s, stageH = 540 * s;
+    // Рабочая область ровно по сцене и панели: топбар и статус не шире и не уже.
+    const shellW = wide
+      ? Math.min(window.innerWidth - 20, stageW + sideW)
+      : window.innerWidth - 20;
+    $('stage-wrap').style.width = stageW + 'px';
+    $('stage-wrap').style.height = stageH + 'px';
+    $('game-container').style.transform = `scale(${s})`;
+    layout.style.width = shellW + 'px';
+    $('topbar').style.width = shellW + 'px';
+    $('status-row').style.width = shellW + 'px';
+    $('panel').style.maxHeight = wide
+      ? stageH + 'px'
+      : Math.max(150, window.innerHeight - stageH - 150) + 'px';
+    if (intro) break;
+    // Реальные высоты хрома меряем уже на новой ширине оболочки.
+    let grown = false;
+    if (topOpen) {
+      const realTop = $('topbar').offsetHeight + gap;
+      if (realTop > topH + 2) { topH = realTop; grown = true; }
+    }
+    const realBottom = $('status-row').offsetHeight + gap;
+    if (realBottom > bottomH + 2) { bottomH = realBottom; grown = true; }
+    if (!grown) break;
+  }
 }
 window.addEventListener('resize', fitStage);
