@@ -14,7 +14,7 @@
 
 - **Двойной клик по `index.html`** — всё работает с `file://`.
 - Или локальный сервер: `python -m http.server 8080` → <http://localhost:8080/>.
-- GitHub Pages: Settings → Pages → Deploy from branch → корень. `index.html` — точка входа.
+- GitHub Pages: Settings → Pages → Deploy from branch → корень. `index.html` — точка входа; сайт: <https://godspace.github.io/HARMONIA/>.
 
 Требуется браузер с Canvas 2D и Web Audio; MIDI — в Chrome/Edge (Web MIDI).
 
@@ -183,6 +183,9 @@ D красная. Аккорд гаснет за `CFG.chordFadeMs`, треуго
 
 ```
 index.html            разметка сцены и панели; <link> на CSS и <script> на модули
+favicon.svg           иконка сайта
+robots.txt            правила индексации
+sitemap.xml           карта сайта для поисковиков
 css/
   base.css            сброс, фон, топбар, переключатели
   stage.css           сцена 800×540, HUD, индикатор возврата, пэд аккордов, тост
@@ -318,6 +321,27 @@ HARMONIA.Transport.bpm; HARMONIA.state.transport // часы формы: так�
 ```
 
 Быстрая проверка целостности данных — `python tools/combolist.py --check`.
+
+Smoke-тест проверяет брендинг, canonical/Open Graph/JSON-LD и наличие счётчика
+Яндекс.Метрики:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools/_smoke_build.ps1
+# затем открыть smoke.html в браузере
+```
+
+## Публикация и SEO
+
+- Канонический адрес, Open Graph и JSON-LD настроены на
+  <https://godspace.github.io/HARMONIA/>.
+- `robots.txt` и `sitemap.xml` лежат в корне; после включения GitHub Pages
+  проверьте `https://godspace.github.io/HARMONIA/robots.txt` и
+  `https://godspace.github.io/HARMONIA/sitemap.xml`.
+- Яндекс.Метрика: счётчик `114504272`. Локальные запуски (`file://`,
+  `localhost`, `127.0.0.1`) не отправляют статистику.
+- Для сниппетов в поиске важны `title`, `description`, H1 и
+  `docs/screenshot.png`; при замене скриншота обновите `og:image` и `image`
+  в `index.html`.
 
 ## Лицензия
 

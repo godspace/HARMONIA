@@ -44,6 +44,38 @@ $post = @'
     }
   });
 
+  step('seo', function () {
+    var canonical = document.querySelector('link[rel="canonical"]');
+    if (!canonical || canonical.href !== 'https://godspace.github.io/HARMONIA/') {
+      throw new Error('canonical URL is missing or wrong');
+    }
+    var robots = document.querySelector('meta[name="robots"]');
+    if (!robots || robots.content.indexOf('index') === -1) throw new Error('robots meta is missing');
+    var ogTitle = document.querySelector('meta[property="og:title"]');
+    if (!ogTitle || ogTitle.content.indexOf('HARMONIA') === -1) throw new Error('og:title is missing');
+    var ogImage = document.querySelector('meta[property="og:image"]');
+    if (!ogImage || ogImage.content.indexOf('/docs/screenshot.png') === -1) {
+      throw new Error('og:image is missing');
+    }
+    var ld = document.querySelector('script[type="application/ld+json"]');
+    if (!ld) throw new Error('JSON-LD is missing');
+    var data = JSON.parse(ld.textContent);
+    if (data['@type'] !== 'WebApplication' || data.name !== 'HARMONIA') {
+      throw new Error('JSON-LD WebApplication is malformed');
+    }
+    var metrika = Array.prototype.some.call(document.scripts, function (s) {
+      return /mc\.yandex\.ru\/metrika\/tag\.js\?id=114504272/.test(s.src) ||
+        /ym\(114504272/.test(s.textContent);
+    });
+    if (!metrika) throw new Error('Yandex Metrika 114504272 is missing');
+    var icon = document.querySelector('link[rel="icon"]');
+    if (!icon || icon.href.indexOf('favicon.svg') === -1) throw new Error('favicon is missing');
+    if (location.protocol === 'file:' && document.querySelector('script[src*="mc.yandex.ru"]')) {
+      throw new Error('Metrika must not load from file://');
+    }
+    if (document.documentElement.lang !== 'ru') throw new Error('html lang is not ru');
+  });
+
   step('default-sound', function () {
     var P = HARMONIA.P;
     if (P.reverb !== 1 || Number($('pReverb').value) !== 100) throw new Error('reverb default is not 100%');

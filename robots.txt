@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://godspace.github.io/HARMONIA/sitemap.xml

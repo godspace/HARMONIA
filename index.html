@@ -3,9 +3,73 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <meta name="description" content="HARMONIA — симулятор гармонии: 24 комбо на кварто-квинтовом круге, пять аккордов левой рукой, умная правая рука вокруг текущего аккорда, MIDI-клавиатура и живая панель параметров.">
+  <title>HARMONIA — симулятор гармонии и тренажёр аккордов</title>
+  <meta name="description" content="HARMONIA — бесплатный онлайн-симулятор гармонии: 24 комбо на кварто-квинтовом круге, аккорды, умная правая рука, MIDI и запись мелодии прямо в браузере.">
+  <meta name="keywords" content="HARMONIA, симулятор гармонии, тренажёр аккордов, кварто-квинтовый круг, теория музыки, импровизация, MIDI-клавиатура, музыкальный тренажёр">
+  <meta name="author" content="godspace">
+  <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
   <meta name="theme-color" content="#0b0d15">
-  <title>HARMONIA — симулятор гармонии</title>
+  <meta name="color-scheme" content="dark">
+  <link rel="canonical" href="https://godspace.github.io/HARMONIA/">
+  <link rel="alternate" hreflang="ru" href="https://godspace.github.io/HARMONIA/">
+  <link rel="alternate" hreflang="x-default" href="https://godspace.github.io/HARMONIA/">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="sitemap" type="application/xml" title="Sitemap" href="sitemap.xml">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="HARMONIA">
+  <meta property="og:locale" content="ru_RU">
+  <meta property="og:title" content="HARMONIA — симулятор гармонии и тренажёр аккордов">
+  <meta property="og:description" content="Бесплатный онлайн-симулятор гармонии: 24 комбо на кварто-квинтовом круге, аккорды, умная правая рука, MIDI и запись мелодии прямо в браузере.">
+  <meta property="og:url" content="https://godspace.github.io/HARMONIA/">
+  <meta property="og:image" content="https://godspace.github.io/HARMONIA/docs/screenshot.png">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="1600">
+  <meta property="og:image:height" content="1000">
+  <meta property="og:image:alt" content="HARMONIA — сцена с орбитами тональностей и панелью настроек">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="HARMONIA — симулятор гармонии и тренажёр аккордов">
+  <meta name="twitter:description" content="Бесплатный онлайн-симулятор гармонии: 24 комбо на кварто-квинтовом круге, аккорды, умная правая рука, MIDI и запись мелодии прямо в браузере.">
+  <meta name="twitter:image" content="https://godspace.github.io/HARMONIA/docs/screenshot.png">
+  <meta name="twitter:image:alt" content="HARMONIA — сцена с орбитами тональностей и панелью настроек">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "HARMONIA",
+    "alternateName": "HARMONIA — симулятор гармонии",
+    "url": "https://godspace.github.io/HARMONIA/",
+    "description": "Бесплатный онлайн-симулятор гармонии: 24 комбо на кварто-квинтовом круге, аккорды, умная правая рука, MIDI и запись мелодии прямо в браузере.",
+    "applicationCategory": "MusicApplication",
+    "operatingSystem": "Any",
+    "browserRequirements": "JavaScript, Canvas 2D, Web Audio API; Web MIDI в Chrome и Edge",
+    "inLanguage": "ru",
+    "isAccessibleForFree": true,
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "RUB"
+    },
+    "license": "https://github.com/godspace/HARMONIA/blob/main/LICENSE",
+    "codeRepository": "https://github.com/godspace/HARMONIA",
+    "image": "https://godspace.github.io/HARMONIA/docs/screenshot.png",
+    "screenshot": "https://godspace.github.io/HARMONIA/docs/screenshot.png",
+    "author": {
+      "@type": "Person",
+      "name": "godspace",
+      "url": "https://github.com/godspace"
+    },
+    "sameAs": [
+      "https://github.com/godspace/HARMONIA"
+    ],
+    "featureList": [
+      "24 комбо на кварто-квинтовом круге",
+      "Аккорды левой рукой и умная правая рука",
+      "MIDI-клавиатура и запись мелодии",
+      "Форма-пьеса на 16 тактов",
+      "Работа в браузере без установки"
+    ]
+  }
+  </script>
   <link rel="stylesheet" href="css/base.css">
   <link rel="stylesheet" href="css/stage.css">
   <link rel="stylesheet" href="css/overlays.css">
@@ -106,7 +170,7 @@
       </div>
 
       <div id="startOverlay" class="scrim">
-        <h1>Симулятор гармонии · 24 комбо</h1>
+        <h1>HARMONIA — симулятор гармонии · 24 комбо</h1>
         <div class="intro-copy">
           <b>Одна клавиатура — две руки.</b>
           Левая держит гармонию, правая ведёт мелодию. В умном режиме пять нот
@@ -346,5 +410,23 @@
   <script src="js/midi.js"></script>
   <script src="js/render.js"></script>
   <script src="js/main.js"></script>
+
+  <!-- Яндекс.Метрика: локальные запуски и headless-проверки не учитываются. -->
+  <script type="text/javascript">
+    (function () {
+      var host = location.hostname;
+      if (location.protocol === 'file:' || host === 'localhost' || host === '127.0.0.1') return;
+      (function(m,e,t,r,i,k,a){
+          m[i]=m[i]||function(){(m[i].a=m[i].a||[]).push(arguments)};
+          m[i].l=1*new Date();
+          for (var j = 0; j < document.scripts.length; j++) {if (document.scripts[j].src === r) { return; }}
+          k=e.createElement(t),a=e.getElementsByTagName(t)[0],k.async=1,k.src=r,a.parentNode.insertBefore(k,a)
+      })(window, document,'script','https://mc.yandex.ru/metrika/tag.js?id=114504272', 'ym');
+
+      window.ym(114504272, 'init', {ssr:true, webvisor:true, clickmap:true, ecommerce:"dataLayer", referrer: document.referrer, url: location.href, accurateTrackBounce:true, trackLinks:true});
+    })();
+  </script>
+  <noscript><div><img src="https://mc.yandex.ru/watch/114504272" style="position:absolute; left:-9999px;" alt="" /></div></noscript>
+  <!-- /Яндекс.Метрика -->
 </body>
 </html>
