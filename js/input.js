@@ -150,37 +150,13 @@ function clearIntroTimer() {
 function introKeyEl(code) {
   return document.querySelector('#startOverlay .kb-key[data-key="' + code + '"]');
 }
-function introDotEl(code) {
-  return document.querySelector('#introDots .ip-dot[data-key="' + code + '"]');
-}
+// Прогресс показывает сама схема: нажатая клавиша получает класс hit (✓ и
+// свечение), а строка над клавиатурой — только счётчик. Отдельной дорожки из
+// десяти подписанных точек и кнопки «старт» нет: они дублировали клавиши,
+// отнимали место у схемы, а кнопку всё равно нельзя было нажать раньше времени.
 function syncIntroDrill() {
-  const left = intro.total - intro.count;
   const count = $('introCount');
   if (count) count.textContent = intro.count + ' / ' + intro.total;
-  const btn = $('startBtn');
-  if (btn) {
-    btn.disabled = left > 0;
-    btn.classList.toggle('ready', left === 0);
-    btn.textContent = left > 0 ? 'Осталось нажать: ' + left : 'Поехали — начинаем';
-  }
-}
-// Точки прогресса собираются из самой разметки клавиш: подписи берутся у
-// `<b>` на схеме, поэтому новая раскладка не требует второй таблицы.
-function buildIntroDrill() {
-  const track = $('introDots');
-  if (track) {
-    track.innerHTML = '';
-    INTRO_KEYS.forEach((code) => {
-      const key = introKeyEl(code);
-      const cap = key && key.querySelector('b');
-      const dot = document.createElement('span');
-      dot.className = 'ip-dot';
-      dot.dataset.key = code;
-      dot.textContent = cap ? cap.textContent : code;
-      track.appendChild(dot);
-    });
-  }
-  syncIntroDrill();
 }
 // Отклик на каждую нажатую клавишу: аккорд звучит подложкой, нота — колоколом.
 // Это не игра: ни очков, ни шагов, ни записи — только проверка «клавиша слышна».
@@ -214,8 +190,6 @@ function introPress(code) {
     key.classList.add('hit');
     key.classList.remove('need');
   }
-  const dot = introDotEl(code);
-  if (dot) dot.classList.add('done');
   syncIntroDrill();
   if (intro.count >= intro.total) introFinish();
   return true;
@@ -236,13 +210,7 @@ function introState() {
     hit: INTRO_KEYS.filter(code => intro.hit[code])
   };
 }
-buildIntroDrill();
-$('startBtn').addEventListener('click', (e) => {
-  e.stopPropagation();
-  // Кнопка — индикатор пробы: до последней клавиши она выключена, а после
-  // пробы её нажатие только ускоряет уже начавшееся затухание.
-  if (intro.count >= intro.total) beginFromOverlay();
-});
+syncIntroDrill();
 $('startOverlay').addEventListener('click', (e) => {
   // Клик мимо клавиш ничего не запускает: вход — только через пробу.
   const key = e.target.closest ? e.target.closest('.kb-key[data-key]') : null;

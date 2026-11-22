@@ -12,51 +12,53 @@
   -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
 }
 .scrim p { max-width: 640px; line-height: 1.6; color: #c2cae0; margin: 0 0 22px; font-size: 14.5px; }
-/* Вход: анимированная раскладка настоящей клавиатуры. Активные клавиши стоят
-   там же, где они находятся под пальцами, а не тремя абстрактными рядами. */
-.intro-copy {
-  max-width: 650px; margin: 0 0 12px; font-size: 13px; line-height: 1.45;
-  color: #c2cae0;
+/* ===== Стартовый экран: проба пальцев =====
+   Игрок знакомится с кнопками руками, а не чтением, поэтому текста на экране
+   ровно две строки: название и «нажмите десять подсвеченных клавиш» со
+   счётчиком. Всё остальное место занимает интерактивная схема клавиатуры.
+   Экран фиксирован к окну, а не лежит внутри #game-container: сцена
+   масштабируется transform'ом (fitStage), и внутри неё и текст, и клавиши на
+   телефоне сжимались бы до нечитаемых. */
+#startOverlay {
+  position: fixed; inset: 0; z-index: 30;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: clamp(6px, 1.4vh, 14px);
+  padding: clamp(10px, 2.4vh, 26px) clamp(10px, 3vw, 32px);
+  background: radial-gradient(circle at 50% 36%, #1c2132 0%, #0b0d15 72%);
+  overflow: auto; cursor: default;
+  transition: opacity 0.5s ease, transform 0.5s ease;
 }
-.intro-copy b { color: #ffffff; }
-/* Проба пальцев: счётчик десяти клавиш, которые нужно нажать до старта. */
-.intro-drill {
-  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-  justify-content: center; margin: 0 0 12px;
+/* Затухание после успешной пробы: сессия начинается сразу, поэтому фон сначала
+   гаснет, а уже потом прячется совсем (display: none ставит beginFromOverlay). */
+#startOverlay.fade { opacity: 0; transform: scale(1.02); pointer-events: none; }
+.intro-title {
+  margin: 0; font-size: clamp(11px, 1.4vw, 16px); font-weight: 800;
+  letter-spacing: clamp(1px, 0.26vw, 3px); text-transform: uppercase;
+  background: linear-gradient(90deg, #6bdfff, #a455e3, #ff1541);
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
 }
-.ip-kicker {
-  font-size: 9px; font-weight: 800; letter-spacing: 0.6px;
-  text-transform: uppercase; color: #9aa4c2;
+/* Единственная инструкция: что нажать и сколько осталось. */
+.intro-lead {
+  display: flex; align-items: baseline; justify-content: center; flex-wrap: wrap;
+  gap: 4px 10px; margin: 0; text-align: center;
+  font-size: clamp(11px, 1.35vw, 15px); line-height: 1.35; color: #c2cae0;
 }
-.ip-track { display: flex; gap: 5px; flex-wrap: wrap; justify-content: center; }
-.ip-dot {
-  min-width: 20px; height: 20px; padding: 0 4px; border-radius: 6px;
-  display: inline-flex; align-items: center; justify-content: center;
-  font-size: 9px; font-weight: 800; line-height: 1; color: #7e88a6;
-  background: rgba(255, 255, 255, 0.055);
-  border: 1px dashed rgba(255, 255, 255, 0.22);
-  transition: color 0.18s, background 0.18s, border-color 0.18s, box-shadow 0.18s;
-}
-.ip-dot.done {
-  color: #dfe8ff; background: rgba(107, 223, 255, 0.16);
-  border: 1px solid rgba(107, 223, 255, 0.6);
-  box-shadow: 0 0 10px rgba(107, 223, 255, 0.35);
-}
+.intro-lead b { color: #ffffff; }
 .ip-count {
-  font-size: 11px; font-weight: 800; letter-spacing: 0.4px;
-  color: #ffd166; font-variant-numeric: tabular-nums;
+  font-weight: 800; letter-spacing: 0.4px; color: #ffd166;
+  font-variant-numeric: tabular-nums;
 }
+/* Клавиатура забирает всё свободное место: схема — главный элемент экрана. */
 .intro-keyboard {
-  display: flex; flex-direction: column; gap: 7px; width: min(700px, 100%);
-  margin: 0 0 11px;
+  flex: 1 1 auto; min-height: 0; width: 100%; max-width: 1360px;
+  display: flex; flex-direction: column; justify-content: center;
+  gap: clamp(4px, 1vh, 10px);
 }
-.kb-hands {
-  display: flex; justify-content: space-between; gap: 12px; padding: 0 12px;
-}
+.kb-hands { display: flex; justify-content: space-between; gap: 12px; padding: 0 clamp(4px, 1vw, 14px); }
 .kb-hand {
   display: flex; align-items: center; gap: 6px;
-  font-size: 9px; font-weight: 800; letter-spacing: 0.45px;
-  text-transform: uppercase; color: #9aa4c2;
+  font-size: clamp(8px, 1vw, 12px); font-weight: 800; letter-spacing: 0.45px;
+  text-transform: uppercase; color: #9aa4c2; white-space: nowrap;
 }
 .kb-hand i {
   width: 7px; height: 7px; border-radius: 50%; flex: none;
@@ -64,29 +66,34 @@
 }
 .kb-hand.rh i { background: #74cc3d; box-shadow: 0 0 8px rgba(116, 204, 61, 0.6); }
 .kb-board {
-  width: min(560px, 100%); margin: 0 auto; padding: 8px 10px 9px;
-  display: flex; flex-direction: column; gap: 5px;
-  border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 12px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.02));
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  flex: 1 1 auto; min-height: 0; width: 100%;
+  /* Высота доски ограничена и шириной, и высотой окна: на телефоне клавиши
+     остаются компактными, на большом мониторе — крупными, но не вытянутыми. */
+  max-height: min(520px, 60vh, 82vw);
+  padding: clamp(6px, 1.2vh, 14px);
+  display: flex; flex-direction: column; gap: clamp(4px, 0.9vh, 10px);
+  border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 14px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.34), inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
-.kb-row { display: flex; align-items: center; justify-content: center; gap: 4px; }
-.kb-home { transform: translateX(10px); }
+.kb-row { flex: 1 1 0; min-height: 0; display: flex; gap: clamp(3px, 0.55vw, 8px); }
 /* Небольшой сдвиг рядов даёт настоящую «лесенку», но не выводит клавиши
    за скруглённую рамку: иначе на узком экране появляется горизонтальный скролл. */
-.kb-bottom { transform: translateX(8px); }
-.kb-space-row { transform: translateX(4px); }
+.kb-home { transform: translateX(6px); }
+.kb-bottom { transform: translateX(5px); }
+.kb-space-row { transform: translateX(3px); }
 .kb-key {
-  position: relative; flex: 0 0 30px; width: 30px; height: 27px;
+  position: relative; flex: 1 1 0; min-width: 0;
   display: inline-flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 1px; line-height: 1; font-size: 10px; font-weight: 800;
+  gap: 2px; padding: 0 2px; line-height: 1;
+  font-size: clamp(9px, 1.1vw, 15px); font-weight: 800;
   color: #b9c2da; background: rgba(255, 255, 255, 0.055);
-  border: 1px solid rgba(255, 255, 255, 0.16); border-radius: 5px;
-  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.16); border-radius: 8px;
+  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.22);
   transition: background 0.15s, border-color 0.15s, transform 0.15s;
 }
-.kb-key b { font-size: 10.5px; line-height: 1; color: #e8eeff; }
-.kb-key span { font-size: 7px; line-height: 1; color: #8b95b3; white-space: nowrap; }
+.kb-key b { font-size: clamp(10px, 1.3vw, 17px); line-height: 1; color: #e8eeff; }
+.kb-key span { font-size: clamp(7px, 0.72vw, 10px); line-height: 1; color: #8b95b3; white-space: nowrap; }
 .kb-key.dim { color: #69738f; opacity: 0.42; font-weight: 700; }
 .kb-key.on {
   animation: introKeyPulse 4.2s ease-in-out infinite;
@@ -114,48 +121,37 @@
   content: '✓'; position: absolute; top: 1px; right: 3px;
   font-size: 7px; line-height: 1; color: var(--lit);
 }
-.kb-tab { flex-basis: 42px; width: 42px; }
-.kb-caps { flex-basis: 40px; width: 40px; }
-.kb-enter { flex-basis: 52px; width: 52px; }
-.kb-shift { flex-basis: 48px; width: 48px; }
-.kb-mod { flex-basis: 36px; width: 36px; }
+/* Широкие клавиши растягиваются непропорционально — как на настоящей доске. */
+.kb-tab { flex-grow: 1.7; }
+.kb-caps { flex-grow: 1.6; }
+.kb-enter { flex-grow: 2; }
+.kb-shift { flex-grow: 1.9; }
+.kb-mod { flex-grow: 1.4; }
 .kb-space {
-  flex-basis: 188px; width: 188px; flex-direction: row; gap: 6px;
+  flex-grow: 6; flex-direction: row; gap: 6px;
   background: rgba(255, 209, 102, 0.09);
 }
-.kb-space b { font-size: 9.5px; }
+.kb-space b { font-size: clamp(9px, 1vw, 13px); }
+/* Стрелки — сетка 3×2 внутри общего ряда: кластер растягивается вместе с доской. */
 .kb-arrows {
-  display: grid; grid-template-columns: repeat(3, 22px); grid-template-rows: repeat(2, 22px);
-  gap: 3px; width: 72px; flex: none;
+  flex: 1.6 1 0; min-width: 0;
+  display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(2, 1fr);
+  gap: clamp(2px, 0.4vw, 5px);
 }
-.kb-arrow {
-  flex: none; width: 22px; height: 22px; border-radius: 4px;
-  font-size: 12px; font-weight: 800;
-}
+.kb-arrow { flex: none; border-radius: 6px; font-size: clamp(10px, 1.2vw, 16px); }
 .kb-arrow.up { grid-column: 2; grid-row: 1; }
 .kb-arrow.left { grid-column: 1; grid-row: 2; }
 .kb-arrow.down { grid-column: 2; grid-row: 2; }
 .kb-arrow.right { grid-column: 3; grid-row: 2; }
 .kb-arrow-label {
-  align-self: flex-end; margin-left: 1px; font-size: 7px; line-height: 1.1;
-  color: #7e88a6; text-transform: uppercase; letter-spacing: 0.3px;
+  align-self: flex-end; margin-left: 1px;
+  font-size: clamp(7px, 0.7vw, 9px); line-height: 1.1;
+  color: #7e88a6; text-transform: uppercase; letter-spacing: 0.3px; white-space: nowrap;
 }
 @keyframes introKeyPulse {
   0%, 72%, 100% { transform: translateY(0); background: rgba(255, 255, 255, 0.055); box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.22); }
   5% { transform: translateY(-2px); background: rgba(255, 255, 255, 0.16); border-color: var(--lit); box-shadow: 0 0 12px var(--lit), inset 0 -2px 0 rgba(0, 0, 0, 0.22); }
   5.01%, 12% { transform: translateY(-1px); background: rgba(255, 255, 255, 0.10); border-color: var(--lit); }
-}
-.intro-note { margin: 0 0 14px; font-size: 10.5px; color: #7e88a6; }
-.intro-sub {
-  max-width: 650px; margin: 0 0 12px; font-size: 10.5px; line-height: 1.5;
-  color: #8f99b6;
-}
-.intro-sub b { color: #c2cae0; }
-.intro-hint { margin: 8px 0 0; font-size: 10px; color: #6f7997; }
-.intro-note kbd {
-  font: 800 9.5px/1 inherit; padding: 2px 4px; border-radius: 3px;
-  background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.14);
-  color: #b9c2da;
 }
 @media (prefers-reduced-motion: reduce) {
   .kb-key.on { animation: none; }
@@ -170,13 +166,5 @@
 }
 .big-btn:hover { transform: scale(1.05); }
 .big-btn.alt { background: rgba(255, 255, 255, 0.1); color: #d0d7ee; box-shadow: none; border: 1px solid rgba(255, 255, 255, 0.25); }
-/* Проба пальцев: кнопка-счётчик выключена, пока не нажаты все десять клавиш. */
-.big-btn:disabled { cursor: default; opacity: 0.5; box-shadow: none; }
-.big-btn:disabled:hover { transform: none; }
-.big-btn.ready { box-shadow: 0 6px 28px rgba(116, 204, 61, 0.45); }
-/* Затухание стартового окна после успешной пробы: сессия начинается сразу,
-   поэтому фон сначала гаснет, а уже потом прячется совсем. */
-#startOverlay { transition: opacity 0.5s ease, transform 0.5s ease; }
-#startOverlay.fade { opacity: 0; transform: scale(1.02); pointer-events: none; }
 #modal { display: none; cursor: default; }
 #modalStats { font-size: 15px; color: #ffd166; font-weight: 800; margin-bottom: 18px; }

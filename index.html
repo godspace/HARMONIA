@@ -172,93 +172,6 @@
         </div>
       </div>
 
-      <div id="startOverlay" class="scrim">
-        <h1>HARMONIA — симулятор гармонии · 24 комбо</h1>
-        <div class="intro-copy">
-          <b>Положите пальцы на десять игровых клавиш и нажмите их.</b>
-          Левая рука — <b>Q W E R F</b> (аккорды), правая — <b>J I O P [</b>
-          (ноты). Порядок любой: каждая клавиша отвечает звуком, а когда нажаты
-          все десять, окно затухает и начинается симулятор.
-        </div>
-        <div class="intro-drill">
-          <span class="ip-kicker">Проба пальцев</span>
-          <div class="ip-track" id="introDots" aria-hidden="true"></div>
-          <span class="ip-count" id="introCount" aria-live="polite">0 / 10</span>
-        </div>
-        <div class="intro-keyboard" role="group" aria-label="Раскладка компьютерной клавиатуры: Q W E R F — левая рука, J I O P [ — правая. Нажмите эти десять клавиш, чтобы начать; Space — новое комбо после 1000, Enter и стрелки — команды">
-          <div class="kb-hands">
-            <span class="kb-hand lh"><i></i>Левая рука · Q W E R F</span>
-            <span class="kb-hand rh"><i></i>Правая рука · J I O P [</span>
-          </div>
-          <div class="kb-board">
-            <div class="kb-row kb-top">
-              <span class="kb-key dim kb-tab">Tab</span>
-              <span class="kb-key lh on need home" data-key="KeyQ" style="--i:0" title="Q · II — супертоника"><b>Q</b><span>II</span></span>
-              <span class="kb-key lh on need" data-key="KeyW" style="--i:1" title="W · IV — субдоминанта"><b>W</b><span>IV</span></span>
-              <span class="kb-key lh on need" data-key="KeyE" style="--i:2" title="E · V — доминанта"><b>E</b><span>V</span></span>
-              <span class="kb-key lh on need" data-key="KeyR" style="--i:3" title="R · VI — субмедианта"><b>R</b><span>VI</span></span>
-              <span class="kb-key dim">T</span>
-              <span class="kb-key dim">Y</span>
-              <span class="kb-key dim">U</span>
-              <span class="kb-key rh on need" data-key="KeyI" style="--i:5" title="I · нота 2"><b>I</b><span>2</span></span>
-              <span class="kb-key rh on need" data-key="KeyO" style="--i:6" title="O · нота 3"><b>O</b><span>3</span></span>
-              <span class="kb-key rh on need" data-key="KeyP" style="--i:7" title="P · нота 4"><b>P</b><span>4</span></span>
-              <span class="kb-key rh on need" data-key="BracketLeft" style="--i:8" title="[ · нота 5"><b>[</b><span>5</span></span>
-              <span class="kb-key dim">]</span>
-            </div>
-            <div class="kb-row kb-home">
-              <span class="kb-key dim kb-caps">Caps</span>
-              <span class="kb-key dim">A</span>
-              <span class="kb-key dim">S</span>
-              <span class="kb-key dim">D</span>
-              <span class="kb-key lh on need home" data-key="KeyF" style="--i:4" title="F · I — тоника"><b>F</b><span>I</span></span>
-              <span class="kb-key dim">G</span>
-              <span class="kb-key dim">H</span>
-              <span class="kb-key rh on need home" data-key="KeyJ" style="--i:9" title="J · нота 1"><b>J</b><span>1</span></span>
-              <span class="kb-key dim">K</span>
-              <span class="kb-key dim">L</span>
-              <span class="kb-key dim">;</span>
-              <span class="kb-key dim">'</span>
-              <span class="kb-key cmd on kb-enter" style="--i:11"><b>Enter</b><span>комбо</span></span>
-            </div>
-            <div class="kb-row kb-bottom">
-              <span class="kb-key dim kb-shift">Shift</span>
-              <span class="kb-key dim">Z</span>
-              <span class="kb-key dim">X</span>
-              <span class="kb-key dim">C</span>
-              <span class="kb-key dim">V</span>
-              <span class="kb-key dim">B</span>
-              <span class="kb-key dim">N</span>
-              <span class="kb-key dim">M</span>
-              <span class="kb-key dim">,</span>
-              <span class="kb-key dim">.</span>
-              <span class="kb-key dim">/</span>
-              <span class="kb-key dim kb-shift">Shift</span>
-            </div>
-            <div class="kb-row kb-space-row">
-              <span class="kb-key dim kb-mod">Ctrl</span>
-              <span class="kb-key dim kb-mod">Alt</span>
-              <span class="kb-key cmd on kb-space" style="--i:10"><b>Space</b><span>комбо</span></span>
-              <span class="kb-key dim kb-mod">Alt</span>
-              <span class="kb-arrows" aria-label="Стрелки: лад и комбо">
-                <span class="kb-key cmd on kb-arrow up" style="--i:12" title="↑ — следующее комбо"><b>↑</b></span>
-                <span class="kb-key cmd on kb-arrow left" style="--i:13" title="← — мажор"><b>←</b></span>
-                <span class="kb-key cmd on kb-arrow down" style="--i:14" title="↓ — предыдущее комбо"><b>↓</b></span>
-                <span class="kb-key cmd on kb-arrow right" style="--i:15" title="→ — минор"><b>→</b></span>
-              </span>
-              <span class="kb-arrow-label">лад / комбо</span>
-            </div>
-          </div>
-        </div>
-        <div class="intro-sub">В умном режиме пять нот правой руки сами собираются вокруг текущего
-          аккорда и избегают острых столкновений. Кнопка <b>Умное переключение</b> в панели
-          <b>Звук</b> переключает их на пять фиксированных корней; там же сдвиг октавы.</div>
-        <div class="intro-note"><kbd>1</kbd>–<kbd>3</kbd> — визуализация · <kbd>←</kbd><kbd>→</kbd> — лад · <kbd>↑</kbd><kbd>↓</kbd> — комбо · <kbd>Space</kbd> — новое комбо после 1000 · <kbd>Esc</kbd> — пауза · <kbd>M</kbd> — звук</div>
-
-        <div class="btnrow"><button id="startBtn" class="big-btn" disabled>Осталось нажать: 10</button></div>
-        <div class="intro-hint">Клавиши можно нажимать и на схеме — мышкой или пальцем.</div>
-      </div>
-
       <div id="modal" class="scrim">
         <h1 id="modalTitle">Пауза</h1>
         <p id="modalText"></p>
@@ -403,6 +316,84 @@
   <div id="midi-status"><span class="dot"></span><span id="midiText">Web MIDI: проверка…</span></div>
   <div class="hints"><kbd>Q</kbd> <kbd>W</kbd> <kbd>E</kbd> <kbd>R</kbd> <kbd>F</kbd> = аккорды · <span id="noteHints"><kbd>J</kbd> <kbd>I</kbd> <kbd>O</kbd> <kbd>P</kbd> <kbd>[</kbd></span> = ноты · <kbd>−</kbd><kbd>=</kbd> = октава · <kbd>←</kbd><kbd>→</kbd> = лад · <kbd>↑</kbd><kbd>↓</kbd> = комбо · <kbd>Enter</kbd> / <kbd>Backspace</kbd> = комбо · <kbd>Space</kbd> = новое комбо после 1000 · <kbd>1</kbd>–<kbd>3</kbd> = визуализация · <kbd>Esc</kbd> = пауза · MIDI: трезвучие = аккорд</div>
 </div>
+
+  <!-- Стартовый экран: проба пальцев. Текста ровно две строки — название и
+       «нажмите десять подсвеченных клавиш» со счётчиком, а всё остальное место
+       занимает схема настоящей клавиатуры. Экран фиксирован к окну, а не лежит
+       внутри сцены: #game-container масштабируется transform'ом (fitStage), и
+       внутри него клавиши на телефоне сжимались бы до нечитаемых. -->
+  <div id="startOverlay">
+    <h1 class="intro-title">HARMONIA — симулятор гармонии · 24 комбо</h1>
+    <p class="intro-lead">
+      <span>Нажмите <b>десять</b> подсвеченных клавиш — на клавиатуре или по схеме</span>
+      <span class="ip-count" id="introCount" aria-live="polite">0 / 10</span>
+    </p>
+    <div class="intro-keyboard" role="group" aria-label="Схема клавиатуры: Q W E R F — аккорды левой руки, J I O P [ — ноты правой. Нажмите все десять подсвеченных клавиш, чтобы начать">
+      <div class="kb-hands">
+        <span class="kb-hand lh"><i></i>Левая рука · аккорды</span>
+        <span class="kb-hand rh"><i></i>Правая рука · ноты</span>
+      </div>
+      <div class="kb-board">
+            <div class="kb-row kb-top">
+              <span class="kb-key dim kb-tab">Tab</span>
+              <span class="kb-key lh on need home" data-key="KeyQ" style="--i:0" title="Q · II — супертоника"><b>Q</b><span>II</span></span>
+              <span class="kb-key lh on need" data-key="KeyW" style="--i:1" title="W · IV — субдоминанта"><b>W</b><span>IV</span></span>
+              <span class="kb-key lh on need" data-key="KeyE" style="--i:2" title="E · V — доминанта"><b>E</b><span>V</span></span>
+              <span class="kb-key lh on need" data-key="KeyR" style="--i:3" title="R · VI — субмедианта"><b>R</b><span>VI</span></span>
+              <span class="kb-key dim">T</span>
+              <span class="kb-key dim">Y</span>
+              <span class="kb-key dim">U</span>
+              <span class="kb-key rh on need" data-key="KeyI" style="--i:5" title="I · нота 2"><b>I</b><span>2</span></span>
+              <span class="kb-key rh on need" data-key="KeyO" style="--i:6" title="O · нота 3"><b>O</b><span>3</span></span>
+              <span class="kb-key rh on need" data-key="KeyP" style="--i:7" title="P · нота 4"><b>P</b><span>4</span></span>
+              <span class="kb-key rh on need" data-key="BracketLeft" style="--i:8" title="[ · нота 5"><b>[</b><span>5</span></span>
+              <span class="kb-key dim">]</span>
+            </div>
+            <div class="kb-row kb-home">
+              <span class="kb-key dim kb-caps">Caps</span>
+              <span class="kb-key dim">A</span>
+              <span class="kb-key dim">S</span>
+              <span class="kb-key dim">D</span>
+              <span class="kb-key lh on need home" data-key="KeyF" style="--i:4" title="F · I — тоника"><b>F</b><span>I</span></span>
+              <span class="kb-key dim">G</span>
+              <span class="kb-key dim">H</span>
+              <span class="kb-key rh on need home" data-key="KeyJ" style="--i:9" title="J · нота 1"><b>J</b><span>1</span></span>
+              <span class="kb-key dim">K</span>
+              <span class="kb-key dim">L</span>
+              <span class="kb-key dim">;</span>
+              <span class="kb-key dim">'</span>
+              <span class="kb-key cmd kb-enter"><b>Enter</b><span>комбо</span></span>
+            </div>
+            <div class="kb-row kb-bottom">
+              <span class="kb-key dim kb-shift">Shift</span>
+              <span class="kb-key dim">Z</span>
+              <span class="kb-key dim">X</span>
+              <span class="kb-key dim">C</span>
+              <span class="kb-key dim">V</span>
+              <span class="kb-key dim">B</span>
+              <span class="kb-key dim">N</span>
+              <span class="kb-key dim">M</span>
+              <span class="kb-key dim">,</span>
+              <span class="kb-key dim">.</span>
+              <span class="kb-key dim">/</span>
+              <span class="kb-key dim kb-shift">Shift</span>
+            </div>
+            <div class="kb-row kb-space-row">
+              <span class="kb-key dim kb-mod">Ctrl</span>
+              <span class="kb-key dim kb-mod">Alt</span>
+              <span class="kb-key cmd kb-space"><b>Space</b><span>комбо</span></span>
+              <span class="kb-key dim kb-mod">Alt</span>
+              <span class="kb-arrows" aria-label="Стрелки: лад и комбо">
+                <span class="kb-key cmd kb-arrow up" title="↑ — следующее комбо"><b>↑</b></span>
+                <span class="kb-key cmd kb-arrow left" title="← — мажор"><b>←</b></span>
+                <span class="kb-key cmd kb-arrow down" title="↓ — предыдущее комбо"><b>↓</b></span>
+                <span class="kb-key cmd kb-arrow right" title="→ — минор"><b>→</b></span>
+              </span>
+              <span class="kb-arrow-label">лад / комбо</span>
+            </div>
+      </div>
+    </div>
+  </div>
 
   <!-- Модули без сборки, порядок = порядок зависимостей.
        Карта проекта и точки расширения — docs/ARCHITECTURE.md -->

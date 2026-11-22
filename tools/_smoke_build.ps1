@@ -131,26 +131,41 @@ $post = @'
     if (document.querySelectorAll('#startOverlay .kb-key[data-key]').length !== 10) {
       throw new Error('intro keyboard does not mark ten playable keys');
     }
-    if (document.querySelectorAll('#introDots .ip-dot').length !== 10) {
-      throw new Error('intro progress track must show ten keys');
+    // Текста на старте минимум: заголовок и одна строка инструкции со счётчиком.
+    // Длинное описание умного режима, список горячих клавиш, дорожка точек и
+    // кнопка «старт» убраны: их не читают, а место принадлежит клавиатуре.
+    if (document.querySelectorAll('#startOverlay p').length !== 1) {
+      throw new Error('intro screen must keep a single instruction line');
     }
-    if (!$('startBtn').disabled) throw new Error('start button must stay disabled before the drill');
+    if (document.querySelector('#startOverlay .intro-copy, #startOverlay #startBtn, #startOverlay #introDots')) {
+      throw new Error('verbose intro blocks are back');
+    }
+    var count = $('introCount');
+    if (!count || count.textContent.indexOf('0 / 10') === -1) throw new Error('intro counter must start at 0 / 10');
+    // Клавиатура — главный элемент: во всю ширину окна и заметно выше строки текста.
+    var box = overlay.getBoundingClientRect();
+    var board = document.querySelector('#startOverlay .kb-board').getBoundingClientRect();
+    var textH = document.querySelector('#startOverlay .intro-title').getBoundingClientRect().height +
+      document.querySelector('#startOverlay .intro-lead').getBoundingClientRect().height;
+    if (board.width < Math.min(box.width, 1360) * 0.85) {
+      throw new Error('intro keyboard is too narrow: ' + Math.round(board.width) + ' of ' + Math.round(box.width));
+    }
+    if (board.height < textH * 2) {
+      throw new Error('intro keyboard must dominate the text: ' + Math.round(board.height) + ' vs ' + Math.round(textH));
+    }
     HARMONIA.INTRO_KEYS.slice(0, 9).forEach(function (code) { HARMONIA.introPress(code); });
     var st = HARMONIA.introState();
     if (st.done || st.count !== 9) throw new Error('drill counted ' + st.count + ' instead of 9 keys');
-    if (!$('startBtn').disabled) throw new Error('start button unlocked before the last key');
+    if (count.textContent.indexOf('9 / 10') === -1) throw new Error('intro counter did not follow: ' + count.textContent);
     HARMONIA.introPress(HARMONIA.INTRO_KEYS[0]);
     if (HARMONIA.introState().count !== 9) throw new Error('a repeated key must not count twice');
     HARMONIA.introPress(HARMONIA.INTRO_KEYS[9]);
     st = HARMONIA.introState();
     if (!st.done || st.count !== 10) throw new Error('drill did not finish after ten keys');
-    if ($('startBtn').disabled) throw new Error('start button must unlock after the drill');
+    if (count.textContent.indexOf('10 / 10') === -1) throw new Error('intro counter did not finish: ' + count.textContent);
     if (!overlay.classList.contains('fade')) throw new Error('start overlay must fade after the drill');
     if (document.querySelectorAll('#startOverlay .kb-key.hit').length !== 10) {
       throw new Error('pressed keys are not marked on the keyboard');
-    }
-    if (document.querySelectorAll('#introDots .ip-dot.done').length !== 10) {
-      throw new Error('progress track did not fill');
     }
     if (HARMONIA.state.started) throw new Error('drill started the session before the fade');
   });
