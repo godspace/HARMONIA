@@ -51,6 +51,10 @@ $post = @'
     }
     var robots = document.querySelector('meta[name="robots"]');
     if (!robots || robots.content.indexOf('index') === -1) throw new Error('robots meta is missing');
+    var googleVerification = document.querySelector('meta[name="google-site-verification"]');
+    if (!googleVerification || googleVerification.content !== 'WQZso1a4LcVn2_Adr-JlpDhe5KHCz_qSr4MS75SxeGc') {
+      throw new Error('Google site verification meta is missing or wrong');
+    }
     var ogTitle = document.querySelector('meta[property="og:title"]');
     if (!ogTitle || ogTitle.content.indexOf('HARMONIA') === -1) throw new Error('og:title is missing');
     var ogImage = document.querySelector('meta[property="og:image"]');

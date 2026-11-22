@@ -322,8 +322,8 @@ HARMONIA.Transport.bpm; HARMONIA.state.transport // часы формы: так�
 
 Быстрая проверка целостности данных — `python tools/combolist.py --check`.
 
-Smoke-тест проверяет брендинг, canonical/Open Graph/JSON-LD и наличие счётчика
-Яндекс.Метрики:
+Smoke-тест проверяет брендинг, canonical/Open Graph/JSON-LD, метатег
+Google Search Console и наличие счётчика Яндекс.Метрики:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File tools/_smoke_build.ps1
