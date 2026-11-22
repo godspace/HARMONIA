@@ -51,7 +51,12 @@
    `https://godspace.github.io/HARMONIA/sitemap.xml`.
 3. **URL Inspection** → проверить `https://godspace.github.io/HARMONIA/`
    → **Request indexing**.
-4. Через 1–7 дней проверить **Indexing → Pages** и статус sitemap.
+4. **URL Inspection** → `https://godspace.github.io/HARMONIA/en/` →
+   **Test live URL**, затем **Request indexing**: новая страница попадает
+   в очередь только после ручного запроса, `hreflang`-кластер Google
+   склеивает уже после индексации обеих версий.
+5. Через 1–7 дней проверить **Indexing → Pages** и статус sitemap
+   (для обеих страниц), поиск `site:godspace.github.io/HARMONIA/`.
 
 Если HTML-тег не подтверждается:
 
@@ -85,14 +90,15 @@ Sitemap: https://godspace.github.io/HARMONIA/sitemap.xml
 
 ```text
 index.html            разметка, SEO/Open Graph/JSON-LD, Google-метатег
-css/                  base, stage, overlays, panel
+en/index.html         англоязычная страница: статичный текст, без скриптов
+css/                  base, stage, overlays, panel, landing (en/index.html)
 js/                   приложение: harmony, audio, scene, viz, game, midi, render, translate, main
 data/COMBOLIST.csv    единственный источник правды для 24 комбо
 tools/combolist.py    генератор js/data.js и проверка --check
-tools/_smoke_build.ps1 smoke-тест SEO и брендинга
+tools/_smoke_build.ps1 smoke-тест SEO и брендинга (ru + en)
 docs/ARCHITECTURE.md  карта модулей и потоков данных
 docs/screenshot.png   скриншот для README и og:image
-sitemap.xml           карта сайта (сейчас одна главная)
+sitemap.xml           карта сайта: главная + en/ с xhtml:link alternates
 robots.txt            правила для пути HARMONIA
 .nojekyll             отключает Jekyll на GitHub Pages
 ```
