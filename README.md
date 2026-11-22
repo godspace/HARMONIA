@@ -334,9 +334,26 @@ powershell -ExecutionPolicy Bypass -File tools/_smoke_build.ps1
 
 - Канонический адрес, Open Graph и JSON-LD настроены на
   <https://godspace.github.io/HARMONIA/>.
-- `robots.txt` и `sitemap.xml` лежат в корне; после включения GitHub Pages
-  проверьте `https://godspace.github.io/HARMONIA/robots.txt` и
-  `https://godspace.github.io/HARMONIA/sitemap.xml`.
+- `sitemap.xml` лежит в корне проекта:
+  <https://godspace.github.io/HARMONIA/sitemap.xml>.
+- `robots.txt` в этом репозитории действует только для отдельного
+  домена/корня. На GitHub Pages поисковики читают
+  <https://godspace.github.io/robots.txt> из репозитория
+  `godspace.github.io`; чтобы HARMONIA находилась автоматически, добавьте
+  туда строку
+  `Sitemap: https://godspace.github.io/HARMONIA/sitemap.xml`
+  (или URL HARMONIA в корневой `sitemap.xml`).
+- Яндекс.Вебмастер работает с хостом, а не с путём:
+  `https://godspace.github.io` и `https://godspace.github.io/HARMONIA/` —
+  один сайт. Сообщение «Сайт уже добавлен» означает, что нужно открыть
+  существующий сайт `https://godspace.github.io` и добавить sitemap
+  вручную: **Индексирование → Файлы Sitemap** →
+  `https://godspace.github.io/HARMONIA/sitemap.xml`. Затем —
+  **Индексирование → Переобход страниц** для главной; лимит 10 адресов в
+  сутки общий на весь хост.
+- Google Search Console, в отличие от Яндекса, поддерживает URL-prefix:
+  добавляйте свойство `https://godspace.github.io/HARMONIA/` и тот же
+  sitemap.
 - Яндекс.Метрика: счётчик `114504272`. Локальные запуски (`file://`,
   `localhost`, `127.0.0.1`) не отправляют статистику.
 - Для сниппетов в поиске важны `title`, `description`, H1 и
