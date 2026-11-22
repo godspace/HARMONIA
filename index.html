@@ -319,16 +319,20 @@
 
   <!-- Стартовый экран: проба пальцев. Текста ровно две строки — название и
        «нажмите десять подсвеченных клавиш» со счётчиком, а всё остальное место
-       занимает схема настоящей клавиатуры. Экран фиксирован к окну, а не лежит
-       внутри сцены: #game-container масштабируется transform'ом (fitStage), и
-       внутри него клавиши на телефоне сжимались бы до нечитаемых. -->
+       занимает схема настоящей клавиатуры. Когда десять клавиш собраны, строка
+       меняется на «нажмите пробел», а Space на схеме загорается: сессия
+       начинается тем же жестом, который в игре открывает новое комбо.
+       Экран фиксирован к окну, а не лежит внутри сцены: #game-container
+       масштабируется transform'ом (fitStage), и внутри него клавиши на телефоне
+       сжимались бы до нечитаемых. -->
   <div id="startOverlay">
     <h1 class="intro-title">HARMONIA — симулятор гармонии · 24 комбо</h1>
     <p class="intro-lead">
-      <span>Нажмите <b>десять</b> подсвеченных клавиш — на клавиатуре или по схеме</span>
+      <span class="ip-before">Нажмите <b>десять</b> подсвеченных клавиш — на клавиатуре или по схеме</span>
+      <span class="ip-after" aria-live="polite">Клавиши на месте — нажмите <b>пробел</b>, чтобы начать</span>
       <span class="ip-count" id="introCount" aria-live="polite">0 / 10</span>
     </p>
-    <div class="intro-keyboard" role="group" aria-label="Схема клавиатуры: Q W E R F — аккорды левой руки, J I O P [ — ноты правой. Нажмите все десять подсвеченных клавиш, чтобы начать">
+    <div class="intro-keyboard" role="group" aria-label="Схема клавиатуры: Q W E R F — аккорды левой руки, J I O P [ — ноты правой. Нажмите все десять подсвеченных клавиш, затем пробел, чтобы начать">
       <div class="kb-hands">
         <span class="kb-hand lh"><i></i>Левая рука · аккорды</span>
         <span class="kb-hand rh"><i></i>Правая рука · ноты</span>
@@ -381,7 +385,7 @@
             <div class="kb-row kb-space-row">
               <span class="kb-key dim kb-mod">Ctrl</span>
               <span class="kb-key dim kb-mod">Alt</span>
-              <span class="kb-key cmd kb-space"><b>Space</b><span>комбо</span></span>
+              <span class="kb-key cmd kb-space" data-key="Space" title="Пробел — начать игру; в игре — новое комбо"><b>Space</b><span class="kb-space-role">комбо</span><span class="kb-space-start">начать</span></span>
               <span class="kb-key dim kb-mod">Alt</span>
               <span class="kb-arrows" aria-label="Стрелки: лад и комбо">
                 <span class="kb-key cmd kb-arrow up" title="↑ — следующее комбо"><b>↑</b></span>

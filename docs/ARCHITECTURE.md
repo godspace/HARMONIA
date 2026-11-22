@@ -45,7 +45,7 @@
 | `ui-panel` | настройки | `bindRange`, `bindSelect`, `bindToggle`, `syncAll`, `togglePedal` |
 | `ui-drawers` | выдвижные панели | `drawers`, `drawerOpen`, `drawerIntro`, `setDrawer`, `toggleDrawer`, `setDrawerIntro`, `initDrawers` |
 | `ui-compose` | HUD/панель формы и результат | `buildFormHud`, `updateFormHUD`, `resetFormHud`, `setFormEnabled`, `showFormResult`, `initCompose` |
-| `input` | физический ввод | `runCommand`, `beginFromOverlay`, стартовая проба `INTRO_KEYS`/`introPress`/`introState`, стрелки `←/→` → `setMode`, `↑/↓` → комбо |
+| `input` | физический ввод | `runCommand`, `beginFromOverlay`, стартовая проба `INTRO_KEYS`/`introPress`/`introState`/`introStart`, стрелки `←/→` → `setMode`, `↑/↓` → комбо |
 | `midi` | Web MIDI | `Midi`, `MIDI_CONTROLLER`/`MIDI_PIANO`, `resolveEcho` |
 | `render` | кадр | `render`, `fitStage` |
 | `main` | запуск | boot + `window.HARMONIA` |
@@ -97,11 +97,18 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
   закрыть кликом мимо клавиш. Пока оно открыто, клавиатура отдаёт десять
   `INTRO_KEYS` пробе `introPress()` (повтор не считается, каждая клавиша отвечает
   звуком до старта); десятая вызывает `introFinish()` — окно получает класс
-  `fade`, и через `CFG.introFadeMs` стартует сессия. Клик по клавише на схеме
-  идёт тем же путём, поэтому проба работает и без физической клавиатуры.
+  `ready`, но остаётся на экране: `Space` на схеме загорается и подписывается
+  «начать», строка инструкции сменяется на «нажмите пробел». Сессию открывает
+  только `introStart()` (пробел или клик по этой клавише): он ставит `fade`, и
+  через `CFG.introFadeMs` вызывается `beginFromOverlay()`. Это тот же жест, что в
+  игре открывает новое комбо, поэтому реакция закрепляется до первой ноты.
+  Клик по клавише на схеме идёт тем же путём, поэтому проба работает и без
+  физической клавиатуры.
   Экран почти без текста: `h1` + одна строка инструкции со счётчиком
   `#introCount`; прогресс несут сами клавиши (`introKeyEl()` ставит `.hit` и
-  снимает `.need`), дорожки точек и кнопки старта больше нет. `#startOverlay`
+  снимает `.need`), дорожки точек и кнопки старта больше нет. Тексты обоих
+  состояний живут в `index.html` (`.ip-before` / `.ip-after`), JS только
+  переключает класс `ready`. `#startOverlay`
   лежит на уровне `body`, вне `#game-container`: `fitStage()` масштабирует только
   сцену, иначе клавиши на телефоне сжимались бы до нечитаемых.
   MIDI-нота, запись и пьеса тоже входят через `beginFromOverlay()` — это
@@ -368,6 +375,7 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
 | Новая визуализация | `VIZ` + `VIZ_ORDER` (`project/guides/center/ball/ring`) — меню и цифры `1`–`3` строятся сами |
 | Порог Space-перехода | `CFG.comboAdvanceAt` + `advanceCombo()` / `updateSpaceNext()` |
 | Состав стартовой пробы | `INTRO_KEYS` + `introPress()` + `data-key` на клавишах в `index.html` |
+| Подтверждение старта пробелом | `introStart()` + класс `ready` на `#startOverlay` + `.ip-after` / `.kb-space-start` в `index.html` |
 | Веса красоты переходов/фраз | `CFG.beauty` + `harmonyTransitionBeauty()`, `harmonyPhraseBeauty()` |
 | Громкость нот/аккордов | `P.noteVol`/`P.chordVol` + `noteGain`/`chordGain` в `audio.js` |
 | Новый параметр панели | `DEFAULTS` → разметка `.prow` → `bindRange/bindToggle` |
@@ -388,8 +396,9 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
   `HARMONIA.Midi.noteOn(60, 0.9)`, `HARMONIA.Heard.pcs()`, `HARMONIA.harmonyDebug()`,
   `HARMONIA.vizDebug()`, `HARMONIA.setViz('spectrum')`, `HARMONIA.cycleViz()`.
 - Headless-прогон (Chrome): открыть `index.html`, пройти пробу
-  (`HARMONIA.INTRO_KEYS.forEach(code => HARMONIA.introPress(code))`) или вызвать
-  `HARMONIA.beginFromOverlay()`, проверить `HARMONIA.state.visited`, `score`,
+  (`HARMONIA.INTRO_KEYS.forEach(code => HARMONIA.introPress(code))`), нажать
+  пробел (`HARMONIA.introStart()`) или вызвать `HARMONIA.beginFromOverlay()`,
+  проверить `HARMONIA.state.visited`, `score`,
   число `.chord-card`, отсутствие ошибок в консоли;
   затем `Midi.noteOn(60/64/67)` → `state.heard.triad.degree === 'I'`.
 - `tools/_smoke_build.ps1` собирает `smoke.html` с шагами boot/intro-drill/
@@ -397,8 +406,9 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
   `<pre id="smoke-result">` строку `ok:true`. Шаг `intro-drill` держит стартовое
   окно открытым, пока не нажаты десять клавиш: одна строка инструкции и счётчик
   `0 / 10 → 10 / 10`, клавиатура не уже 85 % ширины окна и выше двух строк
-  текста, повтор не двигает счёт, после десятой все клавиши `.hit` и появляется
-  класс `fade`. Шаги `default-sound`,
+  текста, повтор не двигает счёт, после десятой все клавиши `.hit`, окно получает
+  `.ready` с подсвеченным `Space` и подсказкой `.ip-after`, а сессия стартует
+  только после пробела (`.fade`, затем `CFG.introFadeMs`). Шаги `default-sound`,
   `melody-layout`,
   `space-combo-advance`, `smart-hand-window`, `smart-resume-window`,
   `diminished-anchor`, `smart-form-target`, `adaptive-defer` и

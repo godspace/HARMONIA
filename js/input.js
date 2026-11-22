@@ -30,8 +30,15 @@ window.addEventListener('keydown', (e) => {
   // Ctrl/⌘/Alt + клавиша — команда браузера, а не игра (Ctrl+R, Ctrl+M, ⌘Q…).
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   // Стартовый экран: пока сессия не начата, десять игровых клавиш — это проба
-  // пальцев. Остальные клавиши и раньше ничего не делали до старта.
-  if (!state.started && !e.repeat && introPress(e.code)) return;
+  // пальцев, а пробел — подтверждение старта после неё. Тот же жест в игре
+  // открывает новое комбо, поэтому реакция закрепляется ещё до первой ноты.
+  if (!state.started && !e.repeat) {
+    if (e.code === 'Space') {
+      if (introStart()) { e.preventDefault(); return; }
+    } else if (introPress(e.code)) {
+      return;
+    }
+  }
   // Пока открыт результат пьесы, игровые команды спят: кнопки диалога
   // активируются браузером сами, а Space/Enter/Esc не меняют сцену за ним.
   const formResult = document.getElementById('formResult');
@@ -130,18 +137,26 @@ function beginFromOverlay() {
   const overlay = $('startOverlay');
   if (overlay) {
     overlay.style.display = 'none';
-    overlay.classList.remove('fade');
+    overlay.classList.remove('fade', 'ready');
   }
   state.started = true;
   startSession();
 }
-// ===== Стартовый экран: проба десяти клавиш =====
+// ===== Стартовый экран: проба десяти клавиш и пробел =====
 // Сессия начинается не по клику, а после того, как игрок положил пальцы на
 // десять игровых клавиш и нажал их. Порядок любой — важна каждая клавиша:
 // Q W E R F держат гармонию, J I O P [ ведут мелодию. Проба учит раскладку до
-// старта и заодно даёт браузеру жест, после которого разрешён звук.
+// старта и заодно даёт браузеру жест, после которого разрешён звук. Когда все
+// десять на месте, окно не гаснет само: пробел становится активным, и игрок
+// сам делает первый шаг — тем же жестом, которым в игре открывается новое комбо.
 const INTRO_KEYS = CHORD_CODES.concat(NOTE_KEYS);
-const intro = { hit: {}, count: 0, total: INTRO_KEYS.length, done: false, timer: 0 };
+const intro = {
+  hit: {}, count: 0, total: INTRO_KEYS.length,
+  done: false,        // десять клавиш собраны
+  ready: false,       // пробел стал активным, но ещё не нажат
+  starting: false,    // окно гаснет, сессия стартует через CFG.introFadeMs
+  timer: 0
+};
 function clearIntroTimer() {
   if (!intro.timer) return;
   clearTimeout(intro.timer);
@@ -154,6 +169,8 @@ function introKeyEl(code) {
 // свечение), а строка над клавиатурой — только счётчик. Отдельной дорожки из
 // десяти подписанных точек и кнопки «старт» нет: они дублировали клавиши,
 // отнимали место у схемы, а кнопку всё равно нельзя было нажать раньше времени.
+// После 10 / 10 счётчик зеленеет, а строку инструкции сменяет просьба о пробеле
+// (класс ready на окне; текст живёт в index.html, не в JS).
 function syncIntroDrill() {
   const count = $('introCount');
   if (count) count.textContent = intro.count + ' / ' + intro.total;
@@ -178,11 +195,13 @@ function introPreview(code) {
 // Одна клавиша пробы. Повторное нажатие звучит, но счёт не двигает: считаются
 // именно десять разных клавиш. Возвращает true, если клавиша принадлежит пробе.
 function introPress(code) {
-  if (intro.done || INTRO_KEYS.indexOf(code) === -1) return false;
+  if (INTRO_KEYS.indexOf(code) === -1) return false;
   const overlay = $('startOverlay');
   if (!overlay || overlay.style.display === 'none') return false;
+  // Окно уже гаснет по пробелу: клавиши молчат, чтобы не звучать «в пустоту».
+  if (intro.starting) return true;
   introPreview(code);
-  if (intro.hit[code]) return true;
+  if (intro.done || intro.hit[code]) return true;
   intro.hit[code] = true;
   intro.count += 1;
   const key = introKeyEl(code);
@@ -194,27 +213,45 @@ function introPress(code) {
   if (intro.count >= intro.total) introFinish();
   return true;
 }
-// Проба пройдена: окно гаснет, и только после паузы начинается сессия —
-// последняя клавиша успевает вспыхнуть до того, как сцена займёт экран.
+// Проба пройдена, но сессия ещё не начата: окно остаётся на экране и получает
+// класс ready — строка меняется на «нажмите пробел», а Space на схеме
+// загорается. Так жест «пробел = дальше» закрепляется до первой ноты, и в игре
+// загоревшийся пробел встречают уже знакомой реакцией.
 function introFinish() {
   if (intro.done) return;
   intro.done = true;
+  intro.ready = true;
   syncIntroDrill();
+  const overlay = $('startOverlay');
+  if (overlay) overlay.classList.add('ready');
+}
+// Пробел после пробы: окно гаснет, и через CFG.introFadeMs начинается сессия —
+// последняя вспышка Space успевает погаснуть до того, как сцена займёт экран.
+// Клик по клавише Space на схеме идёт сюда же; повторное нажатие ничего не
+// ускоряет и не сбрасывает.
+function introStart() {
+  if (state.started || !intro.ready || intro.starting) return false;
+  intro.starting = true;
+  clearIntroTimer();
   const overlay = $('startOverlay');
   if (overlay) overlay.classList.add('fade');
   intro.timer = setTimeout(beginFromOverlay, CFG.introFadeMs);
+  return true;
 }
 function introState() {
   return {
-    count: intro.count, total: intro.total, done: intro.done,
+    count: intro.count, total: intro.total,
+    done: intro.done, ready: intro.ready, starting: intro.starting,
     hit: INTRO_KEYS.filter(code => intro.hit[code])
   };
 }
 syncIntroDrill();
 $('startOverlay').addEventListener('click', (e) => {
-  // Клик мимо клавиш ничего не запускает: вход — только через пробу.
+  // Клик мимо клавиш ничего не запускает: вход — только через пробу и пробел.
   const key = e.target.closest ? e.target.closest('.kb-key[data-key]') : null;
-  if (key) introPress(key.dataset.key);
+  if (!key) return;
+  if (key.dataset.key === 'Space') introStart();
+  else introPress(key.dataset.key);
 });
 $('mResume').addEventListener('click', () => setPaused(false));
 $('mRestart').addEventListener('click', () => { initAudio(); startSession(); });

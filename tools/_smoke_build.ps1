@@ -128,9 +128,12 @@ $post = @'
     if (!overlay || overlay.style.display === 'none') throw new Error('start overlay must be visible before start');
     if (HARMONIA.state.started) throw new Error('session must not start before the finger drill');
     if (HARMONIA.INTRO_KEYS.length !== 10) throw new Error('intro drill must ask for ten keys');
-    if (document.querySelectorAll('#startOverlay .kb-key[data-key]').length !== 10) {
-      throw new Error('intro keyboard does not mark ten playable keys');
-    }
+    // data-key есть и у стартового Space: считаем только десять клавиш пробы.
+    var marked = Array.prototype.filter.call(
+      document.querySelectorAll('#startOverlay .kb-key[data-key]'),
+      function (el) { return HARMONIA.INTRO_KEYS.indexOf(el.dataset.key) !== -1; }
+    ).length;
+    if (marked !== 10) throw new Error('intro keyboard does not mark ten playable keys');
     // Текста на старте минимум: заголовок и одна строка инструкции со счётчиком.
     // Длинное описание умного режима, список горячих клавиш, дорожка точек и
     // кнопка «старт» убраны: их не читают, а место принадлежит клавиатуре.
@@ -153,21 +156,58 @@ $post = @'
     if (board.height < textH * 2) {
       throw new Error('intro keyboard must dominate the text: ' + Math.round(board.height) + ' vs ' + Math.round(textH));
     }
+    // Пробел до пробы молчит: старт открывает только десятая клавиша.
+    function pressSpace() {
+      window.dispatchEvent(new KeyboardEvent('keydown', {
+        code: 'Space', key: ' ', bubbles: true, cancelable: true
+      }));
+    }
+    pressSpace();
+    if (HARMONIA.introState().starting || HARMONIA.state.started) {
+      throw new Error('Space started the session before the ten keys');
+    }
+    // Клик по стартовому Space до пробы тоже ничего не открывает.
+    document.querySelector('#startOverlay .kb-space[data-key="Space"]').click();
+    if (HARMONIA.introState().starting || HARMONIA.state.started) {
+      throw new Error('the intro Space key started the session before the ten keys');
+    }
     HARMONIA.INTRO_KEYS.slice(0, 9).forEach(function (code) { HARMONIA.introPress(code); });
     var st = HARMONIA.introState();
     if (st.done || st.count !== 9) throw new Error('drill counted ' + st.count + ' instead of 9 keys');
+    if (st.ready) throw new Error('Space armed before the tenth key');
     if (count.textContent.indexOf('9 / 10') === -1) throw new Error('intro counter did not follow: ' + count.textContent);
     HARMONIA.introPress(HARMONIA.INTRO_KEYS[0]);
     if (HARMONIA.introState().count !== 9) throw new Error('a repeated key must not count twice');
     HARMONIA.introPress(HARMONIA.INTRO_KEYS[9]);
     st = HARMONIA.introState();
     if (!st.done || st.count !== 10) throw new Error('drill did not finish after ten keys');
+    if (!st.ready || st.starting) throw new Error('ten keys must arm Space without starting');
     if (count.textContent.indexOf('10 / 10') === -1) throw new Error('intro counter did not finish: ' + count.textContent);
-    if (!overlay.classList.contains('fade')) throw new Error('start overlay must fade after the drill');
+    if (!overlay.classList.contains('ready')) throw new Error('start overlay must arm Space after the drill');
+    if (overlay.classList.contains('fade')) throw new Error('start overlay must wait for Space');
     if (document.querySelectorAll('#startOverlay .kb-key.hit').length !== 10) {
       throw new Error('pressed keys are not marked on the keyboard');
     }
-    if (HARMONIA.state.started) throw new Error('drill started the session before the fade');
+    // Пробел — не подсказка, а единственный путь дальше: клавиша на схеме
+    // подсвечена и подписана «начать», а строка инструкции сменилась.
+    var spaceKey = document.querySelector('#startOverlay .kb-space[data-key="Space"]');
+    if (!spaceKey) throw new Error('the intro Space key is not wired for the start');
+    if (window.getComputedStyle(document.querySelector('#startOverlay .ip-after')).display === 'none') {
+      throw new Error('Space prompt is hidden after the drill');
+    }
+    if (window.getComputedStyle(document.querySelector('#startOverlay .ip-before')).display !== 'none') {
+      throw new Error('drill prompt must give way to the Space prompt');
+    }
+    if (HARMONIA.state.started) throw new Error('drill must not start the session without Space');
+    HARMONIA.introPress(HARMONIA.INTRO_KEYS[0]);
+    if (HARMONIA.introState().count !== 10) throw new Error('drill recounted after it finished');
+    pressSpace();
+    st = HARMONIA.introState();
+    if (!st.starting) throw new Error('Space did not confirm the start');
+    if (!overlay.classList.contains('fade')) throw new Error('start overlay must fade after Space');
+    if (HARMONIA.state.started) throw new Error('session must start only after the fade');
+    pressSpace();
+    if (!HARMONIA.introState().starting) throw new Error('repeated Space broke the start');
   });
 
   step('form-before-start', function () {

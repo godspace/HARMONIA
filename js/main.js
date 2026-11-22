@@ -22,7 +22,7 @@ window.HARMONIA = {
   state, P, CFG, COMBOS, ORDER, INPUT, Midi, VIZ, viz, Heard,
   Transport, Composition, setFormEnabled, updateFormHUD,
   harmonicChords, updateHUD, playHarmonic, chordEvent, pressCode, releaseCode, runCommand, loadCombo, setMode, startSession,
-  beginFromOverlay, INTRO_KEYS, introPress, introState,
+  beginFromOverlay, INTRO_KEYS, introPress, introState, introStart,
   drawers, drawerOpen, drawerIntro, setDrawer, toggleDrawer, setDrawerIntro, initDrawers,
   togglePedal, updateSpaceNext, advanceCombo, canAdvanceCombo, comboAdvanceReady,
   nextCombo, prevCombo, nextComboTarget, prevComboTarget,

@@ -28,7 +28,7 @@
   overflow: auto; cursor: default;
   transition: opacity 0.5s ease, transform 0.5s ease;
 }
-/* Затухание после успешной пробы: сессия начинается сразу, поэтому фон сначала
+/* Затухание после пробела: сессия начинается сразу, поэтому фон сначала
    гаснет, а уже потом прячется совсем (display: none ставит beginFromOverlay). */
 #startOverlay.fade { opacity: 0; transform: scale(1.02); pointer-events: none; }
 .intro-title {
@@ -48,6 +48,12 @@
   font-weight: 800; letter-spacing: 0.4px; color: #ffd166;
   font-variant-numeric: tabular-nums;
 }
+/* После пробы инструкция меняется целиком: одна короткая строка про пробел.
+   Счётчик остаётся 10 / 10 и зеленеет, чтобы «готово» читалось без текста. */
+.intro-lead .ip-after { display: none; }
+#startOverlay.ready .ip-before { display: none; }
+#startOverlay.ready .ip-after { display: inline; }
+#startOverlay.ready .ip-count { color: #74cc3d; }
 /* Клавиатура забирает всё свободное место: схема — главный элемент экрана. */
 .intro-keyboard {
   flex: 1 1 auto; min-height: 0; width: 100%; max-width: 1360px;
@@ -132,6 +138,27 @@
   background: rgba(255, 209, 102, 0.09);
 }
 .kb-space b { font-size: clamp(9px, 1vw, 13px); }
+/* Пробел — единственная клавиша, которую просят нажать после пробы: в игре она
+   открывает новое комбо, поэтому на старте закрепляется та же реакция. До
+   10 / 10 клавиша нейтральна, после — пульсирует и подписана «начать»; клик по
+   ней равен нажатию, поэтому старт доступен и без физической клавиатуры. */
+.kb-space-start { display: none; }
+#startOverlay.ready .kb-space {
+  border-style: solid; border-color: #ffd166; cursor: pointer;
+  background: rgba(255, 209, 102, 0.18);
+  box-shadow: 0 0 16px rgba(255, 209, 102, 0.5), inset 0 -2px 0 rgba(0, 0, 0, 0.22);
+  animation: introSpaceReady 1.7s ease-in-out infinite;
+}
+#startOverlay.ready .kb-space-role { display: none; }
+#startOverlay.ready .kb-space-start { display: inline; }
+#startOverlay.ready .kb-space b,
+#startOverlay.ready .kb-space-start { color: #fff6dc; }
+/* Пробел нажат: свечение снимается сразу, а текст «начать» остаётся до конца
+   затухания — окно не мигает обратно на инструкцию пробы. */
+#startOverlay.ready.fade .kb-space {
+  animation: none; transform: translateY(1px);
+  background: rgba(255, 255, 255, 0.22); border-color: #ffffff;
+}
 /* Стрелки — сетка 3×2 внутри общего ряда: кластер растягивается вместе с доской. */
 .kb-arrows {
   flex: 1.6 1 0; min-width: 0;
@@ -153,8 +180,13 @@
   5% { transform: translateY(-2px); background: rgba(255, 255, 255, 0.16); border-color: var(--lit); box-shadow: 0 0 12px var(--lit), inset 0 -2px 0 rgba(0, 0, 0, 0.22); }
   5.01%, 12% { transform: translateY(-1px); background: rgba(255, 255, 255, 0.10); border-color: var(--lit); }
 }
+@keyframes introSpaceReady {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2px); }
+}
 @media (prefers-reduced-motion: reduce) {
   .kb-key.on { animation: none; }
+  #startOverlay.ready .kb-space { animation: none; }
   #startOverlay { transition: none; }
 }
 .btnrow { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
