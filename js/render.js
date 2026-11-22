@@ -158,12 +158,15 @@ function fitStage() {
   const availW = window.innerWidth - 20 - sideW;
   // Снизу: статус-строка, а в узком режиме ещё и панель под сценой (её высоту
   // ограничивает maxHeight). Закрытая оставляет только таб в одну строку.
-  const below = wide ? 0 : (panelOpen ? FIT_PANEL_BELOW : FIT_PANEL_TAB + gap);
+  const pillH = $('panelTab').offsetHeight || 0;
+  const below = wide ? 0 : (panelOpen ? FIT_PANEL_BELOW : Math.max(FIT_PANEL_TAB, pillH + gap));
   // Верхняя полоса: сначала номинальная высота, потом реальная. В узкой
   // оболочке кнопки топбара переносятся на вторую строку, а подсказки внизу —
   // на вторую-третью, и без этой поправки сцена заходила бы на хром.
   // Двух проходов обычно хватает, три — страховка от третьей строки.
-  let topH = topOpen ? FIT_TOP : FIT_TAB;
+  // Закрытый топбар места не занимает: его полосу меряем по табу и body-gap.
+  const tabH = $('topbarTab').offsetHeight || 0;
+  let topH = topOpen ? FIT_TOP : Math.max(FIT_TAB, tabH + 10);
   let bottomH = FIT_BOTTOM;
   for (let pass = 0; pass < 3; pass++) {
     const availH = intro

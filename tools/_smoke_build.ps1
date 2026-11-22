@@ -3,9 +3,6 @@ $html = [IO.File]::ReadAllText((Join-Path $PWD 'index.html'), [Text.Encoding]::U
 $pre = @'
 <script>
 window.__smokeErrors = [];
-// Чистое хранилище: выдвижные панели помнят выбор игрока, а проверки должны
-// стартовать с состоянием по умолчанию (обе панели открыты).
-try { localStorage.removeItem('harmonia.drawers.v1'); } catch (e) {}
 window.addEventListener('error', function (e) {
   window.__smokeErrors.push('error: ' + (e.message || e.type) + (e.filename ? ' @ ' + e.filename + ':' + e.lineno : ''));
 });
@@ -175,41 +172,61 @@ $post = @'
   });
 
   step('drawers-after-start', function () {
-    // Старт возвращает меню: проба пальцев их только прятала, не выключала.
+    // После пробы хром не возвращается: панели остаются свёрнутыми, у краёв
+    // сцены только табы. Игрок сразу играет и открывает меню по необходимости.
     if (document.body.classList.contains('intro')) throw new Error('intro chrome is still on after the start');
     if (HARMONIA.drawerIntro()) throw new Error('drawer intro mode is still on after the start');
-    if (window.getComputedStyle($('topbar')).display === 'none') throw new Error('topbar did not come back after the start');
-    if (window.getComputedStyle($('panel')).display === 'none') throw new Error('panel did not come back after the start');
+    if (HARMONIA.drawerOpen('topbar') || HARMONIA.drawerOpen('panel')) {
+      throw new Error('drawers must stay closed after the drill');
+    }
+    if (window.getComputedStyle($('topbar')).display !== 'none') {
+      throw new Error('topbar is visible right after the start');
+    }
+    if (window.getComputedStyle($('panel')).display !== 'none') {
+      throw new Error('panel is visible right after the start');
+    }
+    if (!$('topbarTab').classList.contains('show')) throw new Error('topbar tab is missing after the start');
+    if (!$('panelTab').classList.contains('show')) throw new Error('panel tab is missing after the start');
+    if (window.getComputedStyle($('topbarTab')).display === 'none') throw new Error('topbar tab is not rendered');
+    if (window.getComputedStyle($('panelTab')).display === 'none') throw new Error('panel tab is not rendered');
     if (window.getComputedStyle($('status-row')).display === 'none') throw new Error('status row did not come back');
-    if ($('topbarTab').classList.contains('show')) throw new Error('topbar tab is visible while the menu is open');
-    if ($('panelTab').classList.contains('show')) throw new Error('panel tab is visible while the panel is open');
   });
 
   step('drawers-toggle', function () {
     var stage = $('game-container');
     var wide = window.innerWidth >= 1120;
-    var before = stage.style.transform;
+    var cleanSize = stage.style.transform;
+    // Таб возвращает панель: колонка снова занимает место, сцена уступает.
+    $('panelTab').click();
+    if ($('panel').classList.contains('closed')) throw new Error('panel tab did not open the panel');
+    if (window.getComputedStyle($('panel')).display === 'none') throw new Error('opened panel takes no space');
+    if ($('panelTab').classList.contains('show')) throw new Error('panel tab stayed visible after opening');
+    if ($('panelHide').getAttribute('aria-expanded') !== 'true') throw new Error('panel aria-expanded did not flip');
+    if (wide && stage.style.transform === cleanSize) throw new Error('stage did not yield space to the panel');
+    // …и сворачивает её обратно: пиксели возвращаются сцене.
     $('panelHide').click();
     if (!$('panel').classList.contains('closed')) throw new Error('panel hide button did not close the panel');
     if (window.getComputedStyle($('panel')).display !== 'none') throw new Error('closed panel still takes space');
     if (!$('panelTab').classList.contains('show')) throw new Error('panel tab did not appear');
-    if ($('panelHide').getAttribute('aria-expanded') !== 'false') throw new Error('panel aria-expanded did not flip');
-    if (wide && stage.style.transform === before) throw new Error('stage did not grow into the freed panel space');
-    $('panelTab').click();
-    if ($('panel').classList.contains('closed')) throw new Error('panel tab did not reopen the panel');
-    if ($('panelTab').classList.contains('show')) throw new Error('panel tab stayed visible after reopening');
-    if (wide && stage.style.transform !== before) throw new Error('stage size did not return with the panel');
+    if ($('panelHide').getAttribute('aria-expanded') !== 'false') throw new Error('panel aria-expanded did not flip back');
+    if (wide && stage.style.transform !== cleanSize) throw new Error('stage did not grow into the freed panel space');
     var top = $('topbar');
+    $('topbarTab').click();
+    if (top.classList.contains('closed')) throw new Error('topbar tab did not open the menu');
+    if (window.getComputedStyle(top).display === 'none') throw new Error('opened topbar takes no space');
+    if ($('topbarTab').classList.contains('show')) throw new Error('topbar tab stayed visible after opening');
     $('topbarHide').click();
     if (!top.classList.contains('closed')) throw new Error('topbar hide button did not close the menu');
     if (window.getComputedStyle(top).display !== 'none') throw new Error('closed topbar still takes space');
     if (!$('topbarTab').classList.contains('show')) throw new Error('topbar tab did not appear');
+    if (HARMONIA.drawerOpen('topbar') || HARMONIA.drawerOpen('panel')) {
+      throw new Error('drawers must be closed at the end of the toggle test');
+    }
+    // Остальным проверкам нужен открытый хром — возвращаем панели табами.
+    $('panelTab').click();
     $('topbarTab').click();
-    if (top.classList.contains('closed')) throw new Error('topbar tab did not reopen the menu');
-    if ($('topbarTab').classList.contains('show')) throw new Error('topbar tab stayed visible after reopening');
-    var saved = JSON.parse(localStorage.getItem('harmonia.drawers.v1') || '{}');
-    if (saved.topbar !== true || saved.panel !== true) {
-      throw new Error('drawer choice was not remembered: ' + JSON.stringify(saved));
+    if (!HARMONIA.drawerOpen('panel') || !HARMONIA.drawerOpen('topbar')) {
+      throw new Error('tabs did not restore both drawers for the rest of the suite');
     }
   });
 

@@ -83,7 +83,8 @@ button.ctl:active { transform: translateY(0) scale(0.97); }
   to { opacity: 1; transform: translateY(0); }
 }
 /* Проба пальцев: на стартовом экране меню не нужно — сцена получает весь экран.
-   Класс intro ставит setDrawerIntro() (js/ui-drawers.js). */
+   Класс intro уже стоит в разметке (index.html), поэтому меню не мелькает при
+   загрузке; дальше им управляет setDrawerIntro() (js/ui-drawers.js). */
 body.intro #topbar,
 body.intro #topbarTab,
 body.intro #panel,
