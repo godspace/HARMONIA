@@ -49,6 +49,32 @@ $post = @'
     if (!canonical || canonical.href !== 'https://godspace.github.io/HARMONIA/') {
       throw new Error('canonical URL is missing or wrong');
     }
+    // Языковой кластер: русский оригинал + англоязычная страница. hreflang
+    // должен указывать только на настоящие страницы, а не на машинный перевод.
+    var alts = {};
+    Array.prototype.forEach.call(
+      document.querySelectorAll('link[rel="alternate"][hreflang]'),
+      function (l) { alts[l.getAttribute('hreflang')] = l.getAttribute('href'); }
+    );
+    if (alts.ru !== 'https://godspace.github.io/HARMONIA/') {
+      throw new Error('hreflang ru is missing or wrong');
+    }
+    if (alts.en !== 'https://godspace.github.io/HARMONIA/en/') {
+      throw new Error('hreflang en is missing or wrong');
+    }
+    if (alts['x-default'] !== 'https://godspace.github.io/HARMONIA/') {
+      throw new Error('hreflang x-default is missing or wrong');
+    }
+    var enLink = document.getElementById('enLink');
+    if (!enLink || enLink.getAttribute('href') !== 'en/') {
+      throw new Error('link to the English page is missing from the top bar');
+    }
+    // Ссылка EN стоит рядом с названием, а не в ряду управления: ряд
+    // .top-controls уже переносится на 1440 px, и лишняя кнопка вырастила бы
+    // полосу ещё на строку, отняв высоту у сцены.
+    if (!document.querySelector('.brand-group #enLink')) {
+      throw new Error('EN link must sit inside .brand-group, beside the brand');
+    }
     var robots = document.querySelector('meta[name="robots"]');
     if (!robots || robots.content.indexOf('index') === -1) throw new Error('robots meta is missing');
     var googleVerification = document.querySelector('meta[name="google-site-verification"]');
@@ -78,6 +104,27 @@ $post = @'
       throw new Error('Metrika must not load from file://');
     }
     if (document.documentElement.lang !== 'ru') throw new Error('html lang is not ru');
+  });
+
+  step('lang-switch', function () {
+    // Язык интерфейса: тот же приём, что в godspace/math-6-grade — виджет
+    // Google Translate, но подключённый по требованию. Поисковик и file://
+    // не должны получать чужой скрипт при загрузке.
+    var sel = $('langSel');
+    if (!sel) throw new Error('langSel is missing');
+    if (sel.options.length < 20) throw new Error('language list is too short: ' + sel.options.length);
+    if (sel.options[0].value !== '') throw new Error('the first language must be Russian');
+    if (!HARMONIA.Translate || typeof HARMONIA.Translate.state !== 'function') {
+      throw new Error('Translate API is missing');
+    }
+    var st = HARMONIA.Translate.state();
+    if (st.loaded) throw new Error('Google Translate must load on demand only');
+    if (st.ready) throw new Error('Google Translate widget must not be ready before the drill');
+    if (!$('google_translate_element')) throw new Error('translate mount point is missing');
+    if (document.querySelector('script[src*="translate_a/element.js"]')) {
+      throw new Error('translate script is present before the user picks a language');
+    }
+    if (HARMONIA.Translate.source !== 'ru') throw new Error('translate source language must be ru');
   });
 
   step('default-sound', function () {
@@ -716,3 +763,160 @@ $post = @'
 $html = $html.Replace('<script src="js/util.js"></script>', $pre + '<script src="js/util.js"></script>')
 $html = $html.Replace('</body>', $post + '</body>')
 [IO.File]::WriteAllText((Join-Path $PWD 'smoke.html'), $html, (New-Object Text.UTF8Encoding($false)))
+
+# ===== Англоязычная страница (en/index.html) =====
+# Это не приложение, а статичный обзор: у него нет ни одного скрипта, поэтому
+# проверки здесь про разметку, кластер hreflang и соответствие FAQ-разметки
+# видимому тексту. Отчёт кладётся в en/smoke.html — рядом с исходником, чтобы
+# относительные пути ../css и ../docs работали так же, как на GitHub Pages.
+$enSource = Join-Path $PWD 'en/index.html'
+if (-not (Test-Path $enSource)) { throw 'en/index.html is missing' }
+$enHtml = [IO.File]::ReadAllText($enSource, [Text.Encoding]::UTF8)
+$enPost = @'
+<script>
+(function () {
+  var results = [];
+  function check(name, cond, extra) {
+    results.push({ name: name, ok: !!cond, extra: extra == null ? '' : String(extra) });
+  }
+  function step(name, fn) {
+    try { fn(); check(name, true); }
+    catch (e) { check(name, false, (e && e.stack) || e); }
+  }
+  function attr(sel, name) {
+    var el = document.querySelector(sel);
+    return el ? el.getAttribute(name) : null;
+  }
+  function meta(sel) {
+    var el = document.querySelector(sel);
+    return el ? el.content : null;
+  }
+  var BASE = 'https://godspace.github.io/HARMONIA/';
+
+  step('lang', function () {
+    if (document.documentElement.lang !== 'en') throw new Error('html lang is not en');
+  });
+
+  step('head', function () {
+    if (document.title.indexOf('HARMONIA') === -1) throw new Error('page title lost the name');
+    if (document.title.indexOf('COMBOLIST') !== -1) throw new Error('COMBOLIST is in the page title');
+    var desc = meta('meta[name="description"]');
+    if (!desc || desc.length < 80) throw new Error('meta description is missing or too short');
+    var robots = meta('meta[name="robots"]');
+    if (!robots || robots.indexOf('index') === -1) throw new Error('robots meta is missing');
+    var canonical = attr('link[rel="canonical"]', 'href');
+    if (canonical !== BASE + 'en/') throw new Error('canonical URL is missing or wrong: ' + canonical);
+    if (attr('link[rel="icon"]', 'href') !== '../favicon.svg') throw new Error('favicon is missing');
+  });
+
+  step('hreflang', function () {
+    var alts = {};
+    Array.prototype.forEach.call(
+      document.querySelectorAll('link[rel="alternate"][hreflang]'),
+      function (l) { alts[l.getAttribute('hreflang')] = l.getAttribute('href'); }
+    );
+    if (alts.en !== BASE + 'en/') throw new Error('hreflang en must point at this page');
+    if (alts.ru !== BASE) throw new Error('hreflang ru is missing or wrong');
+    if (alts['x-default'] !== BASE) throw new Error('hreflang x-default is missing or wrong');
+  });
+
+  step('social', function () {
+    if (meta('meta[property="og:locale"]') !== 'en_US') throw new Error('og:locale is not en_US');
+    if (meta('meta[property="og:url"]') !== BASE + 'en/') throw new Error('og:url is wrong');
+    if (meta('meta[property="og:type"]') !== 'website') throw new Error('og:type is wrong');
+    var img = meta('meta[property="og:image"]');
+    if (!img || img.indexOf('/docs/screenshot.png') === -1) throw new Error('og:image is missing');
+    if (!meta('meta[property="og:image:alt"]')) throw new Error('og:image:alt is missing');
+    if ((meta('meta[name="twitter:card"]') || '') !== 'summary_large_image') {
+      throw new Error('twitter card is missing');
+    }
+  });
+
+  step('json-ld', function () {
+    var ld = document.querySelector('script[type="application/ld+json"]');
+    if (!ld) throw new Error('JSON-LD is missing');
+    var data = JSON.parse(ld.textContent);
+    var nodes = (data['@graph'] || [data]);
+    function findType(type) {
+      return nodes.filter(function (n) { return n['@type'] === type; })[0];
+    }
+    var app = findType('WebApplication');
+    if (!app || app.name !== 'HARMONIA') throw new Error('WebApplication node is missing');
+    if (app.inLanguage !== 'en') throw new Error('WebApplication is not in English');
+    if (app.url !== BASE + 'en/') throw new Error('WebApplication url is wrong');
+    if (app.offers && app.offers.price !== '0') throw new Error('the offer is not free');
+    var faq = findType('FAQPage');
+    if (!faq || !faq.mainEntity || faq.mainEntity.length < 5) {
+      throw new Error('FAQPage node is missing or too short');
+    }
+    // Google считает разметку несоответствующей, если вопросов нет в тексте.
+    var visible = Array.prototype.map.call(
+      document.querySelectorAll('.faq summary'),
+      function (s) { return s.textContent.trim(); }
+    );
+    faq.mainEntity.forEach(function (q) {
+      if (visible.indexOf(q.name) === -1) throw new Error('FAQ question is not visible: ' + q.name);
+      if (!q.acceptedAnswer || !q.acceptedAnswer.text) {
+        throw new Error('FAQ answer is empty: ' + q.name);
+      }
+    });
+  });
+
+  step('content', function () {
+    var h1 = document.querySelectorAll('h1');
+    if (h1.length !== 1) throw new Error('the page must have exactly one h1');
+    if (h1[0].textContent.indexOf('HARMONIA') === -1) throw new Error('h1 lost the name');
+    if (document.querySelectorAll('main section').length < 5) {
+      throw new Error('too few sections: the page is not a real landing');
+    }
+    var cta = document.querySelector('a.cta[href="../index.html?lang=en"]');
+    if (!cta) throw new Error('the CTA must open the simulator with ?lang=en');
+    var ru = document.querySelector('a[href="../"][hreflang="ru"]');
+    if (!ru) throw new Error('link back to the Russian version is missing');
+    var img = document.querySelector('figure.shot img');
+    if (!img || !img.getAttribute('alt') || img.getAttribute('alt').length < 40) {
+      throw new Error('the screenshot needs a descriptive alt');
+    }
+    if (img.getAttribute('src') !== '../docs/screenshot.png') throw new Error('screenshot path is wrong');
+    if (img.getAttribute('width') !== '1600' || img.getAttribute('height') !== '1000') {
+      throw new Error('screenshot size is missing');
+    }
+  });
+
+  step('no-scripts', function () {
+    // Лендинг обязан оставаться статичным: виджет перевода и аналитика живут
+    // только на странице игры.
+    if (document.querySelectorAll('script[src]').length !== 0) {
+      throw new Error('the landing page must not load external scripts');
+    }
+    if (document.getElementById('google_translate_element')) {
+      throw new Error('the translate widget must not be mounted on the landing page');
+    }
+  });
+
+  check('console-errors', window.__enSmokeErrors.length === 0, window.__enSmokeErrors.join(' | '));
+  var failed = results.filter(function (r) { return !r.ok; });
+  document.body.innerHTML = '<pre id="smoke-result">' + JSON.stringify({
+    ok: failed.length === 0,
+    failed: failed,
+    passed: results.filter(function (r) { return r.ok; }).map(function (r) { return r.name; }),
+    errors: window.__enSmokeErrors
+  }) + '</pre>';
+})();
+</script>
+'@
+$enPre = @'
+<script>
+window.__enSmokeErrors = [];
+window.addEventListener('error', function (e) {
+  window.__enSmokeErrors.push('error: ' + (e.message || e.type));
+});
+window.addEventListener('unhandledrejection', function (e) {
+  window.__enSmokeErrors.push('rejection: ' + String(e.reason));
+});
+</script>
+'@
+$enHtml = $enHtml.Replace('</body>', $enPre + $enPost + '</body>')
+[IO.File]::WriteAllText((Join-Path $PWD 'en/smoke.html'), $enHtml, (New-Object Text.UTF8Encoding($false)))
+Write-Host 'smoke.html and en/smoke.html are built'
+

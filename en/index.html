@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HARMONIA — free online harmony simulator and chord trainer</title>
+  <meta name="description" content="Practise harmony in the browser: 24 major and minor combos on the circle of fifths, chord functions, smart melody notes, MIDI keyboard support and melody recording. Free, no sign-up.">
+  <meta name="keywords" content="harmony simulator, chord trainer, circle of fifths trainer, music theory practice, chord progression game, improvisation practice, MIDI chord trainer, online music trainer">
+  <meta name="author" content="godspace">
+  <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">
+  <meta name="theme-color" content="#0b0d15">
+  <meta name="color-scheme" content="dark">
+
+  <link rel="canonical" href="https://godspace.github.io/HARMONIA/en/">
+  <link rel="alternate" hreflang="en" href="https://godspace.github.io/HARMONIA/en/">
+  <link rel="alternate" hreflang="ru" href="https://godspace.github.io/HARMONIA/">
+  <link rel="alternate" hreflang="x-default" href="https://godspace.github.io/HARMONIA/">
+  <link rel="icon" type="image/svg+xml" href="../favicon.svg">
+  <link rel="sitemap" type="application/xml" title="Sitemap" href="../sitemap.xml">
+
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="HARMONIA">
+  <meta property="og:locale" content="en_US">
+  <meta property="og:locale:alternate" content="ru_RU">
+  <meta property="og:title" content="HARMONIA — free online harmony simulator and chord trainer">
+  <meta property="og:description" content="24 major and minor combos on the circle of fifths, chord functions under the left hand, smart melody notes under the right one, MIDI and melody recording — right in the browser.">
+  <meta property="og:url" content="https://godspace.github.io/HARMONIA/en/">
+  <meta property="og:image" content="https://godspace.github.io/HARMONIA/docs/screenshot.png">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="1600">
+  <meta property="og:image:height" content="1000">
+  <meta property="og:image:alt" content="HARMONIA — the simulator stage with seven degree balls, chord pad and settings panel">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="HARMONIA — free online harmony simulator and chord trainer">
+  <meta name="twitter:description" content="24 major and minor combos on the circle of fifths, chord functions, smart melody notes, MIDI and melody recording — free, no sign-up.">
+  <meta name="twitter:image" content="https://godspace.github.io/HARMONIA/docs/screenshot.png">
+  <meta name="twitter:image:alt" content="HARMONIA — the simulator stage with seven degree balls, chord pad and settings panel">
+
+  <link rel="stylesheet" href="../css/landing.css">
+</head>
+<body>
+
+  <header class="site-head">
+    <div class="wrap">
+      <a class="brand" href="./">HARMONIA</a>
+      <nav class="head-nav" aria-label="Site">
+        <a class="plain" href="../" hreflang="ru" lang="ru">Русская версия</a>
+        <a class="plain" href="#how-to-play">How to play</a>
+        <a class="cta small" href="../index.html?lang=en">Open the simulator</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="wrap">
+
+    <section class="hero" style="border-top: 0;">
+      <p class="kicker">Harmony simulator · circle of fifths · free</p>
+      <h1><span class="accent">HARMONIA</span> — a harmony simulator you play like an instrument</h1>
+      <p class="lead">
+        Twenty-four major and minor combos travel the circle of fifths. Your left hand plays
+        chord functions, your right hand plays melody notes that always fit, and seven orbiting
+        balls show the seven degrees of the mode. Nothing to install: it runs in the browser,
+        and a MIDI keyboard is heard as a real instrument.
+      </p>
+      <p class="cta-row">
+        <a class="cta" href="../index.html?lang=en">Open the simulator</a>
+        <a class="cta ghost" href="https://github.com/godspace/HARMONIA">Source on GitHub</a>
+      </p>
+      <p class="note">Free, no sign-up, no installation. Computer keyboard works out of the box.</p>
+
+      <figure class="shot">
+        <img src="../docs/screenshot.png" width="1600" height="1000"
+             alt="HARMONIA simulator stage: seven coloured degree balls around a tonic sun, score and return-to-tonic panels above, chord pad and circle of fifths below">
+        <figcaption>The stage: seven degree balls orbiting the tonic, the return-to-tonic indicator,
+          the chord pad and the settings panel. The interface is shown in Russian; English is one click away.</figcaption>
+      </figure>
+    </section>
+
+    <section id="what">
+      <h2>What HARMONIA is</h2>
+      <p>
+        HARMONIA is a free browser-based harmony simulator for anyone who wants to <b>practise
+        chord progressions instead of reading about them</b>. The whole game is built around the
+        circle of fifths: twenty-four combos — twelve major and twelve minor — walk the circle,
+        and each combo has a tonic, a subdominant, a dominant and a tonic again.
+      </p>
+      <p>
+        The left hand plays the harmonic functions. The right hand plays melody notes, and it does
+        not simply map five keys to five fixed pitches: the five note keys open a <b>safe window of
+        five degrees around the sounding chord</b>, so an improvised line rarely collides with the
+        harmony. Seven balls — one per degree of the mode — carry the colour of their function and
+        the height of their pitch, so the picture on the stage is honest: the ball cannot travel to
+        a place the interval maths does not describe.
+      </p>
+      <p>
+        There is no build step, no framework and no external dependency. The simulator is plain
+        HTML, CSS and JavaScript, so it also runs from a local file without a server.
+      </p>
+    </section>
+
+    <section id="combo">
+      <h2>How a combo works</h2>
+      <p>
+        A combo is one trip through a key: tonic, subdominant, dominant, tonic. Playing a chord
+        change earns points by function (tonic, subdominant, dominant), by common tones, by root
+        motion and by how the leading tone resolves, so <code>ii → V → I</code> is rewarded as a
+        prepared authentic cadence, <code>IV → I</code> as a plagal one and <code>V → vi</code> as
+        a deceptive turn. Repeating the same pair gradually pays less.
+      </p>
+      <p>
+        At <b>300 points</b> the Space button starts pulsing under the chord cards. Press it — or
+        <kbd>Space</kbd> — and the combo advances without a single modal window: major hands over to
+        the minor of the same pair, minor hands over to the major of the next pair. The modes
+        alternate, the score of the new combo starts from zero, and the circle of fifths keeps
+        turning. <kbd>Enter</kbd> and <kbd>Backspace</kbd> walk the same route by hand.
+      </p>
+    </section>
+
+    <section id="features">
+      <h2>What you can do</h2>
+      <div class="cards">
+        <div class="card">
+          <h3>Practise functions, not shapes</h3>
+          <p>Five chord keys cover the supertonic, subdominant, dominant, submediant and tonic,
+            in major and in minor.</p>
+        </div>
+        <div class="card">
+          <h3>Improvise with a safety net</h3>
+          <p>The right hand offers five degrees that fit the current chord; switch the smart mode
+            off to get five fixed roots instead.</p>
+        </div>
+        <div class="card">
+          <h3>Play a MIDI keyboard</h3>
+          <p>Every note keeps its pitch, octave and velocity. A held triad is recognised as a scale
+            degree or as a colour outside the key.</p>
+        </div>
+        <div class="card">
+          <h3>Sustain with a pedal</h3>
+          <p>CC64 holds released notes and keeps them in the recognition pool; CC123 is the panic
+            button. Tails fade faster under the pedal so it never turns to mush.</p>
+        </div>
+        <div class="card">
+          <h3>Record and listen back</h3>
+          <p>Chords and notes are recorded with timing and stored in the browser. Count-in of zero,
+            one or two bars, and a loop toggle for playback.</p>
+        </div>
+        <div class="card">
+          <h3>Play a 16-bar form</h3>
+          <p>An optional piece with intro, A, B, A′ and coda, soft targets for every bar and a
+            result screen with a breakdown by section.</p>
+        </div>
+        <div class="card">
+          <h3>Three visualisations</h3>
+          <p>Orbits, spectrum and circle. The circle draws the chord as a triangle on the belt of
+            tones, with common tones marked as voice-leading anchors.</p>
+        </div>
+        <div class="card">
+          <h3>Tune the sound</h3>
+          <p>Reverb, trail decay, idle speed, note octave, metronome and tempo live in a panel that
+            does not steal space from the stage when it is closed.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="how-to-play">
+      <h2>How to play</h2>
+      <ol>
+        <li>The start screen asks you to press <b>ten highlighted keys</b>: <kbd>Q</kbd> <kbd>W</kbd>
+          <kbd>E</kbd> <kbd>R</kbd> <kbd>F</kbd> for the left hand and <kbd>J</kbd> <kbd>I</kbd>
+          <kbd>O</kbd> <kbd>P</kbd> <kbd>[</kbd> for the right one. Each key answers with a sound;
+          a repeat is not counted. You can also click the keyboard picture, so the entrance works
+          on a tablet.</li>
+        <li>When the counter reaches <b>10 / 10</b>, the Space key lights up. Press <kbd>Space</kbd>
+          and the session begins — the same gesture that opens a new combo in the game.</li>
+        <li>Play chord changes with the left hand and add melody notes with the right one. The score
+          of the current combo grows with every meaningful harmonic turn.</li>
+        <li>At 300 points press <kbd>Space</kbd> to move on: the mode flips and the circle of fifths
+          takes you to the next key.</li>
+      </ol>
+
+      <div class="table-scroll">
+        <table class="keys">
+          <caption>Keyboard map. Every action is also available from the menus.</caption>
+          <tbody>
+            <tr><th>Start: ten highlighted keys, then Space</th><td><kbd>Q</kbd> <kbd>W</kbd> <kbd>E</kbd> <kbd>R</kbd> <kbd>F</kbd> + <kbd>J</kbd> <kbd>I</kbd> <kbd>O</kbd> <kbd>P</kbd> <kbd>[</kbd> → <kbd>Space</kbd></td></tr>
+            <tr><th>Left hand: supertonic, subdominant, dominant, submediant, tonic</th><td><kbd>Q</kbd> <kbd>W</kbd> <kbd>E</kbd> <kbd>R</kbd> <kbd>F</kbd></td></tr>
+            <tr><th>Right hand: five melody notes around the chord</th><td><kbd>J</kbd> <kbd>I</kbd> <kbd>O</kbd> <kbd>P</kbd> <kbd>[</kbd></td></tr>
+            <tr><th>Melody octave up / down</th><td><kbd>=</kbd> / <kbd>−</kbd></td></tr>
+            <tr><th>Next / previous combo</th><td><kbd>Enter</kbd> / <kbd>Backspace</kbd> or <kbd>↑</kbd> / <kbd>↓</kbd></td></tr>
+            <tr><th>New combo after 300 points</th><td><kbd>Space</kbd></td></tr>
+            <tr><th>Mode: major / minor</th><td><kbd>←</kbd> / <kbd>→</kbd></td></tr>
+            <tr><th>Visualisation: orbits, spectrum, circle</th><td><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd></td></tr>
+            <tr><th>Pause, mute, clear trail, restart the session</th><td><kbd>Esc</kbd> <kbd>M</kbd> <kbd>C</kbd> <kbd>0</kbd></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="note">Note names on the stage use solfège (do, re, mi…) because the project is
+        Russian; the colour, radius and degree number carry the same information.</p>
+    </section>
+
+    <section id="midi">
+      <h2>A MIDI keyboard is the ears, not five buttons</h2>
+      <p>
+        Connect a controller and every key becomes a real note: its own pitch in any octave, its own
+        velocity. About 70 ms after the last change, held notes are folded into a triad and the
+        simulator names it — a degree of the mode, a secondary dominant such as <code>V/ii</code>,
+        or a colour outside the key. There is no “this key equals this chord” table, so the same
+        hardware behaves like an instrument rather than a remote control.
+      </p>
+      <p>
+        The sustain pedal (CC64) keeps released notes sounding and inside the recognition pool;
+        CC123 is the panic button. Web MIDI is available in Chrome and Edge; in other browsers the
+        computer keyboard still plays everything.
+      </p>
+    </section>
+
+    <section id="form">
+      <h2>Optional layers: a 16-bar form and melody recording</h2>
+      <p>
+        A free jam is the default mode: no metronome, no count-in, no bar targets. Turn the form on
+        and the same game becomes a <b>16-bar piece</b> — intro (2 bars), A (4), B (4), A′ (4) and a
+        coda (2) — at 84 BPM, in 4/4 or 3/4. Every bar suggests a degree of the current mode as a
+        soft target; hitting it adds points and lights the bar, missing it breaks nothing. Because
+        targets are degrees rather than fixed chords, a mode or combo change in the middle of the
+        piece stays correct. <kbd>Esc</kbd> pauses the clock and the game together, and after the
+        last bar a result screen breaks the run down by section.
+      </p>
+      <h3>Recording</h3>
+      <p>
+        The recording panel keeps chords and notes with their timing, offers a count-in of zero, one
+        or two bars, and plays everything back through the same synthesiser without touching the
+        score. Saved melodies live in <code>localStorage</code> and survive a reload; recording stops
+        by itself after three minutes or 6 000 events so the storage never overflows.
+      </p>
+    </section>
+
+    <section id="languages">
+      <h2>Interface language</h2>
+      <p>
+        The simulator is written in Russian, and the language list in the top menu switches the
+        interface to any language Google Translate supports. The widget is loaded only when you
+        pick a language, never on page load, and it is disabled on local files — so the page a
+        search engine sees stays a single, stable Russian document.
+      </p>
+      <p>
+        Musical symbols are deliberately left alone: solfège names, degree numbers, chord symbols,
+        key labels and the circle of fifths are language-independent and keep their exact meaning in
+        every translation. This page is the English entry point; the <a href="../">Russian version</a>
+        is the canonical one.
+      </p>
+    </section>
+
+    <section id="faq" class="faq">
+      <h2>Questions</h2>
+      <details>
+        <summary>Is HARMONIA free?</summary>
+        <p>Yes. It is a free browser game with no sign-up, no installation and no paywall. The source
+          code is on GitHub under the MIT licence.</p>
+      </details>
+      <details>
+        <summary>Do I need a MIDI keyboard?</summary>
+        <p>No. The computer keyboard plays everything: Q W E R F for the left-hand chords and
+          J I O P [ for the right-hand notes. A MIDI keyboard is optional, but it is heard as a real
+          instrument — every note keeps its own pitch, velocity and octave.</p>
+      </details>
+      <details>
+        <summary>Which browsers are supported?</summary>
+        <p>Any modern browser with Canvas 2D and Web Audio: Chrome, Edge, Firefox or Safari. Web MIDI
+          input works in Chrome and Edge; without MIDI the computer keyboard still plays the whole
+          game.</p>
+      </details>
+      <details>
+        <summary>Can I play it without an internet connection?</summary>
+        <p>Yes. The simulator is plain HTML, CSS and JavaScript with no dependencies, so it works from
+          a local file on your own computer. Only the optional interface translation needs a network
+          connection.</p>
+      </details>
+      <details>
+        <summary>Where are my recordings stored?</summary>
+        <p>In your browser. Saved melodies live in localStorage and never leave your device. The only
+          outside requests are the optional Google Translate widget and anonymous Yandex Metrika
+          visit statistics.</p>
+      </details>
+      <details>
+        <summary>Is it a course or a game?</summary>
+        <p>Closer to a trainer you can play. There are no lessons to read: the point system rewards
+          functional harmony, so the habits that produce cadences are the ones that produce points.</p>
+      </details>
+    </section>
+
+  </main>
+
+  <footer class="site-foot">
+    <div class="wrap">
+      <p style="margin: 0;">HARMONIA · free harmony simulator and chord trainer · MIT licence</p>
+      <nav aria-label="Footer">
+        <a href="../index.html?lang=en">Open the simulator</a>
+        <a href="../" hreflang="ru" lang="ru">Русская версия</a>
+        <a href="https://github.com/godspace/HARMONIA">GitHub</a>
+      </nav>
+    </div>
+  </footer>
+
+  <!-- Разметка для поиска: то же приложение, но англоязычный узел. FAQPage
+       повторяет видимые вопросы дословно — иначе Google считает разметку
+       несоответствующей странице. isBasedOn указывает на русский оригинал. -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebApplication",
+        "@id": "https://godspace.github.io/HARMONIA/en/#app",
+        "name": "HARMONIA",
+        "url": "https://godspace.github.io/HARMONIA/en/",
+        "description": "Free browser harmony simulator: 24 major and minor combos on the circle of fifths, chord functions, smart melody notes, MIDI keyboard support and melody recording.",
+        "applicationCategory": "MusicApplication",
+        "operatingSystem": "Any",
+        "browserRequirements": "Requires JavaScript and Web Audio; Web MIDI input needs Chrome or Edge",
+        "inLanguage": "en",
+        "isAccessibleForFree": true,
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+        "license": "https://opensource.org/licenses/MIT",
+        "screenshot": "https://godspace.github.io/HARMONIA/docs/screenshot.png",
+        "isBasedOn": "https://godspace.github.io/HARMONIA/",
+        "sameAs": "https://github.com/godspace/HARMONIA"
+      },
+      {
+        "@type": "FAQPage",
+        "@id": "https://godspace.github.io/HARMONIA/en/#faq",
+        "inLanguage": "en",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "Is HARMONIA free?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Yes. It is a free browser game with no sign-up, no installation and no paywall. The source code is on GitHub under the MIT licence." }
+          },
+          {
+            "@type": "Question",
+            "name": "Do I need a MIDI keyboard?",
+            "acceptedAnswer": { "@type": "Answer", "text": "No. The computer keyboard plays everything: Q W E R F for the left-hand chords and J I O P [ for the right-hand notes. A MIDI keyboard is optional, but it is heard as a real instrument — every note keeps its own pitch, velocity and octave." }
+          },
+          {
+            "@type": "Question",
+            "name": "Which browsers are supported?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Any modern browser with Canvas 2D and Web Audio: Chrome, Edge, Firefox or Safari. Web MIDI input works in Chrome and Edge; without MIDI the computer keyboard still plays the whole game." }
+          },
+          {
+            "@type": "Question",
+            "name": "Can I play it without an internet connection?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Yes. The simulator is plain HTML, CSS and JavaScript with no dependencies, so it works from a local file on your own computer. Only the optional interface translation needs a network connection." }
+          },
+          {
+            "@type": "Question",
+            "name": "Where are my recordings stored?",
+            "acceptedAnswer": { "@type": "Answer", "text": "In your browser. Saved melodies live in localStorage and never leave your device. The only outside requests are the optional Google Translate widget and anonymous Yandex Metrika visit statistics." }
+          },
+          {
+            "@type": "Question",
+            "name": "Is it a course or a game?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Closer to a trainer you can play. There are no lessons to read: the point system rewards functional harmony, so the habits that produce cadences are the ones that produce points." }
+          }
+        ]
+      }
+    ]
+  }
+  </script>
+</body>
+</html>

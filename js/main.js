@@ -16,10 +16,11 @@ updateHUD();
 applyMute();
 Midi.init();
 initDrawers();
+Translate.mount();
 fitStage();
 // Публичный отладочный API: консоль, автотесты, будущие харнессы.
 window.HARMONIA = {
-  state, P, CFG, COMBOS, ORDER, INPUT, Midi, VIZ, viz, Heard,
+  state, P, CFG, COMBOS, ORDER, INPUT, Midi, Translate, VIZ, viz, Heard,
   Transport, Composition, setFormEnabled, updateFormHUD,
   harmonicChords, updateHUD, playHarmonic, chordEvent, pressCode, releaseCode, runCommand, loadCombo, setMode, startSession,
   beginFromOverlay, INTRO_KEYS, introPress, introState, introStart,

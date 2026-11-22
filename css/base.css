@@ -43,6 +43,9 @@ body {
   white-space: nowrap;
 }
 .brand span { font-size: 12px; letter-spacing: 1px; font-weight: 600; }
+/* Название и ссылка EN живут в одной группе: полоса должна оставаться
+   одной строкой, пока хватает ширины (см. разметку в index.html). */
+.brand-group { display: flex; align-items: center; gap: 8px; }
 .top-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .ctl {
   font-family: inherit; font-size: 12px; font-weight: 600; color: #d0d7ee;
@@ -60,6 +63,35 @@ button.ctl { cursor: pointer; transition: transform 0.12s, border-color 0.12s, b
 button.ctl:hover { transform: translateY(-1px); border-color: rgba(107, 223, 255, 0.55); background: rgba(107, 223, 255, 0.12); }
 button.ctl:active { transform: translateY(0) scale(0.97); }
 .ctl-icon { padding: 6px 9px; font-weight: 800; color: #9aa4c2; }
+/* Ссылка на англоязычную версию (en/index.html) наследует вид .ctl, но это <a>. */
+a.ctl { text-decoration: none; cursor: pointer; }
+a.ctl:hover {
+  text-decoration: none;
+  border-color: rgba(107, 223, 255, 0.55);
+  background: rgba(107, 223, 255, 0.12);
+}
+/* Ссылка EN стоит в одной строке с названием, а не в ряду кнопок: высоту ей
+   задаёт строка бренда, поэтому отступы меньше, чем у остальных .ctl.
+   Иначе полоса вырастает на 10 px и съедает место у сцены. */
+.brand-group #enLink { padding: 2px 7px; font-size: 11px; line-height: 1; }
+/* ===== Язык интерфейса (js/translate.js) =====
+   Виджет Google Translate переводит текст прямо в DOM, своей панели у него
+   нет: список языков — обычный .ctl select в верхнем меню. */
+.lang-ctl { gap: 4px; }
+#langSel { min-width: 108px; }
+/* Сам виджет живёт вне кадра: он нужен только как поставщик .goog-te-combo. */
+#google_translate_element {
+  position: absolute; left: -9999px; top: 0;
+  width: 1px; height: 1px; overflow: hidden;
+}
+/* Google добавляет баннер-iframe и поднимает body на 40px — в полноэкранной
+   сцене это ломает вёрстку, поэтому гасим и то и другое. */
+.goog-te-banner-frame,
+.skiptranslate iframe,
+#goog-gt-tt,
+.goog-te-balloon-frame,
+.goog-tooltip { display: none !important; }
+body { top: 0 !important; }
 /* ===== Выдвижные панели =====
    Верхнее меню и панель настроек — ящики: закрытая панель не занимает место,
    на её краю остаётся таб, который её возвращает. Сцену под новую ширину и

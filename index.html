@@ -13,6 +13,7 @@
   <meta name="color-scheme" content="dark">
   <link rel="canonical" href="https://godspace.github.io/HARMONIA/">
   <link rel="alternate" hreflang="ru" href="https://godspace.github.io/HARMONIA/">
+  <link rel="alternate" hreflang="en" href="https://godspace.github.io/HARMONIA/en/">
   <link rel="alternate" hreflang="x-default" href="https://godspace.github.io/HARMONIA/">
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="sitemap" type="application/xml" title="Sitemap" href="sitemap.xml">
@@ -79,7 +80,14 @@
 <body class="intro">
 
 <div id="topbar">
-  <div class="brand">HARMONIA <span>· симулятор гармонии</span></div>
+  <div class="brand-group">
+    <div class="brand">HARMONIA <span>· симулятор гармонии</span></div>
+    <!-- Англоязычная версия сайта: не машинный перевод, а своя страница с
+         hreflang-парой (en/index.html). Стоит рядом с названием, а не в ряду
+         управления: ряд уже упирается в край на 1440 px, и лишняя кнопка
+         добавила бы полосе вторую строку. -->
+    <a id="enLink" class="ctl ctl-icon" href="en/" hreflang="en" lang="en" title="English version — overview and quick start">EN</a>
+  </div>
   <div class="top-controls">
     <label class="ctl">Лад
       <select id="modeSel">
@@ -97,6 +105,41 @@
     <button id="muteBtn" class="ctl" aria-pressed="false" title="Звук (M)">🔊 Звук: вкл</button>
     <button id="pauseBtn" class="ctl" title="Пауза (Esc)">⏸ Пауза</button>
     <button id="restartBtn" class="ctl" title="Сессия заново (0)">↺ Сессия заново</button>
+    <label class="ctl lang-ctl" title="Язык интерфейса — машинный перевод Google Translate">
+      🌐
+      <select id="langSel" class="notranslate" translate="no" aria-label="Язык интерфейса">
+        <option value="" selected>Русский</option>
+        <option value="en">English</option>
+        <option value="es">Español</option>
+        <option value="pt">Português</option>
+        <option value="de">Deutsch</option>
+        <option value="fr">Français</option>
+        <option value="it">Italiano</option>
+        <option value="pl">Polski</option>
+        <option value="uk">Українська</option>
+        <option value="nl">Nederlands</option>
+        <option value="tr">Türkçe</option>
+        <option value="ar">العربية</option>
+        <option value="hi">हिन्दी</option>
+        <option value="id">Bahasa Indonesia</option>
+        <option value="vi">Tiếng Việt</option>
+        <option value="th">ไทย</option>
+        <option value="zh-CN">中文（简体）</option>
+        <option value="zh-TW">中文（繁體）</option>
+        <option value="ja">日本語</option>
+        <option value="ko">한국어</option>
+        <option value="sv">Svenska</option>
+        <option value="nb">Norsk bokmål</option>
+        <option value="da">Dansk</option>
+        <option value="fi">Suomi</option>
+        <option value="cs">Čeština</option>
+        <option value="sk">Slovenčina</option>
+        <option value="hu">Magyar</option>
+        <option value="ro">Română</option>
+        <option value="el">Ελληνικά</option>
+        <option value="he">עברית</option>
+      </select>
+    </label>
     <button id="topbarHide" class="ctl ctl-icon" type="button" aria-controls="topbar" aria-expanded="true" title="Свернуть верхнее меню — сцена займёт всё место">⌃</button>
   </div>
 </div>
@@ -399,6 +442,10 @@
     </div>
   </div>
 
+  <!-- Точка монтирования Google Translate. Виджет живёт вне экрана: язык
+       переключает #langSel в верхнем меню, а скрипт грузится только по выбору. -->
+  <div id="google_translate_element" aria-hidden="true"></div>
+
   <!-- Модули без сборки, порядок = порядок зависимостей.
        Карта проекта и точки расширения — docs/ARCHITECTURE.md -->
   <script src="js/util.js"></script>
@@ -420,6 +467,7 @@
   <script src="js/ui-compose.js"></script>
   <script src="js/input.js"></script>
   <script src="js/midi.js"></script>
+  <script src="js/translate.js"></script>
   <script src="js/render.js"></script>
   <script src="js/main.js"></script>
 

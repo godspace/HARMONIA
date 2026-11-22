@@ -48,6 +48,7 @@
 | `input` | физический ввод | `runCommand`, `beginFromOverlay`, стартовая проба `INTRO_KEYS`/`introPress`/`introState`/`introStart`, стрелки `←/→` → `setMode`, `↑/↓` → комбо |
 | `midi` | Web MIDI | `Midi`, `MIDI_CONTROLLER`/`MIDI_PIANO`, `resolveEcho` |
 | `render` | кадр | `render`, `fitStage` |
+| `translate` | языки интерфейса | `Translate.mount/apply/state`, `LANGS`, `SHIELD`, `shieldSymbols`, `window.__harmoniaTranslateInit` |
 | `main` | запуск | boot + `window.HARMONIA` |
 
 ## Поток данных
@@ -357,6 +358,64 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
   смена записи и `stopPlayback()` отменяют повтор одной проверкой. Таймеры прошлого
   круга снимаются, чтобы они не копились.
 
+## Языки интерфейса
+
+`translate.js` — тонкая обёртка вокруг официального виджета Google Translate
+(тот же приём, что в соседнем `math-6-grade`). Своих словарей нет: виджет
+переводит текстовые узлы прямо в DOM, поэтому доступны все его языки.
+
+```
+#langSel (change) ──► Translate.apply(code)
+                          │
+                          ├─ arm(): SHIELD → notranslate, localStorage, cookie googtrans=/ru/<code>
+                          ├─ виджет готов ──► .goog-te-combo.value = code + change
+                          └─ не готов ──► pending = code ──► <script element.js> ──►
+                                          __harmoniaTranslateInit ──► TranslateElement ──► waitForCombo
+```
+
+Инварианты:
+
+- до выбора языка скрипт Google не запрашивается: сеть, CSP-логи и индексация
+  страницы остаются чистыми, а сцена не ждёт чужой iframe;
+- `''` — русский: это отсутствие перевода, а не отдельная локаль. Возврат на
+  него — `location.reload()`, потому что Google дописывает `<font>` и убрать
+  их без перезагрузки нельзя;
+- `SHIELD` защищает музыкальные обозначения (`#noteRow`, `#chordPad`,
+  `#fifthsWheel`, `#homeDeg`, `#homeNote`, клавиши стартовой пробы и `kbd`
+  в подсказках): иначе `J` → `ICH`, `соль` → `Salz`, а `<font>` внутри SVG
+  сдвигает подписи и они перестают влезать в шары;
+- ошибки сети глушатся тостом: игра важнее перевода, `failed` снимается при
+  следующем ручном выборе языка;
+- `?lang=xx` и `localStorage` (`harmonia.lang`) переживают перезагрузку,
+  на `file://` перевод не запускается вовсе.
+
+Ограничение машинного перевода: Google переводит текст в момент вставки.
+`updateHUD()` переписывает счёт и чипы только при изменении состояния, и после
+такой перезаписи соответствующий узел снова русский (имена комбо, счёт).
+Своего словаря у проекта нет намеренно: строки данных (`data.js`) и музыкальные
+термины должны оставаться точными.
+
+Машинный перевод — только UI. Он не создаёт индексируемых версий, поэтому
+`canonical` и `hreflang` самого `index.html` от него не зависят: Google не
+считает автоперевод альтернативной версией страницы.
+
+## Англоязычная страница
+
+`en/index.html` — вторая индексируемая страница, написанная руками, а не
+переводом: `lang="en"`, `canonical` `…/HARMONIA/en/`, свой Open Graph, JSON-LD
+(`WebApplication` + `FAQPage`, вопросы дословно совпадают с видимыми
+`summary`), CSS `css/landing.css`. Скриптов на странице нет вовсе — ни игры, ни
+переводчика, ни счётчиков; это проверяет шаг `no-scripts` в `en/smoke.html`.
+
+Кластер `hreflang`: `ru` → `…/HARMONIA/`, `en` → `…/HARMONIA/en/`, `x-default` →
+русская версия; обе страницы и `sitemap.xml` (`xhtml:link`) повторяют одну и ту
+же тройку. Вход в игру с английской страницы идёт через
+`../index.html?lang=en` — `translate.js` читает `?lang=` и включает перевод сразу.
+
+`#enLink` в топбаре стоит рядом с названием, внутри `.brand-group`, а не в ряду
+`.top-controls`: этот ряд уже переносится на 1440 px, и лишняя кнопка добавила
+бы полосе ещё одну строку, а сцене — минус высота.
+
 ## Точки расширения
 
 | Задача | Куда смотреть |
@@ -387,6 +446,8 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
 | Экран результата | `showFormResult()` / `hideFormResult()` в `ui-compose.js` |
 | Формат записи / лимиты | `recorder.js`: `REC_*`, `recordEvent`, `playRecordedEvent` |
 | Другой источник данных | `data/COMBOLIST.csv` → `tools/combolist.py` |
+| Список языков интерфейса | `LANGS` в `translate.js` + `<option>` в `#langSel` (`index.html`) |
+| Что нельзя переводить | `SHIELD` в `translate.js` (селекторы → `translate="no"`) |
 
 ## Проверка
 

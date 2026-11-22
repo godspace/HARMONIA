@@ -30,6 +30,16 @@
 - Google уже подтвердил владение через родительский ресурс
   `https://godspace.github.io/`, но HTML-тег даёт второй независимый способ
   подтверждения. Удалять его нельзя.
+- Переключатель языков (`js/translate.js`, `#langSel` в топбаре) грузит
+  Google Translate только после явного выбора посетителя; шаг `lang-switch`
+  в smoke-тесте проверяет, что до выбора скрипт не подключён. Машинный
+  перевод не индексируется.
+- Англоязычная версия — отдельная статичная страница `en/index.html`
+  (`css/landing.css`, без скриптов) с парой `hreflang` ru/en/x-default и
+  `xhtml:link` в `sitemap.xml`. Вход — ссылка «EN» в топбаре (`#enLink`,
+  внутри `.brand-group` рядом с названием, чтобы полоса не переносилась).
+  Smoke-тест собирает и её (`en/smoke.html`): шаги `lang`, `head`, `hreflang`,
+  `social`, `json-ld`, `content`, `no-scripts`, `console-errors`.
 
 ## 2. Что осталось сделать вручную
 
@@ -76,7 +86,7 @@ Sitemap: https://godspace.github.io/HARMONIA/sitemap.xml
 ```text
 index.html            разметка, SEO/Open Graph/JSON-LD, Google-метатег
 css/                  base, stage, overlays, panel
-js/                   приложение: harmony, audio, scene, viz, game, midi, render, main
+js/                   приложение: harmony, audio, scene, viz, game, midi, render, translate, main
 data/COMBOLIST.csv    единственный источник правды для 24 комбо
 tools/combolist.py    генератор js/data.js и проверка --check
 tools/_smoke_build.ps1 smoke-тест SEO и брендинга
