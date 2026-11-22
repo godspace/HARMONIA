@@ -1,0 +1,23 @@
+# OS / редакторы
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+
+# резервные копии и временные артефакты проверок
+*.bak
+*.tmp
+.tmp*
+tmp_*
+/visual.png
+
+# headless-проверки формы: генерируются tools/_smoke_build.ps1 и _visual_build.ps1
+smoke.html
+smoke-output.html
+smoke-*.txt
+visual.html
+visual-*.txt
+form-screen*.png
+_chrome-*/
+_*.txt

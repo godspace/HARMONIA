@@ -1,0 +1,296 @@
+/* HARMONIA · stage — сцена 800×540, HUD, индикатор «домой», пэд аккордов, бейджи, тост */
+
+#layout {
+  display: flex; gap: 12px; align-items: flex-start; justify-content: center;
+  width: min(1520px, calc(100vw - 20px));
+}
+#layout.side { flex-direction: row; }
+#layout:not(.side) { flex-direction: column; align-items: center; }
+#stage-wrap { position: relative; flex: none; }
+#game-container {
+  position: relative; width: 800px; height: 540px; transform-origin: top left;
+  background: radial-gradient(circle at center, #1e2233 0%, #0e1017 100%);
+  border: 2px solid #2e344e; border-radius: 16px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6), 0 0 60px rgba(78, 195, 255, 0.06) inset;
+  overflow: hidden;
+}
+canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+#hud {
+  position: absolute; top: 14px; left: 18px; right: 18px;
+  display: flex; justify-content: space-between; align-items: flex-start;
+  pointer-events: none; z-index: 5; gap: 8px;
+}
+.score-box, #homePanel {
+  background: rgba(12, 15, 24, 0.68); backdrop-filter: blur(9px);
+  border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.11);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.32);
+}
+.score-box { padding: 9px 14px; }
+.score-title { font-size: 10px; text-transform: uppercase; letter-spacing: 1.2px; color: #8b95b3; font-weight: 700; }
+.score-value { font-size: 26px; font-weight: 800; color: #ffd166; line-height: 1.15; font-variant-numeric: tabular-nums; }
+/* Индикатор возврата: постоянная «домашняя» точка вместо блока аккорда. */
+#homePanel {
+  width: 204px; padding: 8px 11px 9px; text-align: left;
+  transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+}
+.home-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.home-kicker {
+  font-size: 8.5px; font-weight: 800; letter-spacing: 1.05px;
+  text-transform: uppercase; color: #8b95b3; white-space: nowrap;
+}
+.home-count { font-size: 9.5px; font-weight: 800; color: #ffd166; font-variant-numeric: tabular-nums; }
+.home-main { display: flex; align-items: baseline; gap: 6px; margin-top: 1px; }
+.home-title { font-size: 15px; font-weight: 800; letter-spacing: 0.35px; color: #ffd166; }
+.home-deg {
+  padding: 1px 5px; border-radius: 20px; font-size: 9.5px; font-weight: 800;
+  color: #a455e3; background: rgba(164, 85, 227, 0.16);
+}
+.home-note { margin-top: 1px; font-size: 9.5px; font-weight: 700; color: #8b95b3; }
+.home-meter { display: flex; gap: 3px; margin-top: 6px; }
+.home-meter i {
+  flex: 1 1 0; height: 4px; border-radius: 3px;
+  background: rgba(255, 255, 255, 0.1); transition: background 0.2s, box-shadow 0.2s;
+}
+.home-meter i.on {
+  background: linear-gradient(90deg, #ffd166, #ff9f43);
+  box-shadow: 0 0 7px rgba(255, 209, 102, 0.6);
+}
+.home-status { margin-top: 4px; font-size: 9.5px; font-weight: 700; color: #8b95b3; white-space: nowrap; }
+#homePanel.away { border-color: rgba(255, 209, 102, 0.42); }
+#homePanel.away .home-title { color: #ffffff; }
+#homePanel.away .home-status { color: #ffd166; }
+#homePanel.fresh { border-color: rgba(255, 209, 102, 0.72); box-shadow: 0 0 22px rgba(255, 209, 102, 0.16); }
+#homePanel.fresh .home-status { color: #ffd166; }
+#homePanel.beauty { border-color: rgba(116, 204, 61, 0.6); box-shadow: 0 0 18px rgba(116, 204, 61, 0.12); }
+#homePanel.beauty .home-status { color: #9ee36d; }
+#homePanel.flash { animation: homeFlash 0.72s ease-out; }
+@keyframes homeFlash {
+  0% { box-shadow: 0 0 0 0 rgba(255, 209, 102, 0.8); }
+  100% { box-shadow: 0 0 0 22px rgba(255, 209, 102, 0); }
+}
+/* Форма — необязательный центральный слой HUD. В свободном джеме display:none,
+   поэтому ни счёт, ни индикатор «домой» не сдвигаются. */
+.form-hud {
+  display: none; position: absolute; left: 50%; top: 0; transform: translateX(-50%);
+  width: 300px; padding: 7px 9px 6px;
+  background: rgba(12, 15, 24, 0.74); backdrop-filter: blur(9px);
+  border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 12px;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.32);
+  transition: border-color 0.18s, box-shadow 0.18s;
+}
+.form-hud.on { display: block; }
+.form-hud.beat { animation: formBeat 0.42s ease-out; }
+@keyframes formBeat {
+  0% { border-color: rgba(255, 209, 102, 0.8); box-shadow: 0 0 0 0 rgba(255, 209, 102, 0.34), 0 8px 22px rgba(0, 0, 0, 0.32); }
+  100% { border-color: rgba(255, 255, 255, 0.12); box-shadow: 0 0 0 12px rgba(255, 209, 102, 0), 0 8px 22px rgba(0, 0, 0, 0.32); }
+}
+.form-head, .form-foot { display: flex; align-items: center; justify-content: space-between; gap: 7px; }
+.form-head { font-size: 8.5px; font-weight: 800; letter-spacing: 0.75px; text-transform: uppercase; color: #8b95b3; }
+#formPos { color: #ffd166; font-variant-numeric: tabular-nums; }
+.form-sections { display: flex; gap: 2px; margin-top: 5px; }
+.form-section-label {
+  min-width: 0; padding: 1px 0; border-radius: 3px; text-align: center;
+  font-size: 8px; font-weight: 800; line-height: 1.35; color: var(--fc, #9aa4c2);
+  background: rgba(255, 255, 255, 0.045); border: 1px solid transparent;
+  overflow: hidden; white-space: nowrap;
+}
+.form-section-label.active { border-color: var(--fc, #6bdfff); background: rgba(255, 255, 255, 0.12); }
+.form-section-label.done { opacity: 0.58; }
+.form-bars { display: flex; gap: 2px; margin-top: 3px; }
+.form-bars i {
+  flex: 1 1 0; height: 4px; border-radius: 2px;
+  background: var(--fc, #6b7590); opacity: 0.28;
+  transition: opacity 0.15s, transform 0.15s, box-shadow 0.15s;
+}
+.form-bars i.sec-intro { --fc: #6bdfff; }
+.form-bars i.sec-a { --fc: #74cc3d; }
+.form-bars i.sec-b { --fc: #a455e3; }
+.form-bars i.sec-ap { --fc: #ff9f43; }
+.form-bars i.sec-coda { --fc: #ffd166; }
+.form-bar-label.sec-intro, .form-section-label.sec-intro { --fc: #6bdfff; }
+.form-section-label.sec-a { --fc: #74cc3d; }
+.form-section-label.sec-b { --fc: #a455e3; }
+.form-section-label.sec-ap { --fc: #ff9f43; }
+.form-section-label.sec-coda { --fc: #ffd166; }
+.form-bars i.done { opacity: 0.72; }
+.form-bars i.current { opacity: 1; transform: scaleY(1.7); box-shadow: 0 0 7px var(--fc, #6bdfff); }
+.form-foot { margin-top: 5px; font-size: 9.5px; font-weight: 800; }
+.form-sec { color: #d0d7ee; }
+.form-target { color: #6bdfff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.form-beats { display: flex; gap: 3px; flex: none; }
+.form-beats i {
+  width: 4px; height: 4px; border-radius: 50%;
+  background: rgba(255, 255, 255, 0.16); transition: background 0.1s, box-shadow 0.1s;
+}
+.form-beats i.on { background: #ffd166; box-shadow: 0 0 6px rgba(255, 209, 102, 0.75); }
+.form-award { min-height: 11px; margin-top: 1px; text-align: right; font-size: 9px; font-weight: 800; color: #74cc3d; }
+#keyZone {
+  position: absolute; bottom: 11px; left: 0; right: 0;
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 0 12px; z-index: 6;
+}
+#noteRow { display: flex; justify-content: center; gap: 5px; flex-wrap: wrap; }
+#noteRow .key-badge {
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+  min-width: 78px; padding: 3px 8px; font-size: 10.5px; border-radius: 7px;
+  color: #c3cbe2; opacity: 0.88;
+}
+#noteRow .key-badge:hover { opacity: 1; }
+.key-badge .k {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 16px; height: 16px; border-radius: 4px;
+  background: rgba(255, 255, 255, 0.1); font-size: 10px; font-weight: 800;
+  color: #e2e8f8; line-height: 1;
+}
+.key-badge .t { font-weight: 700; font-size: 10.5px; color: #d0d7ee; }
+#chordPad { display: flex; justify-content: center; gap: 6px; }
+.chord-card {
+  position: relative; width: 120px; height: 46px; flex: none;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  padding: 4px 6px 5px;
+  font-family: inherit; cursor: pointer; touch-action: none;
+  color: #dbe3f7; background: rgba(14, 17, 26, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.13); border-radius: 9px;
+  backdrop-filter: blur(7px);
+  transition: transform 0.08s, border-color 0.12s, background 0.12s, box-shadow 0.12s;
+}
+.chord-card .cc-head { display: flex; align-items: center; justify-content: space-between; width: 100%; gap: 4px; }
+.chord-card .cc-deg { font-size: 10px; font-weight: 800; color: #8b95b3; letter-spacing: 0.3px; }
+.chord-card .cc-key {
+  font-size: 9px; font-weight: 800; letter-spacing: 0.7px; padding: 1px 4px;
+  border-radius: 3px; color: #9aa4c2; background: rgba(255, 255, 255, 0.07);
+}
+.chord-card .cc-name { font-size: 10.5px; font-weight: 700; white-space: nowrap; letter-spacing: 0.1px; }
+.chord-card:hover { border-color: rgba(107, 223, 255, 0.5); background: rgba(24, 34, 50, 0.85); }
+.chord-card.tonic { border-color: rgba(255, 209, 102, 0.42); background: rgba(36, 31, 18, 0.82); }
+.chord-card.tonic .cc-name, .chord-card.tonic .cc-deg { color: #ffd166; }
+.chord-card.tonic .cc-key { color: rgba(255, 209, 102, 0.9); background: rgba(255, 209, 102, 0.14); }
+.chord-card.next { border-color: rgba(107, 223, 255, 0.7); box-shadow: inset 0 2px 0 #6bdfff; }
+.chord-card.next .cc-deg, .chord-card.next .cc-key { color: #6bdfff; }
+.chord-card.tonic.next { border-color: rgba(255, 209, 102, 0.75); box-shadow: inset 0 2px 0 #ffd166; }
+.chord-card.tonic.next .cc-deg, .chord-card.tonic.next .cc-key { color: #ffd166; }
+.chord-card.active { transform: translateY(1px) scale(0.97); background: rgba(107, 223, 255, 0.24); border-color: #6bdfff; }
+.chord-card.tonic.active { background: rgba(255, 209, 102, 0.26); border-color: #ffd166; }
+/* Сыгранный шаг комбо: галочка на карточке вместо отдельных чипсов в HUD. */
+.chord-card.done { border-color: rgba(116, 204, 61, 0.42); }
+.chord-card.done::after {
+  content: '✓'; position: absolute; top: 3px; right: 5px;
+  font-size: 8px; font-weight: 800; color: #74cc3d; line-height: 1;
+}
+.chord-card.tonic.done::after { color: #ffd166; }
+.chord-card.home-flash { animation: tonicFlash 0.65s ease-out; }
+@keyframes tonicFlash {
+  0% { box-shadow: 0 0 0 0 rgba(255, 209, 102, 0.85); }
+  100% { box-shadow: 0 0 0 20px rgba(255, 209, 102, 0); }
+}
+
+.key-badge {
+  font-family: inherit; background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 6px 12px; border-radius: 8px; font-size: 12px; color: #d0d7ee;
+  cursor: pointer; touch-action: none;
+  transition: background 0.1s, border-color 0.1s, transform 0.1s;
+}
+.key-badge:hover { border-color: rgba(107, 223, 255, 0.5); background: rgba(107, 223, 255, 0.1); }
+.key-badge.held {
+  color: #ffffff; background: rgba(107, 223, 255, 0.24); border-color: #6bdfff;
+  box-shadow: 0 0 12px rgba(107, 223, 255, 0.35); transform: scale(0.96);
+}
+/* Тост — в свободной правой полосе сцены: орбиты центрированы, их правый край
+   (x=400+150+диск) остаётся левее тоста. */
+#toast {
+  position: absolute; top: 50%; right: 6px; transform: translateY(-50%);
+  z-index: 7; pointer-events: none; opacity: 0;
+  font-size: 12px; font-weight: 800; letter-spacing: 0.2px; line-height: 1.25;
+  padding: 5px 8px; border-radius: 9px; max-width: 188px; text-align: center;
+  background: rgba(14, 16, 23, 0.85); border: 1px solid rgba(255, 209, 102, 0.5);
+  color: #ffd166; backdrop-filter: blur(6px);
+  transition: opacity 0.25s; white-space: normal;
+}
+#toast.show { opacity: 1; transform: translateY(-50%); }
+/* Переход в новое комбо: компактный Space под аккордами. До 1000 он
+   показывает прогресс и выключен; после рубежа включается и пульсирует,
+   поэтому игра продолжается без модального окна и без мыши. */
+#spaceNext {
+  display: inline-flex; align-items: center; gap: 7px;
+  min-height: 23px; padding: 1px 8px 1px 3px;
+  font-family: inherit; font-size: 10px; font-weight: 700; line-height: 1;
+  color: #7e88a6; background: rgba(14, 17, 26, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 7px;
+  cursor: pointer; opacity: 0.72;
+  transition: opacity 0.15s, color 0.15s, border-color 0.15s,
+    background 0.15s, transform 0.12s, box-shadow 0.15s;
+}
+#spaceNext:disabled { cursor: default; }
+#spaceNext:not(:disabled):hover {
+  opacity: 1; transform: translateY(-1px);
+  border-color: rgba(255, 209, 102, 0.72); background: rgba(255, 209, 102, 0.12);
+}
+#spaceNext .sn-key {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 43px; padding: 3px 6px; border-radius: 4px;
+  font-size: 9px; font-weight: 800; letter-spacing: 0.3px;
+  color: #c3cbe2; background: rgba(255, 255, 255, 0.09);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+#spaceNext .sn-label { color: #9aa4c2; }
+#spaceNext .sn-progress {
+  color: #6bdfff; font-size: 9px; font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+#spaceNext.ready {
+  opacity: 1; color: #ffd166; border-color: rgba(255, 209, 102, 0.68);
+  background: rgba(255, 209, 102, 0.13);
+  animation: spaceReady 1.15s ease-in-out infinite;
+}
+#spaceNext.ready .sn-key {
+  color: #12141d; background: linear-gradient(180deg, #ffe08a, #ffd166);
+  border-color: #ffd166; box-shadow: 0 0 9px rgba(255, 209, 102, 0.5);
+}
+#spaceNext.ready .sn-label { color: #ffe3a0; }
+#spaceNext.ready .sn-progress { color: #ffd166; }
+@keyframes spaceReady {
+  0%, 100% { box-shadow: 0 0 0 rgba(255, 209, 102, 0); }
+  50% { box-shadow: 0 0 17px rgba(255, 209, 102, 0.62); }
+}
+
+/* Результат пьесы: отдельный слой, который не мешает свободному джему после
+   закрытия. Кнопки возвращают либо новую пьесу, либо чистый джем. */
+#formResult {
+  position: absolute; inset: 0; z-index: 14; display: none;
+  align-items: center; justify-content: center; padding: 18px;
+  background: rgba(8, 10, 16, 0.78); backdrop-filter: blur(9px);
+}
+#formResult.show { display: flex; animation: formResultIn 0.24s ease-out; }
+@keyframes formResultIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.fr-card {
+  width: min(380px, 100%); max-height: calc(100% - 12px); overflow: auto;
+  padding: 17px 18px 15px; text-align: center;
+  background: rgba(12, 15, 24, 0.97);
+  border: 1px solid rgba(255, 209, 102, 0.5); border-radius: 14px;
+  box-shadow: 0 20px 55px rgba(0, 0, 0, 0.68), 0 0 35px rgba(255, 209, 102, 0.12);
+}
+.fr-kicker { font-size: 9.5px; font-weight: 800; letter-spacing: 1.2px; text-transform: uppercase; color: #74cc3d; }
+.fr-card h2 { margin: 3px 0 4px; font-size: 21px; color: #ffd166; }
+.fr-score { font-size: 17px; font-weight: 800; color: #ffffff; margin-bottom: 6px; }
+.fr-melody {
+  margin-bottom: 10px; padding: 5px 8px; border-radius: 7px;
+  font-size: 10.5px; line-height: 1.35; color: #9aa4c2;
+  background: rgba(107, 223, 255, 0.06); border: 1px solid rgba(107, 223, 255, 0.14);
+}
+.fr-melody b { color: #6bdfff; font-weight: 800; }
+.fr-sections { display: flex; flex-direction: column; gap: 4px; text-align: left; }
+.fr-row {
+  display: grid; grid-template-columns: 44px 1fr auto; gap: 8px; align-items: center;
+  padding: 5px 7px; border-radius: 7px; background: rgba(255, 255, 255, 0.045);
+  font-size: 10.5px; color: #c2cae0;
+}
+.fr-name { font-weight: 800; color: #6bdfff; }
+.fr-meta { color: #8b95b3; line-height: 1.3; }
+.fr-row b { color: #74cc3d; font-size: 11px; }
+.fr-actions { display: flex; gap: 8px; margin-top: 13px; }
+.fr-actions .big-btn { flex: 1 1 0; padding: 9px 10px; font-size: 12.5px; border-radius: 8px; }
+

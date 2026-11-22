@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="description" content="HARMONIA — симулятор гармонии: 24 комбо на кварто-квинтовом круге, пять аккордов левой рукой, умная правая рука вокруг текущего аккорда, MIDI-клавиатура и живая панель параметров.">
+  <meta name="theme-color" content="#0b0d15">
+  <title>HARMONIA — симулятор гармонии</title>
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/stage.css">
+  <link rel="stylesheet" href="css/overlays.css">
+  <link rel="stylesheet" href="css/panel.css">
+</head>
+<body>
+
+<div id="topbar">
+  <div class="brand">HARMONIA <span>· симулятор гармонии</span></div>
+  <div class="top-controls">
+    <label class="ctl">Лад
+      <select id="modeSel">
+        <option value="major" selected>Мажор</option>
+        <option value="minor">Минор</option>
+      </select>
+    </label>
+    <div class="ctl">
+      <button class="pbtn" id="comboPrev" style="padding:2px 8px" title="Предыдущее комбо (Backspace)">‹</button>
+      <select id="comboSel"></select>
+      <button class="pbtn" id="comboNext" style="padding:2px 8px" title="Следующее комбо (Enter; Space после 1000)">›</button>
+    </div>
+    <button id="formBtn" class="ctl" aria-pressed="false" title="Необязательный слой: 16-тактная пьеса поверх свободного джема">🎼 Форма: выкл</button>
+    <button id="soundChip" class="ctl" aria-pressed="true" title="Кто звучит: ноутбук или пианино">🔊 Ноутбук</button>
+    <button id="muteBtn" class="ctl" aria-pressed="false" title="Звук (M)">🔊 Звук: вкл</button>
+    <button id="pauseBtn" class="ctl" title="Пауза (Esc)">⏸ Пауза</button>
+    <button id="restartBtn" class="ctl" title="Сессия заново (0)">↺ Сессия заново</button>
+  </div>
+</div>
+
+<div id="layout">
+  <div id="stage-wrap">
+    <div id="game-container">
+      <canvas id="penCanvas" width="800" height="540"></canvas>
+      <canvas id="spriteCanvas" width="800" height="540"></canvas>
+
+      <div id="hud">
+        <div class="score-box">
+          <div class="score-title">Счёт комбо</div>
+          <div class="score-value" id="scoreVal">0</div>
+        </div>
+
+        <!-- Пьеса — необязательный слой. В свободном джеме блок скрыт целиком. -->
+        <div id="formHud" class="form-hud" role="group" aria-label="Ход пьесы">
+          <div class="form-head">
+            <span id="formTempo">84 BPM · 4/4</span>
+            <span id="formPos">Такт 1/16</span>
+          </div>
+          <div class="form-sections" id="formSections"></div>
+          <div class="form-bars" id="formBars" aria-hidden="true"></div>
+          <div class="form-foot">
+            <span id="formSection" class="form-sec">Интро</span>
+            <span id="formTarget" class="form-target">цель I</span>
+            <span id="formBeats" class="form-beats" aria-hidden="true"></span>
+          </div>
+          <div id="formAward" class="form-award"></div>
+        </div>
+
+        <!-- Индикатор возврата в тонику: накопленное напряжение и последний «домой». -->
+        <div id="homePanel" role="status" aria-live="polite" aria-label="Индикатор возврата в тонику">
+          <div class="home-head">
+            <span class="home-kicker">Возврат в тонику</span>
+            <span class="home-count" id="homeCount" title="Сколько раз возвращались в тонику">↩ 0</span>
+          </div>
+          <div class="home-main">
+            <span class="home-title" id="homeTitle">Тоника</span>
+            <span class="home-deg" id="homeDeg">I</span>
+          </div>
+          <div class="home-note" id="homeNote">—</div>
+          <div class="home-meter" id="homeMeter" aria-hidden="true"></div>
+          <div class="home-status" id="homeStatus">дома</div>
+        </div>
+      </div>
+
+      <div id="keyZone">
+        <div id="noteRow" role="group" aria-label="Ноты правой руки — ступени лада"></div>
+        <div id="chordPad" role="group" aria-label="Гармоничные аккорды комбо"></div>
+        <button id="spaceNext" type="button" disabled aria-label="Пробел — новое комбо после 1000 очков">
+          <span class="sn-key">Space</span>
+          <span class="sn-label" id="spaceNextText">новое комбо</span>
+          <span class="sn-progress" id="spaceNextProgress">0 / 1000</span>
+        </button>
+      </div>
+
+      <div id="toast"></div>
+
+      <div id="formResult" role="dialog" aria-modal="true" aria-labelledby="formResultTitle" aria-hidden="true">
+        <div class="fr-card">
+          <div class="fr-kicker" id="formResultKicker">Форма · 16 тактов</div>
+          <h2 id="formResultTitle">Пьеса завершена</h2>
+          <div class="fr-score" id="formResultScore">Форма +0</div>
+          <div class="fr-melody" id="formResultMelody"></div>
+          <div class="fr-sections" id="formResultSections"></div>
+          <div class="fr-actions">
+            <button class="big-btn" id="formResultAgain">↻ Ещё раз</button>
+            <button class="big-btn alt" id="formResultJam">В свободный джем</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="startOverlay" class="scrim">
+        <h1>Симулятор гармонии · 24 комбо</h1>
+        <div class="intro-copy">
+          <b>Одна клавиатура — две руки.</b>
+          Левая держит гармонию, правая ведёт мелодию. В умном режиме пять нот
+          правой руки сами собираются вокруг текущего аккорда и избегают острых
+          столкновений. Кнопка <b>Умное переключение</b> в панели <b>Звук</b>
+          переключает его на пять фиксированных корней; там же сдвиг октавы.
+        </div>
+        <div class="intro-keyboard" role="img" aria-label="Раскладка компьютерной клавиатуры: Q W E R F — левая рука, J I O P [ — правая, Space — новое комбо после 1000, Enter и стрелки — команды">
+          <div class="kb-hands">
+            <span class="kb-hand lh"><i></i>Левая рука · Q W E R F</span>
+            <span class="kb-hand rh"><i></i>Правая рука · J I O P [</span>
+          </div>
+          <div class="kb-board">
+            <div class="kb-row kb-top">
+              <span class="kb-key dim kb-tab">Tab</span>
+              <span class="kb-key lh on home" style="--i:0" title="Q · II — супертоника"><b>Q</b><span>II</span></span>
+              <span class="kb-key lh on" style="--i:1" title="W · IV — субдоминанта"><b>W</b><span>IV</span></span>
+              <span class="kb-key lh on" style="--i:2" title="E · V — доминанта"><b>E</b><span>V</span></span>
+              <span class="kb-key lh on" style="--i:3" title="R · VI — субмедианта"><b>R</b><span>VI</span></span>
+              <span class="kb-key dim">T</span>
+              <span class="kb-key dim">Y</span>
+              <span class="kb-key dim">U</span>
+              <span class="kb-key rh on" style="--i:5" title="I · нота 2"><b>I</b><span>2</span></span>
+              <span class="kb-key rh on" style="--i:6" title="O · нота 3"><b>O</b><span>3</span></span>
+              <span class="kb-key rh on" style="--i:7" title="P · нота 4"><b>P</b><span>4</span></span>
+              <span class="kb-key rh on" style="--i:8" title="[ · нота 5"><b>[</b><span>5</span></span>
+              <span class="kb-key dim">]</span>
+            </div>
+            <div class="kb-row kb-home">
+              <span class="kb-key dim kb-caps">Caps</span>
+              <span class="kb-key dim">A</span>
+              <span class="kb-key dim">S</span>
+              <span class="kb-key dim">D</span>
+              <span class="kb-key lh on home" style="--i:4" title="F · I — тоника"><b>F</b><span>I</span></span>
+              <span class="kb-key dim">G</span>
+              <span class="kb-key dim">H</span>
+              <span class="kb-key rh on home" style="--i:9" title="J · нота 1"><b>J</b><span>1</span></span>
+              <span class="kb-key dim">K</span>
+              <span class="kb-key dim">L</span>
+              <span class="kb-key dim">;</span>
+              <span class="kb-key dim">'</span>
+              <span class="kb-key cmd on kb-enter" style="--i:11"><b>Enter</b><span>комбо</span></span>
+            </div>
+            <div class="kb-row kb-bottom">
+              <span class="kb-key dim kb-shift">Shift</span>
+              <span class="kb-key dim">Z</span>
+              <span class="kb-key dim">X</span>
+              <span class="kb-key dim">C</span>
+              <span class="kb-key dim">V</span>
+              <span class="kb-key dim">B</span>
+              <span class="kb-key dim">N</span>
+              <span class="kb-key dim">M</span>
+              <span class="kb-key dim">,</span>
+              <span class="kb-key dim">.</span>
+              <span class="kb-key dim">/</span>
+              <span class="kb-key dim kb-shift">Shift</span>
+            </div>
+            <div class="kb-row kb-space-row">
+              <span class="kb-key dim kb-mod">Ctrl</span>
+              <span class="kb-key dim kb-mod">Alt</span>
+              <span class="kb-key cmd on kb-space" style="--i:10"><b>Space</b><span>комбо</span></span>
+              <span class="kb-key dim kb-mod">Alt</span>
+              <span class="kb-arrows" aria-label="Стрелки: лад и комбо">
+                <span class="kb-key cmd on kb-arrow up" style="--i:12" title="↑ — следующее комбо"><b>↑</b></span>
+                <span class="kb-key cmd on kb-arrow left" style="--i:13" title="← — мажор"><b>←</b></span>
+                <span class="kb-key cmd on kb-arrow down" style="--i:14" title="↓ — предыдущее комбо"><b>↓</b></span>
+                <span class="kb-key cmd on kb-arrow right" style="--i:15" title="→ — минор"><b>→</b></span>
+              </span>
+              <span class="kb-arrow-label">лад / комбо</span>
+            </div>
+          </div>
+        </div>
+        <div class="intro-note"><kbd>1</kbd>–<kbd>3</kbd> — визуализация · <kbd>←</kbd><kbd>→</kbd> — лад · <kbd>↑</kbd><kbd>↓</kbd> — комбо · <kbd>Space</kbd> — новое комбо после 1000 · <kbd>Esc</kbd> — пауза · <kbd>M</kbd> — звук</div>
+
+        <div class="btnrow"><button id="startBtn" class="big-btn">Запустить симулятор</button></div>
+      </div>
+
+      <div id="modal" class="scrim">
+        <h1 id="modalTitle">Пауза</h1>
+        <p id="modalText"></p>
+        <div id="modalStats"></div>
+        <div class="btnrow">
+          <button id="mResume" class="big-btn">Продолжить</button>
+          <button id="mRestart" class="big-btn alt">↺ Сессия заново</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="panel">
+    <div class="pg">
+      <h3>Комбо · кварто-квинтовый круг</h3>
+      <svg id="fifthsWheel" viewBox="0 0 260 260" role="group" aria-label="Выбор комбо по кругу тональностей"></svg>
+      <div class="wheel-nav">
+        <button class="pbtn" id="pPrevCombo">‹ Назад</button>
+        <button class="pbtn accent" id="pNextCombo">Далее ›</button>
+      </div>
+      <div class="wheel-hint">Space после 1000 · Enter / Backspace · клик по тональности — сразу</div>
+    </div>
+
+    <details class="pg" id="formPg" open>
+      <summary>Форма · пьеса</summary>
+      <button class="tg" id="formToggle" aria-pressed="false">Форма: свободный джем</button>
+      <div class="prow"><label for="formBpm">Темп</label><input type="range" id="formBpm" min="40" max="180" step="2" value="84"><output id="formBpmOut"></output></div>
+      <div class="prow"><label for="formMeter">Размер</label>
+        <select id="formMeter"><option value="4" selected>4/4</option><option value="3">3/4</option></select>
+      </div>
+      <div class="prow"><label for="formCountIn">Отсчёт</label>
+        <select id="formCountIn"><option value="0">без отсчёта</option><option value="1" selected>1 такт</option><option value="2">2 такта</option></select>
+      </div>
+      <button class="tg" id="formMetronome" aria-pressed="true">Метроном: вкл</button>
+      <div class="form-status" id="formStatus" aria-live="polite">Свободный джем. Форма включится только по кнопке.</div>
+      <div class="pbtns">
+        <button class="pbtn accent" id="formRestart">↻ Начать пьесу</button>
+        <button class="pbtn" id="formStop" disabled>В джем</button>
+      </div>
+    </details>
+
+    <div class="pg" id="recPg">
+      <h3>Запись мелодии</h3>
+      <div class="rec-actions">
+        <button class="pbtn rec-btn" id="recBtn" aria-pressed="false" title="Начать или остановить запись">● Запись</button>
+        <button class="pbtn" id="playBtn" title="Прослушать выбранную запись" disabled>▶ Прослушать</button>
+      </div>
+      <div class="prow rec-pick">
+        <label for="recCountIn">Отсчёт</label>
+        <select id="recCountIn" title="Сколько тактов метронома звучит до начала записи">
+          <option value="0" selected>без отсчёта</option>
+          <option value="1">1 такт</option>
+          <option value="2">2 такта</option>
+        </select>
+      </div>
+      <button class="tg" id="recLoop" aria-pressed="false" title="Повторять выбранную запись по кругу">Повтор: выкл</button>
+      <div class="prow rec-pick">
+        <label for="recList">Запись</label>
+        <select id="recList" aria-label="Сохранённые записи"><option value="">— нет записей —</option></select>
+      </div>
+      <div class="pbtns"><button class="pbtn" id="recDel" title="Удалить выбранную запись" disabled>🗑 Удалить</button></div>
+      <div class="rec-status" id="recStatus" aria-live="polite">Нажмите «Запись», чтобы сохранить мелодию.</div>
+    </div>
+
+    <div class="pg">
+      <h3>Визуализация</h3>
+      <div id="vizMenu" class="viz-menu" role="group" aria-label="Выбор визуализации сцены"></div>
+      <div class="wheel-hint">Клик по режиму или <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> — сразу</div>
+    </div>
+
+    <details class="pg" open>
+      <summary>Движение</summary>
+      <div class="prow"><label for="pSpeed">Скорость покоя</label><input type="range" id="pSpeed" min="0" max="240" step="5" value="0" title="0 — шары стоят; движение — только от нажатий"><output id="vSpeed"></output></div>
+      <div class="prow"><label for="pBoost">Импульс</label><input type="range" id="pBoost" min="0" max="150" step="5" value="150"><output id="vBoost"></output></div>
+      <div class="prow"><label for="pTau">Затухание</label><input type="range" id="pTau" min="5" max="100" step="5" value="100"><output id="vTau"></output></div>
+      <button class="tg" id="pDir" aria-pressed="true">⟳ Направление: по часовой</button>
+      <button class="tg" id="pGuides" aria-pressed="true">Направляющие орбит: вкл</button>
+      <button class="tg" id="pTails" aria-pressed="true">Кометные хвосты: вкл</button>
+    </details>
+
+    <details class="pg">
+      <summary>Перо</summary>
+      <div class="prow"><label for="pPenW">Толщина</label><input type="range" id="pPenW" min="1" max="8" step="0.5" value="3"><output id="vPenW"></output></div>
+      <div class="prow"><label for="pFade">Затухание следа</label><input type="range" id="pFade" min="0" max="100" step="5" value="35"><output id="vFade"></output></div>
+      <div class="prow"><label for="pGlow">Свечение</label><input type="range" id="pGlow" min="0" max="40" step="2" value="18"><output id="vGlow"></output></div>
+      <div class="prow"><label for="pQuality">Точность дуг</label>
+        <select id="pQuality"><option value="high" selected>высокая</option><option value="normal">обычная</option></select>
+      </div>
+      <div class="pbtns"><button class="pbtn" id="pClear">Очистить след (C)</button></div>
+    </details>
+
+    <details class="pg">
+      <summary>Сцена</summary>
+      <div class="prow"><label for="pParticles">Частицы</label><input type="range" id="pParticles" min="0" max="120" step="6" value="42"><output id="vParticles"></output></div>
+      <div class="prow"><label for="pPalette">Палитра</label>
+        <select id="pPalette"><option value="neon" selected>Неон</option><option value="aurora">Аврора</option><option value="ember">Угли</option></select>
+      </div>
+    </details>
+
+    <details class="pg">
+      <summary>Звук</summary>
+      <div class="prow"><label for="pReverb">Реверберация</label><input type="range" id="pReverb" min="0" max="100" step="5" value="100"><output id="vReverb"></output></div>
+      <div class="prow"><label for="pNoteTone">Яркость нот</label><input type="range" id="pNoteTone" min="50" max="180" step="10" value="100"><output id="vNoteTone"></output></div>
+      <div class="prow"><label for="pNoteVol">Громкость нот</label><input type="range" id="pNoteVol" min="0" max="150" step="5" value="25" title="Громкость одиночных нот, 0–150 %"><output id="vNoteVol"></output></div>
+      <div class="prow"><label for="pChordVol">Громкость аккордов</label><input type="range" id="pChordVol" min="0" max="150" step="5" value="100" title="Громкость аккордовой подложки и баса, 0–150 %"><output id="vChordVol"></output></div>
+      <div class="prow"><label for="pNoteOct">Октава нот</label>
+        <select id="pNoteOct" title="Сдвиг нот правой руки: −1, 0 или +1 октава"><option value="-1">−1</option><option value="0">0</option><option value="1" selected>+1</option></select>
+      </div>
+      <div class="prow"><label for="pBassOct">Октава баса</label>
+        <select id="pBassOct"><option value="-1" selected>−1</option><option value="0">0</option><option value="1">+1</option></select>
+      </div>
+      <button class="tg" id="pPad" aria-pressed="true">Подложка аккорда: вкл</button>
+      <button class="tg" id="pSmartHand" aria-pressed="true" title="Клик: умное переключение аккордов вкл → выкл → снова вкл. Без умного режима правая рука играет фиксированные корни J I O P [, а автотрезвучия строятся от самой ноты.">Умное переключение: вкл</button>
+      <button class="tg" id="pSustain" aria-pressed="true" title="Педаль: нажата / отпущена (кнопка панели; MIDI CC64)">Педаль: нажата</button>
+    </details>
+
+    <details class="pg">
+      <summary>MIDI</summary>
+      <div class="prow"><label for="pMidiIn">Вход</label>
+        <select id="pMidiIn"><option value="">— нет —</option></select>
+      </div>
+      <div class="wheel-hint" id="midiHint">Подключите клавиатуру — трезвучие станет аккордом, ноты — голосами.</div>
+    </details>
+
+    <details class="pg">
+      <summary>Сессия</summary>
+      <div class="pbtns">
+        <button class="pbtn" id="pReset">Сброс параметров</button>
+        <button class="pbtn" id="pRandom">Случайно</button>
+        <button class="pbtn accent" id="pExport">Экспорт PNG</button>
+      </div>
+    </details>
+  </div>
+</div>
+
+<div id="status-row">
+  <div id="midi-status"><span class="dot"></span><span id="midiText">Web MIDI: проверка…</span></div>
+  <div class="hints"><kbd>Q</kbd> <kbd>W</kbd> <kbd>E</kbd> <kbd>R</kbd> <kbd>F</kbd> = аккорды · <span id="noteHints"><kbd>J</kbd> <kbd>I</kbd> <kbd>O</kbd> <kbd>P</kbd> <kbd>[</kbd></span> = ноты · <kbd>−</kbd><kbd>=</kbd> = октава · <kbd>←</kbd><kbd>→</kbd> = лад · <kbd>↑</kbd><kbd>↓</kbd> = комбо · <kbd>Enter</kbd> / <kbd>Backspace</kbd> = комбо · <kbd>Space</kbd> = новое комбо после 1000 · <kbd>1</kbd>–<kbd>3</kbd> = визуализация · <kbd>Esc</kbd> = пауза · MIDI: трезвучие = аккорд</div>
+</div>
+
+  <!-- Модули без сборки, порядок = порядок зависимостей.
+       Карта проекта и точки расширения — docs/ARCHITECTURE.md -->
+  <script src="js/util.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/harmony.js"></script>
+  <script src="js/state.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/transport.js"></script>
+  <script src="js/composition.js"></script>
+  <script src="js/scene.js"></script>
+  <script src="js/viz.js"></script>
+  <script src="js/game.js"></script>
+  <script src="js/listen.js"></script>
+  <script src="js/ui-hud.js"></script>
+  <script src="js/recorder.js"></script>
+  <script src="js/ui-panel.js"></script>
+  <script src="js/ui-compose.js"></script>
+  <script src="js/input.js"></script>
+  <script src="js/midi.js"></script>
+  <script src="js/render.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>

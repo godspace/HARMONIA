@@ -1,0 +1,42 @@
+/* HARMONIA · js/main.js — запуск приложения и публичный API
+   Модуль без сборки: подключается <script> в index.html до main.js.
+   Все модули делят глобальную область — имена функций/констант уникальны. */
+
+fillComboSelect();
+buildWheel();
+buildBalls();
+buildNoteRow();
+buildChordPad();
+buildVizMenu();
+initCompose();
+buildFormHud();
+applyPalette();
+syncParticles();
+updateHUD();
+applyMute();
+Midi.init();
+fitStage();
+// Публичный отладочный API: консоль, автотесты, будущие харнессы.
+window.HARMONIA = {
+  state, P, CFG, COMBOS, ORDER, INPUT, Midi, VIZ, viz, Heard,
+  Transport, Composition, setFormEnabled, updateFormHUD,
+  harmonicChords, updateHUD, playHarmonic, chordEvent, pressCode, releaseCode, runCommand, loadCombo, setMode, startSession,
+  togglePedal, updateSpaceNext, advanceCombo, canAdvanceCombo, comboAdvanceReady,
+  nextCombo, prevCombo, nextComboTarget, prevComboTarget,
+  diatonicPalette, chordOnDegree, classifyTriad, describeTriad, noteRole, scaleNoteNames, harmonyDebug,
+  harmonyFunction, harmonyTransitionBeauty, harmonyOpeningBeauty, harmonyPhraseBeauty,
+  handNoteBalls, NOTE_KEYS,
+  smartNoteWindow, smartChordDegrees, smartTargetDegree, smartAdaptiveDegree,
+  smartSongAnchor, smartTargetHarmony, smartAnchorForChord,
+  paletteIndexForChord, requestAdaptiveAnchor, setAdaptiveAnchor, resetAdaptive,
+  scheduleAdaptiveApply, applyPendingAdaptiveAnchor,
+  shiftNoteOctave, applyNoteLayout,
+  noteChord, noteChordPlan, noteChordHarmony, scheduleNoteChord, cancelPendingNoteChord,
+  BELL_TIMBRES, voiceVolume, applyVoiceVolumes,
+  startRecording, stopRecording, playSelected, stopPlayback, deleteSelectedRecording,
+  getRecordings: () => recordings,
+  toggleSound, audioRms, spectralCentroid, resetVizLayers, vizDebug, setViz, cycleViz
+};
+// Алиас на один релиз: старые консольные привычки и внешние сниппеты не ломаются.
+window.RITHM = window.HARMONIA;
+requestAnimationFrame(render);
