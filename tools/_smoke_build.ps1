@@ -254,25 +254,28 @@ $post = @'
     }
     HARMONIA.setMode('major');
     HARMONIA.loadCombo(0, false);
-    st.score = HARMONIA.CFG.comboAdvanceAt - 1;
+    // Порог берём из конфига: 300 очков, а не 1000 — одна правка в CFG меняет
+    // и текст кнопки, и этот тест.
+    var gate = HARMONIA.CFG.comboAdvanceAt;
+    st.score = gate - 1;
     HARMONIA.updateHUD();
     var btn = $('spaceNext');
-    if (!btn.disabled) throw new Error('Space transition is enabled below 1000');
-    if (btn.classList.contains('ready')) throw new Error('Space transition pulses below 1000');
-    if ($('spaceNextProgress').textContent.indexOf('999') === -1) {
-      throw new Error('Space progress did not show 999: ' + $('spaceNextProgress').textContent);
+    if (!btn.disabled) throw new Error('Space transition is enabled below ' + gate);
+    if (btn.classList.contains('ready')) throw new Error('Space transition pulses below ' + gate);
+    if ($('spaceNextProgress').textContent.indexOf(String(gate - 1)) === -1) {
+      throw new Error('Space progress did not show ' + (gate - 1) + ': ' + $('spaceNextProgress').textContent);
     }
-    if (HARMONIA.advanceCombo() !== false) throw new Error('advanceCombo ignored the 1000 gate');
+    if (HARMONIA.advanceCombo() !== false) throw new Error('advanceCombo ignored the ' + gate + ' gate');
     var mode = st.mode, idx = st.comboIdx;
     var before = HARMONIA.COMBOS[HARMONIA.ORDER[mode][idx]].id;
     dispatchSpace();
     if (st.mode !== mode || st.comboIdx !== idx) {
-      throw new Error('Space changed combo before 1000');
+      throw new Error('Space changed combo before ' + gate);
     }
-    st.score = HARMONIA.CFG.comboAdvanceAt;
+    st.score = gate;
     HARMONIA.updateHUD();
-    if (btn.disabled) throw new Error('Space transition is disabled at 1000');
-    if (!btn.classList.contains('ready')) throw new Error('Space transition does not pulse at 1000');
+    if (btn.disabled) throw new Error('Space transition is disabled at ' + gate);
+    if (!btn.classList.contains('ready')) throw new Error('Space transition does not pulse at ' + gate);
     if ($('spaceNextProgress').textContent.indexOf('\u0433\u043e\u0442\u043e\u0432\u043e') === -1) {
       throw new Error('Space readiness text is missing: ' + $('spaceNextProgress').textContent);
     }

@@ -90,7 +90,7 @@
     <div class="ctl">
       <button class="pbtn" id="comboPrev" style="padding:2px 8px" title="Предыдущее комбо (Backspace)">‹</button>
       <select id="comboSel"></select>
-      <button class="pbtn" id="comboNext" style="padding:2px 8px" title="Следующее комбо (Enter; Space после 1000)">›</button>
+      <button class="pbtn" id="comboNext" style="padding:2px 8px" title="Следующее комбо (Enter; Space после 300)">›</button>
     </div>
     <button id="formBtn" class="ctl" aria-pressed="false" title="Необязательный слой: 16-тактная пьеса поверх свободного джема">🎼 Форма: выкл</button>
     <button id="soundChip" class="ctl" aria-pressed="true" title="Кто звучит: ноутбук или пианино">🔊 Ноутбук</button>
@@ -149,10 +149,10 @@
       <div id="keyZone">
         <div id="noteRow" role="group" aria-label="Ноты правой руки — ступени лада"></div>
         <div id="chordPad" role="group" aria-label="Гармоничные аккорды комбо"></div>
-        <button id="spaceNext" type="button" disabled aria-label="Пробел — новое комбо после 1000 очков">
+        <button id="spaceNext" type="button" disabled aria-label="Пробел — новое комбо после 300 очков">
           <span class="sn-key">Space</span>
           <span class="sn-label" id="spaceNextText">новое комбо</span>
-          <span class="sn-progress" id="spaceNextProgress">0 / 1000</span>
+          <span class="sn-progress" id="spaceNextProgress">0 / 300</span>
         </button>
       </div>
 
@@ -196,7 +196,7 @@
         <button class="pbtn" id="pPrevCombo">‹ Назад</button>
         <button class="pbtn accent" id="pNextCombo">Далее ›</button>
       </div>
-      <div class="wheel-hint">Space после 1000 · Enter / Backspace · клик по тональности — сразу</div>
+      <div class="wheel-hint">Space после 300 · Enter / Backspace · клик по тональности — сразу</div>
     </div>
 
     <details class="pg" id="formPg" open>
@@ -314,7 +314,7 @@
 
 <div id="status-row">
   <div id="midi-status"><span class="dot"></span><span id="midiText">Web MIDI: проверка…</span></div>
-  <div class="hints"><kbd>Q</kbd> <kbd>W</kbd> <kbd>E</kbd> <kbd>R</kbd> <kbd>F</kbd> = аккорды · <span id="noteHints"><kbd>J</kbd> <kbd>I</kbd> <kbd>O</kbd> <kbd>P</kbd> <kbd>[</kbd></span> = ноты · <kbd>−</kbd><kbd>=</kbd> = октава · <kbd>←</kbd><kbd>→</kbd> = лад · <kbd>↑</kbd><kbd>↓</kbd> = комбо · <kbd>Enter</kbd> / <kbd>Backspace</kbd> = комбо · <kbd>Space</kbd> = новое комбо после 1000 · <kbd>1</kbd>–<kbd>3</kbd> = визуализация · <kbd>Esc</kbd> = пауза · MIDI: трезвучие = аккорд</div>
+  <div class="hints"><kbd>Q</kbd> <kbd>W</kbd> <kbd>E</kbd> <kbd>R</kbd> <kbd>F</kbd> = аккорды · <span id="noteHints"><kbd>J</kbd> <kbd>I</kbd> <kbd>O</kbd> <kbd>P</kbd> <kbd>[</kbd></span> = ноты · <kbd>−</kbd><kbd>=</kbd> = октава · <kbd>←</kbd><kbd>→</kbd> = лад · <kbd>↑</kbd><kbd>↓</kbd> = комбо · <kbd>Enter</kbd> / <kbd>Backspace</kbd> = комбо · <kbd>Space</kbd> = новое комбо после 300 · <kbd>1</kbd>–<kbd>3</kbd> = визуализация · <kbd>Esc</kbd> = пауза · MIDI: трезвучие = аккорд</div>
 </div>
 
   <!-- Стартовый экран: проба пальцев. Текста ровно две строки — название и

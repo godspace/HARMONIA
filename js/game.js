@@ -416,7 +416,7 @@ function chordEvent(h, vel, source) {
     if (state.explored) state.explored.add(h.degree);
     if (!state.played[state.mode][state.comboIdx] && state.visited.every(Boolean)) {
       state.played[state.mode][state.comboIdx] = true;
-      toast('Цикл комбо собран ✓ · после 1000 — Space', 'good');
+      toast('Цикл комбо собран ✓ · после ' + CFG.comboAdvanceAt + ' — Space', 'good');
     }
   }
 

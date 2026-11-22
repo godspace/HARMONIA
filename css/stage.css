@@ -213,7 +213,7 @@ canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
   transition: opacity 0.25s; white-space: normal;
 }
 #toast.show { opacity: 1; transform: translateY(-50%); }
-/* Переход в новое комбо: компактный Space под аккордами. До 1000 он
+/* Переход в новое комбо: компактный Space под аккордами. До 300 он
    показывает прогресс и выключен; после рубежа включается и пульсирует,
    поэтому игра продолжается без модального окна и без мыши. */
 #spaceNext {
