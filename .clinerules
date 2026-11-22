@@ -1,0 +1,32 @@
+# HARMONIA — правила для Cline
+
+## Рабочая папка
+
+- Работай только в корне этого репозитория (HARMONIA).
+- Папка `RITHM` удалена: не восстанавливай и не используй её.
+- Перед крупными изменениями прочитай `README.md`, `docs/CLINE_HANDOFF.md`
+  и `docs/ARCHITECTURE.md`.
+
+## Проект
+
+- Это статический сайт без сборки и зависимостей: HTML/CSS + classic JS,
+  публикация через GitHub Pages из корня `main`.
+- Не переводи `js/*.js` на ES-модули: classic `<script>` нужен для `file://`.
+- Источник данных комбо — `data/COMBOLIST.csv`; после правки запускай
+  `python tools/combolist.py`, затем `python tools/combolist.py --check`.
+- Канонический URL: `https://godspace.github.io/HARMONIA/`.
+- Не удаляй и не меняй без явной просьбы canonical, Open Graph, JSON-LD,
+  `robots` и метатег Google Search Console:
+  `WQZso1a4LcVn2_Adr-JlpDhe5KHCz_qSr4MS75SxeGc`.
+- `robots.txt` этого репозитория не управляет корнем `godspace.github.io`;
+  для хоста нужен отдельный репозиторий `godspace.github.io`.
+
+## Проверки перед коммитом
+
+- Для изменений в данных: `python tools/combolist.py --check`.
+- Для изменений в разметке/SEO:
+  `powershell -ExecutionPolicy Bypass -File tools/_smoke_build.ps1`,
+  затем открыть `smoke.html` в браузере.
+- Перед коммитом: `git status --short --branch`.
+- Публикация: `git push origin main` (GitHub Pages деплоит автоматически).
+- Не коммить сгенерированные `smoke.html`, `smoke-*.txt` и временные `_*.txt`.
