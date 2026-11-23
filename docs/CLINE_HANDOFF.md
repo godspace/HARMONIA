@@ -5,6 +5,7 @@
 **Репозиторий:** <https://github.com/godspace/HARMONIA>  
 **Ветка:** `main`  
 **Базовый коммит (до добавления handoff):** `3c4d577 Add Google Search Console verification`  
+**Синхронизация:** `main` = `origin/main`; точный хеш — `git log --oneline -1`.  
 **Живой сайт:** <https://godspace.github.io/HARMONIA/>
 
 > Папка `RITHM` удалена. Не восстанавливать её и не работать в ней.
@@ -77,7 +78,11 @@
   MIDI-пэд канала 10 (`DRUM_MAP` в `midi.js`): пэд звучит, но не становится нотой,
   поэтому не попадает ни в слух, ни в счёт, ни в запись. Игровых клавиш у барабанов
   нет — проба пальцев и легенда не менялись. Smoke: `groove-patterns`,
-  `groove-toggle`, `groove-follows-form`.
+  `groove-toggle`, `groove-follows-form`, `groove-hits`.
+- Про барабаны рассказано на обоих лендингах: карточка в списке возможностей,
+  раздел «Барабаны» рядом с «Записью» и вопрос в FAQ (`Are there drums?` /
+  `Есть ли барабаны?`). Вопрос продублирован в JSON-LD `FAQPage` дословно —
+  иначе Google считает разметку несоответствующей странице.
 
 ## 2. Что осталось сделать вручную
 
@@ -131,12 +136,13 @@ index.html            разметка, SEO/Open Graph/JSON-LD, Google-мета�
 en/index.html         англоязычная страница: статичный текст, без скриптов
 ru/index.html         русский обзор проекта (/ru/): статичный текст, без скриптов
 css/                  base, stage, overlays, panel, landing (en/ и ru/)
-js/                   приложение: harmony, audio, scene, viz, game, midi, render, i18n, translate, main
+js/                   приложение: harmony, audio, groove, scene, viz, game, midi, render, i18n, translate, main
 data/COMBOLIST.csv    единственный источник правды для 24 комбо
 tools/combolist.py    генератор js/data.js и проверка --check
 tools/_smoke_build.ps1 smoke-тест: игра + en/smoke.html + ru/smoke.html
 docs/ARCHITECTURE.md  карта модулей и потоков данных
-docs/screenshot.png   скриншот для README и og:image
+docs/screenshot.png   скриншот для README и og:image (русский интерфейс)
+docs/screenshot-en.png скриншот английского интерфейса: `en/index.html`
 sitemap.xml           карта сайта: главная + en/ (xhtml:link) + ru/
 robots.txt            правила для пути HARMONIA
 .nojekyll             отключает Jekyll на GitHub Pages
@@ -165,6 +171,11 @@ git push origin main
 ```
 
 `smoke.html` и временные `_*.txt` уже в `.gitignore`; коммитить их не нужно.
+
+`tools/_smoke_build.ps1` хранится в UTF-8 **с BOM**. Без BOM PowerShell 5.1
+читает скрипт как cp1251, кириллица внутри шагов попадает в `smoke.html`
+кракозябрами, и точное сравнение русской подписи (`#vGrooveBpm`) падает без
+видимой причины. Сохранять файл с BOM.
 
 ## 5. Правила проекта
 
@@ -209,7 +220,8 @@ git push origin main
 - `git status --short --branch` — чисто, ветка `main` синхронизирована с
   `origin/main`.
 - `python tools/combolist.py --check` завершается с кодом 0.
-- Smoke-тест выдаёт `ok: true` и находит точный Google-метатег.
+- Smoke-тест выдаёт `ok: true` и находит точный Google-метатег: основная страница
+  — 43 шага, `en/smoke.html` — 8, `ru/smoke.html` — 7.
 - `https://godspace.github.io/HARMONIA/sitemap.xml` отвечает HTTP 200.
 - Папка RITHM отсутствует и не используется.
 

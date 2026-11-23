@@ -1,4 +1,4 @@
-$ErrorActionPreference = 'Stop'
+﻿$ErrorActionPreference = 'Stop'
 $html = [IO.File]::ReadAllText((Join-Path $PWD 'index.html'), [Text.Encoding]::UTF8)
 $pre = @'
 <script>
@@ -1024,10 +1024,10 @@ $post = @'
     if (G.bpm() !== HARMONIA.Transport.bpm) throw new Error('groove tempo does not follow the piece');
     if (G.meter() !== 4) throw new Error('groove meter does not follow the piece');
     if (!$('pGrooveBpm').disabled) throw new Error('jam tempo must be disabled while the piece runs');
-    // Пока пьеса идёт, вместо своего темпа показываем «ведёт пьеса»: числа BPM
-    // в подписи быть не должно.
-    if ($('vGrooveBpm').textContent.indexOf('BPM') !== -1) {
-      throw new Error('readout must not show the jam tempo while the piece runs: ' + $('vGrooveBpm').textContent);
+    // Пока пьеса идёт, вместо своего темпа показываем «ведёт пьеса»: не «без BPM»,
+    // а ровно эта строка — иначе подпись может остаться пустой и тест смолчит.
+    if ($('vGrooveBpm').textContent !== 'ведёт пьеса') {
+      throw new Error('readout must hand the tempo to the piece: ' + $('vGrooveBpm').textContent);
     }
     // Пауза останавливает грув вместе с сессией: планировщик молчит.
     $('pauseBtn').click();
@@ -1040,11 +1040,48 @@ $post = @'
     G.paint();
     if (G._clockSource() !== 'jam') throw new Error('groove did not return to the jam clock');
     if ($('pGrooveBpm').disabled) throw new Error('jam tempo must come back after the piece');
-    if ($('vGrooveBpm').textContent.indexOf('BPM') === -1) {
+    // Возврат в джем показывает свой темп из панели — ровно то число, что в P.
+    if ($('vGrooveBpm').textContent !== HARMONIA.P.grooveBpm + ' BPM') {
       throw new Error('readout did not return to the jam tempo: ' + $('vGrooveBpm').textContent);
     }
     $('grooveToggle').click();
     if (G.on) throw new Error('groove did not turn off');
+  });
+
+  // Планировщик, а не только панель: удары действительно рождаются, темп меняет
+  // их количество, а выключенный грув молчит.
+  step('groove-hits', function () {
+    var G = HARMONIA.Groove, st = HARMONIA.state;
+    if (!st.running || st.paused) throw new Error('the session must be live for the groove test');
+    if (!G.on) $('grooveToggle').click();
+    if (!G.on) throw new Error('groove did not turn on');
+    if (typeof audioCtx === 'undefined' || !audioCtx) {
+      throw new Error('turning the groove on must open the audio path');
+    }
+    // Часы грува свои, поэтому шагаем ими вручную по 50 мс: прогон не зависит
+    // от частоты кадров headless-браузера.
+    function walk(count) {
+      var before = G.hits;
+      for (var i = 0; i < count; i++) { G._ownT0 -= 0.05; G.update(); }
+      return G.hits - before;
+    }
+    var slow = walk(40);
+    if (slow < 4) throw new Error('the scheduler planned no hits: ' + slow);
+    // Тот же отрезок на быстром темпе даёт больше ударов: темп — это сетка,
+    // а не только подпись в панели.
+    $('pGrooveBpm').value = '168';
+    $('pGrooveBpm').dispatchEvent(new Event('input', { bubbles: true }));
+    var fast = walk(40);
+    if (!(fast > slow)) throw new Error('tempo does not change the grid: ' + slow + ' vs ' + fast);
+    // Выключенный грув не планирует ничего и не двигает счётчик.
+    $('grooveToggle').click();
+    var off = walk(20);
+    if (off !== 0 || G.update() !== false) throw new Error('the switched-off groove still plans');
+    // Часы и темп возвращаем на место: следующие шаги видят обычный джем.
+    G._ownT0 = performance.now() / 1000;
+    G._mark = null;
+    $('pGrooveBpm').value = '96';
+    $('pGrooveBpm').dispatchEvent(new Event('input', { bubbles: true }));
   });
 
   step('en-pack', function () {

@@ -21,6 +21,7 @@
                                        viz ─────┤
                                                 │
                  transport ── composition ── ui-compose
+                     └── groove (необязательный слой: барабаны; composition о нём не знает)
                         game ── listen ── ui-hud ── recorder ── ui-panel ── ui-drawers ── input
                           │        │          │
                         midi ──────┴── render ─┴── main
@@ -582,7 +583,7 @@ Translate через `translate.js` (тот же приём, что в сосе�
   число `.chord-card`, отсутствие ошибок в консоли;
   затем `Midi.noteOn(60/64/67)` → `state.heard.triad.degree === 'I'`.
 - `tools/_smoke_build.ps1` собирает три страницы: `smoke.html` (игра, шаги
-  boot/intro-drill/free-jam/форма/запись/smart-раскладка/английский пакет),
+  boot/intro-drill/free-jam/форма/грув/запись/smart-раскладка/английский пакет),
   `en/smoke.html` (статика английского лендинга) и `ru/smoke.html` (статика
   русского обзора). Headless Chrome с `--dump-dom` оставляет в
   `<pre id="smoke-result">` строку `ok:true`. Шаг `intro-drill` держит стартовое
@@ -613,6 +614,12 @@ Translate через `translate.js` (тот же приём, что в сосе�
   → `meter() === 3`; старт формы → `_clockSource() === 'form'`, `bpm()` равен
   `Transport.bpm`, `#pGrooveBpm.disabled`; возврат в джем → снова свои часы. Шаги
   `groove-patterns` (длины строк, акценты, заворот такта, `drumPlan`),
-  `groove-toggle` (кнопка, список фигур, ползунок темпа) и `groove-follows-form`
-  держат это в headless-прогоне.
+  `groove-toggle` (кнопка, список фигур, ползунок темпа), `groove-follows-form`
+  (смена источника часов и подписи) и `groove-hits` (планировщик: удары растут,
+  быстрый темп даёт больше шагов, выключенный грув молчит) держат это в
+  headless-прогоне.
+- `tools/_smoke_build.ps1` хранится в UTF-8 **с BOM**. Без BOM PowerShell 5.1
+  читает скрипт как cp1251, и кириллица внутри шагов попадает в `smoke.html`
+  кракозябрами: ASCII-проверки это не ловят, а точное сравнение русской строки
+  (`#vGrooveBpm === 'ведёт пьеса'`) начинает падать без причины.
 

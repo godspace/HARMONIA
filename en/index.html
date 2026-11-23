@@ -155,6 +155,12 @@
             result screen with a breakdown by section.</p>
         </div>
         <div class="card">
+          <h3>Add a drum groove</h3>
+          <p>An optional backing layer, off by default: straight, half-time, shuffle, ballad or
+            waltz, at the tempo and in the meter of the piece. Drums never earn points and never get
+            recorded; a MIDI pad on channel 10 plays the same kit by hand.</p>
+        </div>
+        <div class="card">
           <h3>Three visualisations</h3>
           <p>Orbits, spectrum and circle. The circle draws the chord as a triangle on the belt of
             tones, with common tones marked as voice-leading anchors.</p>
@@ -238,6 +244,16 @@
         score. Saved melodies live in <code>localStorage</code> and survive a reload; recording stops
         by itself after three minutes or 6 000 events so the storage never overflows.
       </p>
+      <h3>Drums</h3>
+      <p>
+        The drum layer is off by default and never turns itself on: one toggle, a list of patterns —
+        straight, half-time, shuffle, ballad or waltz — and its own volume. In a jam the drums keep
+        their own tempo; in a piece they follow the form, so the slider greys out and the readout
+        says “led by the piece”. The kit is synthesised with Web Audio: no samples, no network
+        requests. It is deliberately deaf to the game — drums never earn points, never enter the
+        recognition pool and never land in a recording. The same kit plays by hand from a MIDI pad
+        on channel 10.
+      </p>
     </section>
 
     <section id="languages">
@@ -295,9 +311,14 @@
         <p>Closer to a trainer you can play. There are no lessons to read: the point system rewards
           functional harmony, so the habits that produce cadences are the ones that produce points.</p>
       </details>
+      <details>
+        <summary>Are there drums?</summary>
+        <p>Optional. A synthesised kit plays a groove behind the jam or the piece — straight,
+          half-time, shuffle, ballad or waltz — off by default and with its own volume. Drums are a
+          backing layer only: they never earn points, never enter the recognition and never get
+          recorded. A MIDI pad on channel 10 plays the same kit by hand.</p>
+      </details>
     </section>
-
-  </main>
 
   <footer class="site-foot">
     <div class="wrap">
@@ -369,6 +390,11 @@
             "@type": "Question",
             "name": "Is it a course or a game?",
             "acceptedAnswer": { "@type": "Answer", "text": "Closer to a trainer you can play. There are no lessons to read: the point system rewards functional harmony, so the habits that produce cadences are the ones that produce points." }
+          },
+          {
+            "@type": "Question",
+            "name": "Are there drums?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Optional. A synthesised kit plays a groove behind the jam or the piece — straight, half-time, shuffle, ballad or waltz — off by default and with its own volume. Drums are a backing layer only: they never earn points, never enter the recognition and never get recorded. A MIDI pad on channel 10 plays the same kit by hand." }
           }
         ]
       }
