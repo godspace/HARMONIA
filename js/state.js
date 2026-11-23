@@ -7,6 +7,10 @@ const state = {
   mode: 'major', comboIdx: 0, chordIndex: 0,
   visited: [false, false, false, false],
   played: { major: [], minor: [] },
+  // entered — комбо, в которые игрок уже заходил в этой сессии. Полоса прогресса
+  // вверху сцены показывает сначала «вошёл» (голубая ячейка), а played — «собрал
+  // цикл из четырёх аккордов» (зелёная). Сбрасывается вместе с played.
+  entered: { major: [], minor: [] },
   clock: 0, rings: 0,
   // score — счёт текущего комбо. loadCombo() начинает каждое комбо с нуля;
   // отдельного общего счёта сессии больше нет.
@@ -69,6 +73,8 @@ const state = {
 };
 ORDER.major.forEach(() => state.played.major.push(false));
 ORDER.minor.forEach(() => state.played.minor.push(false));
+ORDER.major.forEach(() => state.entered.major.push(false));
+ORDER.minor.forEach(() => state.entered.minor.push(false));
 const combo = () => COMBOS[ORDER[state.mode][state.comboIdx]];
 const rootMidi = () => 48 + combo().root;
 // Единый «можно ли играть» — используется вводом, MIDI, аккордами и нотами.

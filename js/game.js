@@ -159,6 +159,9 @@ function loadCombo(idx, keepPen) {
   releaseAllHolds();
   const len = ORDER[state.mode].length;
   state.comboIdx = ((idx % len) + len) % len;
+  // Вошли в комбо — ячейка на полосе прогресса светлеет сразу, задолго до того,
+  // как собран цикл из четырёх аккордов (полоса живёт в ui-hud.js).
+  if (state.entered && state.entered[state.mode]) state.entered[state.mode][state.comboIdx] = true;
   // У каждого комбо собственный счёт: при входе в новое комбо он начинается с нуля.
   state.score = 0;
   state.chordIndex = 0;
@@ -242,6 +245,8 @@ function startSession() {
   state.explored = new Set();
   state.played.major = state.played.major.map(() => false);
   state.played.minor = state.played.minor.map(() => false);
+  state.entered.major = state.entered.major.map(() => false);
+  state.entered.minor = state.entered.minor.map(() => false);
   state.running = true; state.paused = false;
   // Стартовый экран прятал меню: возвращаем хром в том виде, в каком игрок его
   // оставил (проба пальцев панели не открывает насильно).

@@ -239,9 +239,10 @@ var Translate = (function () {
   // и соль, а клавиша «J» превращается в «ICH». Такие узлы помечаем notranslate.
   // Строка тональности рядом со счётом входит сюда же: её нотация выбирается
   // игрой (P.notation), а Google перевёл бы «До мажор» как «Before major».
+  // Ячейки полосы комбо — те же ноты, что и на колесе: их подписи тоже ставит игра.
   const SHIELD = [
     '#noteRow', '#chordPad', '#fifthsWheel', '#homeDeg', '#homeNote', '#comboKey',
-    '#startOverlay .kb-key', '#spaceNext .sn-key', '.hints kbd'
+    '#comboStrip .cs-cells', '#startOverlay .kb-key', '#spaceNext .sn-key', '.hints kbd'
   ];
 
   function shieldSymbols() {

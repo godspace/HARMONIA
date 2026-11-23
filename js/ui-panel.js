@@ -113,6 +113,10 @@ function refreshNotation() {
     balls.forEach((b, i) => { b.name = noteLabel(c.scaleNames[i + 1]); });
   }
   if (typeof buildWheel === 'function') buildWheel();
+  // Подписи ячеек полосы — те же ноты, что и на колесе, поэтому нотация у них
+  // общая: пересобираем полосу вместе с колесом, а классы прогресса расставит
+  // updateHUD ниже.
+  if (typeof buildComboStrip === 'function') buildComboStrip();
   if (typeof fillComboSelect === 'function') fillComboSelect();
   if (typeof buildChordPad === 'function') buildChordPad();
   // Итог пьесы тоже показывает ноты (диапазон мелодии): перерисовываем его,

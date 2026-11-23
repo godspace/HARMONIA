@@ -147,16 +147,32 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
   кнопка под аккордами) проверяет `comboAdvanceReady()`: `state.score` должен
   достичь `CFG.comboAdvanceAt` (300), игра не должна стоять на паузе или
   проигрывать запись. `updateSpaceNext()` показывает прогресс, включает кнопку
-  и пульсацию после рубежа, а заодно ведёт подсказку у счёта: `updateSpaceHint()`
-  пишет `ещё N` / `→ новое комбо`, `nudgeSpace()` на рубеже (и на +150/+300 сверх
-  него) дважды подсвечивает `.score-box` и коротко подпрыгивает кнопкой
-  (`#spaceNext.attn`). Это единственное напоминание: тост занят названием
-  аккорда, поэтому модальных окон и повторов в тосте нет.
+  и пульсацию после рубежа, а заодно ведёт подсказку в полосе комбо:
+  `updateSpaceHint()` пишет `ещё N` / `→ новое комбо`, `nudgeSpace()` на рубеже
+  (и на +150/+300 сверх него) дважды подсвечивает `#comboStrip` и коротко
+  подпрыгивает кнопкой (`#spaceNext.attn`). Это единственное напоминание: тост
+  занят названием аккорда, поэтому модальных окон и повторов в тосте нет.
 - `#comboKey` под счётом — музыкальное имя комбо (`keyNameOf(combo())`, то есть
   `До мажор` / `C major`): счёт принадлежит тональности, а после старта топбар с
   `#comboSel` скрыт. Строка помечена `notranslate` и входит в `SHIELD`, иначе
   Google перевёл бы «До мажор» как «Before major». То же имя стоит в центре
   круга тональностей (`paintWheel`): `№1 · До мажор · 0/12`.
+- `#comboStrip` — полоса маршрута по 24 комбо в верхней середине сцены: две
+  строки по двенадцать ячеек в порядке круга (`ORDER[mode]`, подпись —
+  `cap(noteLabel(COMBOS[id].chords[0][0]))`, то есть тоника лада),
+  `role="progressbar"` на `aria-valuemax="24"`. `buildComboStrip()` собирает
+  ячейки (зовётся из `main.js` и из `refreshNotation()` при смене нотации),
+  `paintComboStrip()` в `updateHUD()` ставит три класса: `seen` — игрок входил в
+  комбо (`state.entered`), `done` — собран цикл из четырёх аккордов
+  (`state.played`), `current` — текущее комбо (золотая пульсация `csPulse`).
+  Двадцать четыре ячейки — самый длинный ряд на сцене, поэтому он остаётся
+  мелким (8 px, `min-width` 15 px): `display: grid` с `max-content` колонками
+  держит мажор и минор выровненными, а ширину колонки задаёт самая длинная
+  подпись, так что «Соль♭» не вылезает из рамки. В пьесе центр занимает
+  форма, и полоса уступает ей место: `#formHud.on ~ .combo-strip { display:none }`
+  (порядок соседей в разметке важен). Подсказка о пробеле живёт здесь же —
+  `#spaceHint` больше не часть блока счёта, поэтому счёт и маршрут читаются
+  отдельно.
 - Нотация подписей — `P.notation` (`sol` | `letters`). Данные и звук её не
   знают: `util.js` держит `letterNoteName()`/`noteLabel()`/`chordLabel()`/
   `keyNameOf()`/`sharpLabel()`, а `data.js` считает `keyNameLatin` при разборе
@@ -497,7 +513,8 @@ Translate через `translate.js` (тот же приём, что в сосе�
 | Новая палитра | `PALETTES` + `<option>` в `index.html` |
 | Новая визуализация | `VIZ` + `VIZ_ORDER` (`project/guides/center/ball/ring`) — меню и цифры `1`–`3` строятся сами |
 | Порог Space-перехода | `CFG.comboAdvanceAt` + `advanceCombo()` / `updateSpaceNext()` |
-| Напоминание о пробеле у счёта | `updateSpaceHint` / `nudgeSpace` + `#spaceHint`, `#comboKey` в `index.html` (`css/stage.css`) |
+| Напоминание о пробеле | `updateSpaceHint` / `nudgeSpace` + `#spaceHint` в полосе `#comboStrip` (`index.html`, `css/stage.css`) |
+| Полоса прогресса по 24 комбо | `buildComboStrip` / `paintComboStrip` (`ui-hud.js`) + `state.entered`/`state.played` + `.cs-cell.seen/.done/.current` |
 | Нотация подписей (до-ре-ми ↔ C-D-E) | `P.notation` + `noteLabel`/`chordLabel`/`keyNameOf` (`util.js`), `resetNotationCaches`/`refreshNotation`, `notationForLang` (`ui-panel.js`), `applyLanguageNotation` (`translate.js`) |
 | Состав стартовой пробы | `INTRO_KEYS` + `introPress()` + `data-key` на клавишах в `index.html` |
 | Подтверждение старта пробелом | `introStart()` + класс `ready` на `#startOverlay` + `.ip-after` / `.kb-space-start` в `index.html` |

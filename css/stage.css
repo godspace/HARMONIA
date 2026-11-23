@@ -33,31 +33,98 @@ canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
 .score-box { padding: 9px 14px; }
 .score-title { font-size: 10px; text-transform: uppercase; letter-spacing: 1.2px; color: #8b95b3; font-weight: 700; }
 .score-value { font-size: 26px; font-weight: 800; color: #ffd166; line-height: 1.15; font-variant-numeric: tabular-nums; }
-/* Музыкальное имя комбо и напоминание о пробеле — две короткие строки под
-   счётом. Счёт принадлежит тональности, поэтому они стоят вместе: игрок
-   читает «сколько очков · где я · что даст пробел» одним взглядом, а блок
-   Space под аккордами остаётся прежним. */
+/* Музыкальное имя комбо — строка под счётом: счёт принадлежит тональности, и
+   «сколько очков · где я» читается одним взглядом. Сама подсказка о пробеле
+   живёт в полосе комбо (ниже): там же, где видно маршрут по 24 ступеням. */
 .score-key {
   margin-top: 1px; font-size: 10.5px; font-weight: 800; letter-spacing: 0.2px;
   color: #d0d7ee; white-space: nowrap;
 }
-.score-space {
-  display: flex; align-items: center; gap: 5px; margin-top: 3px;
+/* Подсказка о пробеле живёт в полосе комбо, под ячейками: до рубежа — сколько
+   очков осталось, после — что сделает пробел. Отдельного бокса у счёта больше
+   нет: счёт и маршрут читаются по разным местам. */
+.space-hint {
+  display: flex; align-items: center; gap: 5px;
   font-size: 9px; font-weight: 700; line-height: 1; color: #7e88a6; white-space: nowrap;
 }
-.score-space b {
+.space-hint b {
   padding: 1px 4px; border-radius: 3px;
   font-size: 8.5px; font-weight: 800; letter-spacing: 0.3px; color: #9aa4c2;
   background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.12);
 }
-.score-space.ready { color: #ffd166; }
-.score-space.ready b {
+.space-hint.ready { color: #ffd166; }
+.space-hint.ready b {
   color: #12141d; background: linear-gradient(180deg, #ffe08a, #ffd166);
   border-color: #ffd166; box-shadow: 0 0 8px rgba(255, 209, 102, 0.45);
 }
-/* Рубеж пройден: блок счёта дважды мягко вспыхивает, чтобы взгляд вернулся к
-   счёту и увидел строку про пробел. Это напоминание, а не тревога. */
-.score-box.attn { animation: scoreNudge 0.9s ease-out 2; }
+/* ===== Полоса прогресса по 24 комбо =====
+   Верх сцены — единственное место, которое в игре видно всегда: в левом углу
+   счёт, в правом — возврат в тонику, а между ними пустая середина. Там и живут
+   двенадцать колонок кварто-квинтового круга в двух рядах (мажор и минор).
+   Ячейка — ступень маршрута: тёмная, пока комбо не начато; голубая, когда
+   игрок в него вошёл; зелёная, когда собран цикл из четырёх аккордов; текущая
+   мягко мигает золотом — это и есть подсказка «ты здесь, дальше — пробел»,
+   без отдельной строки текста. В пьесе центр занимает форма, и полоса уступает
+   ей место. */
+.combo-strip {
+  /* Полоса стоит между счётом и «домой» в потоке HUD: flex сам раздаёт
+     свободное место, поэтому ячейки не наезжают ни на число очков, ни на
+     индикатор тоники — даже когда счёт становится четырёхзначным. */
+  flex: none; align-self: flex-start;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 5px 9px 6px;
+  background: rgba(12, 15, 24, 0.68); backdrop-filter: blur(9px);
+  border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.11);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.32);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+#formHud.on ~ .combo-strip { display: none; }
+/* Ряды и их обёртки не создают боксов: 26 ячеек (2 подписи + 24 ноты) лежат
+   одной сеткой, поэтому колонки мажора и минора совпадают, а ширина колонки
+   берётся по самой длинной подписи — «соль♭» не вылезает из рамки. */
+.cs-body {
+  display: grid; grid-template-columns: auto repeat(12, max-content);
+  column-gap: 4px; row-gap: 3px; align-items: center;
+}
+.cs-row, .cs-cells { display: contents; }
+.cs-tag {
+  width: 30px; font-size: 7px; font-weight: 800; letter-spacing: 0.6px;
+  text-transform: uppercase; color: #8b95b3; white-space: nowrap;
+}
+.cs-cell {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 15px; height: 14px; padding: 0 2px;
+  font-size: 8px; font-weight: 800; line-height: 1; letter-spacing: 0.2px;
+  color: #7e88a6; background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 3.5px;
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+  transition: color 0.18s, background 0.18s, border-color 0.18s, box-shadow 0.18s;
+}
+/* Вошёл в комбо — ячейка светлеет: маршрут виден ещё до первого аккорда. */
+.cs-cell.seen {
+  color: #bfe9ff; background: rgba(107, 223, 255, 0.14);
+  border-color: rgba(107, 223, 255, 0.42);
+}
+/* Цикл из четырёх аккордов собран — ступень пройдена целиком. */
+.cs-cell.done {
+  color: #dcf7c6; background: rgba(116, 204, 61, 0.2);
+  border-color: rgba(116, 204, 61, 0.55);
+}
+/* Текущее комбо: золотая рамка и медленное дыхание — напоминание, где игрок.
+   Пульсация не отменяет заливку: пройденная ступень остаётся зелёной. */
+.cs-cell.current {
+  color: #ffe3a1; border-color: #ffd166;
+  box-shadow: inset 0 0 0 1px rgba(255, 209, 102, 0.35);
+  animation: csPulse 2.1s ease-in-out infinite;
+}
+.cs-cell.current.done { color: #f4ffd9; }
+@keyframes csPulse {
+  0%, 100% { box-shadow: inset 0 0 0 1px rgba(255, 209, 102, 0.35), 0 0 0 0 rgba(255, 209, 102, 0); }
+  50% { box-shadow: inset 0 0 0 1px rgba(255, 209, 102, 0.7), 0 0 9px 1px rgba(255, 209, 102, 0.5); }
+}
+/* Рубеж пройден: полоса дважды мягко вспыхивает, чтобы взгляд вернулся к
+   подсказке о пробеле. Это напоминание, а не тревога. */
+.combo-strip.attn { animation: scoreNudge 0.9s ease-out 2; }
 @keyframes scoreNudge {
   0%, 100% { border-color: rgba(255, 255, 255, 0.11); box-shadow: 0 8px 22px rgba(0, 0, 0, 0.32); }
   45% { border-color: rgba(255, 209, 102, 0.9); box-shadow: 0 0 22px rgba(255, 209, 102, 0.3), 0 8px 22px rgba(0, 0, 0, 0.32); }
@@ -297,7 +364,11 @@ canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
 }
 /* Кому мигание не подходит — подсказка остаётся текстом и цветом. */
 @media (prefers-reduced-motion: reduce) {
-  .score-box.attn, #spaceNext.ready.attn { animation: none; }
+  .combo-strip.attn, #spaceNext.ready.attn { animation: none; }
+  .cs-cell.current {
+    animation: none;
+    box-shadow: inset 0 0 0 1px rgba(255, 209, 102, 0.7);
+  }
 }
 
 /* Результат пьесы: отдельный слой, который не мешает свободному джему после

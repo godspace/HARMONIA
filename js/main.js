@@ -4,6 +4,7 @@
 
 fillComboSelect();
 buildWheel();
+buildComboStrip();
 buildBalls();
 buildNoteRow();
 buildChordPad();

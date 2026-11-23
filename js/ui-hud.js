@@ -311,21 +311,66 @@ function updateHUD() {
   $('pNextCombo').classList.toggle('pulse', cycleDone && state.running && !state.paused);
   paintChordPad();
   paintWheel();
+  paintComboStrip();
   if (typeof updateFormHUD === 'function') updateFormHUD();
   updateSpaceNext();
 }
+// ===== Полоса прогресса по 24 комбо =====
+// Верх сцены — единственное место, которое игрок видит постоянно, поэтому
+// прогресс по всем 12 × 2 комбинациям живёт там: два ряда ячеек в порядке
+// кварто-квинтового круга. Ячейка светлеет, когда игрок вошёл в комбо
+// (state.entered), зеленеет, когда собран цикл из четырёх аккордов
+// (state.played), а текущая мягко мигает — так видно и «где я», и что дальше
+// есть шаг. Подпись ячейки — тоника: ряд уже назван ладом, «m» не нужна.
+let comboCells = [];
+function buildComboStrip() {
+  const strip = $('comboStrip');
+  if (!strip) return;
+  ['major', 'minor'].forEach(mode => {
+    const host = $(mode === 'major' ? 'csMajor' : 'csMinor');
+    if (!host) return;
+    host.innerHTML = ORDER[mode].map((id, i) => {
+      const label = cap(noteLabel(COMBOS[id].chords[0][0]));
+      return `<span class="cs-cell" data-mode="${mode}" data-idx="${i}">${label}</span>`;
+    }).join('');
+  });
+  comboCells = Array.from(strip.querySelectorAll('.cs-cell'));
+  paintComboStrip();
+}
+function paintComboStrip() {
+  if (!comboCells.length || typeof COMBOS === 'undefined') return;
+  comboCells.forEach(cell => {
+    const mode = cell.dataset.mode;
+    const idx = Number(cell.dataset.idx);
+    const done = !!(state.played[mode] && state.played[mode][idx]);
+    const seen = done || !!(state.entered && state.entered[mode] && state.entered[mode][idx]);
+    cell.classList.toggle('current', mode === state.mode && idx === state.comboIdx);
+    cell.classList.toggle('done', done);
+    cell.classList.toggle('seen', seen && !done);
+  });
+  // Прогресс для скринридера — счёт собранных циклов: «3 / 24» без перевода.
+  const bar = $('comboProgress');
+  if (!bar) return;
+  const played = state.played.major.filter(Boolean).length +
+    state.played.minor.filter(Boolean).length;
+  const total = ORDER.major.length + ORDER.minor.length;
+  bar.setAttribute('aria-valuemax', String(total));
+  bar.setAttribute('aria-valuenow', String(played));
+  bar.setAttribute('aria-valuetext', played + ' / ' + total);
+}
 // ===== Напоминание о пробеле =====
-// Очки игрок видит в левом верхнем углу, а кнопка перехода живёт внизу под
-// аккордами — и после 300 очков её легко не заметить: руки заняты, взгляд на
-// счёте. Рядом со счётом появляется короткая строка «Space · ещё N», после
-// рубежа — «Space → новое комбо». Это не модальное окно и не тост (тост занят
-// названием аккорда), а тихое напоминание в том месте, куда игрок и так смотрит.
-// Блок счёта мягко подсвечивается на рубеже и ещё дважды, если игрок решил
-// играть дальше; после третьего раза мигалка замолкает до смены комбо.
+// Очки игрок видит в левом верхнем углу, маршрут по 24 комбо — в полосе по
+// центру, а кнопка перехода живёт внизу под аккордами, и после 300 очков её
+// легко не заметить: руки заняты, взгляд на сцене. Поэтому подсказка стоит в
+// самой полосе: до рубежа — «Space · ещё N», после — «Space → новое комбо».
+// Это не модальное окно и не тост (тост занят названием аккорда), а тихое
+// напоминание рядом с мигающей ячейкой текущего комбо. Полоса мягко
+// подсвечивается на рубеже и ещё дважды, если игрок решил играть дальше;
+// после третьего раза мигалка замолкает до смены комбо.
 let spaceNudgeKey = '', spaceNudgeStage = 0, spaceNudgeTimer = null;
 function resetSpaceNudge(key) {
   if (spaceNudgeTimer) { clearTimeout(spaceNudgeTimer); spaceNudgeTimer = null; }
-  document.querySelectorAll('.score-box.attn, #spaceNext.attn')
+  document.querySelectorAll('.combo-strip.attn, #spaceNext.attn')
     .forEach(el => el.classList.remove('attn'));
   spaceNudgeKey = key;
   spaceNudgeStage = 0;
@@ -350,7 +395,7 @@ function nudgeSpace(ready, threshold) {
   const stage = Math.min(3, 1 + Math.floor((state.score - threshold) / step));
   if (stage <= spaceNudgeStage) return;
   spaceNudgeStage = stage;
-  const targets = [document.querySelector('.score-box'), $('spaceNext')].filter(Boolean);
+  const targets = [$('comboStrip'), $('spaceNext')].filter(Boolean);
   targets.forEach(el => {
     el.classList.remove('attn');
     void el.offsetWidth;

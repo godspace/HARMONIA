@@ -414,9 +414,9 @@ $post = @'
   });
 
   step('space-hint', function () {
-    // Блок счёта — второе место после кнопки, где игрок узнаёт про пробел:
-    // до рубежа там остаток очков, после — что сделает пробел. На рубеже блок
-    // мягко подсвечивается (класс attn), чтобы подсказку заметили без тоста.
+    // Подсказка о пробеле живёт в полосе комбо (верх по центру): до рубежа там
+    // остаток очков, после — что сделает пробел. На рубеже полоса мягко
+    // подсвечивается (класс attn), чтобы подсказку заметили без тоста.
     var st = HARMONIA.state;
     var gate = HARMONIA.CFG.comboAdvanceAt;
     HARMONIA.setMode('major');
@@ -425,13 +425,14 @@ $post = @'
     HARMONIA.updateHUD();
     var hint = $('spaceHint');
     var text = $('spaceHintText');
-    var box = document.querySelector('.score-box');
-    if (!hint || !text) throw new Error('the score block has no Space hint');
+    var strip = $('comboStrip');
+    if (!hint || !text) throw new Error('the combo strip has no Space hint');
+    if (!strip || !strip.contains(hint)) throw new Error('the Space hint must live in the combo strip');
     if (hint.classList.contains('ready')) throw new Error('Space hint is armed at zero score');
     if (text.textContent.indexOf(String(gate)) === -1) {
       throw new Error('Space hint lost the remaining points: ' + text.textContent);
     }
-    if (box.classList.contains('attn')) throw new Error('the score block nudged below the gate');
+    if (strip.classList.contains('attn')) throw new Error('the combo strip nudged below the gate');
     st.score = gate - 25;
     HARMONIA.updateHUD();
     if (text.textContent.indexOf('25') === -1) {
@@ -440,7 +441,7 @@ $post = @'
     st.score = gate;
     HARMONIA.updateHUD();
     if (!hint.classList.contains('ready')) throw new Error('Space hint is not ready at ' + gate);
-    if (!box.classList.contains('attn')) throw new Error('the score block did not nudge at ' + gate);
+    if (!strip.classList.contains('attn')) throw new Error('the combo strip did not nudge at ' + gate);
     var keyEl = $('comboKey');
     var comboName = HARMONIA.keyNameOf(HARMONIA.COMBOS[HARMONIA.ORDER[st.mode][st.comboIdx]]);
     if (!keyEl || keyEl.textContent !== comboName) {
@@ -459,6 +460,63 @@ $post = @'
     st.score = 0;
     HARMONIA.updateHUD();
     if (hint.classList.contains('ready')) throw new Error('Space hint stayed ready after the score reset');
+  });
+
+  step('combo-strip', function () {
+    // Верх сцены показывает весь маршрут по 12 × 2 комбо: ячейка светлеет при
+    // входе в комбо, зеленеет после собранного цикла, а текущая мягко мигает —
+    // это и есть напоминание, на каком этапе игрок, без отдельной строки.
+    var st = HARMONIA.state;
+    HARMONIA.setMode('major');
+    HARMONIA.loadCombo(0, false);
+    var strip = $('comboStrip');
+    if (!strip) throw new Error('the combo strip is missing');
+    var cells = strip.querySelectorAll('.cs-cell');
+    if (cells.length !== 24) throw new Error('the strip must show 24 combos, got ' + cells.length);
+    var current = strip.querySelectorAll('.cs-cell.current');
+    if (current.length !== 1) throw new Error('exactly one cell must mark the current combo');
+    var cur = current[0];
+    if (cur.dataset.mode !== 'major' || Number(cur.dataset.idx) !== st.comboIdx) {
+      throw new Error('the blinking cell is not the current combo');
+    }
+    if (!st.entered.major[0]) throw new Error('entering a combo did not mark it on the strip');
+    if (!cur.classList.contains('seen')) throw new Error('the entered combo is not lit on the strip');
+    // Цикл из четырёх аккордов: ступень становится пройденной (зелёной).
+    st.played.major[0] = true;
+    HARMONIA.updateHUD();
+    if (!cur.classList.contains('done')) throw new Error('a collected cycle is not marked done');
+    st.played.major[0] = false;
+    // Переход переносит мигалку: старое место гаснет, новое загорается.
+    HARMONIA.loadCombo(5, false);
+    var moved = strip.querySelectorAll('.cs-cell.current');
+    if (moved.length !== 1) throw new Error('the strip lost its current combo after the move');
+    if (Number(moved[0].dataset.idx) !== 5) throw new Error('the current cell did not follow the combo');
+    if (cur.classList.contains('current')) throw new Error('the old cell is still marked current');
+    if (!moved[0].textContent.trim()) throw new Error('a strip cell has no key label');
+    // Ряды названы ладом — иначе двадцать четыре ноты не прочитать.
+    if (strip.textContent.toLowerCase().indexOf('\u043c\u0430\u0436\u043e\u0440') === -1) {
+      throw new Error('the strip does not name its rows by mode');
+    }
+    // Прогресс для скринридера считает собранные циклы, максимум — 24.
+    var bar = $('comboProgress');
+    var played = st.played.major.filter(Boolean).length + st.played.minor.filter(Boolean).length;
+    if (!bar || Number(bar.getAttribute('aria-valuemax')) !== 24) {
+      throw new Error('the strip progressbar is missing its maximum');
+    }
+    if (Number(bar.getAttribute('aria-valuenow')) !== played) {
+      throw new Error('the strip progress did not follow the played combos: ' +
+        bar.getAttribute('aria-valuenow') + ' vs ' + played);
+    }
+    // В пьесе центр занимает форма: полоса уступает ей место и возвращается.
+    $('formBtn').click();
+    if (window.getComputedStyle(strip).display !== 'none') {
+      throw new Error('the strip must step aside for the form HUD');
+    }
+    $('formStop').click();
+    if (window.getComputedStyle(strip).display === 'none') {
+      throw new Error('the strip did not come back after the form');
+    }
+    HARMONIA.loadCombo(0, false);
   });
 
   step('notation', function () {
@@ -1106,7 +1164,14 @@ $enPost = @'
     if (!img || !img.getAttribute('alt') || img.getAttribute('alt').length < 40) {
       throw new Error('the screenshot needs a descriptive alt');
     }
-    if (img.getAttribute('src') !== '../docs/screenshot.png') throw new Error('screenshot path is wrong');
+    // Английская страница показывает английский интерфейс: своя картинка, а не
+    // русская с оговоркой в подписи.
+    if (img.getAttribute('src') !== '../docs/screenshot-en.png') {
+      throw new Error('the English page must show the English screenshot');
+    }
+    if (img.getAttribute('alt').indexOf('English') === -1) {
+      throw new Error('the English screenshot needs an alt that says so');
+    }
     if (img.getAttribute('width') !== '1600' || img.getAttribute('height') !== '1000') {
       throw new Error('screenshot size is missing');
     }
