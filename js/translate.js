@@ -9,6 +9,9 @@
 
    · скрипт Google грузится только после явного выбора языка: поисковик видит
      русскую страницу, а сцена не платит за чужой iframe при каждом запуске;
+   · английский идёт мимо Google: у него свой пакет (js/i18n.js) с точными
+     подписями и подсказками, поэтому en не грузит виджет и работает даже с
+     диска (file://). Остальные языки — машинный перевод, как раньше;
    · выбор запоминается (cookie googtrans + localStorage), поэтому на сайте
      язык применяется сам при следующем визите; ?lang=en тоже работает;
    · на file:// перевод выключен — без сети он не работает;
@@ -78,6 +81,27 @@ var Translate = (function () {
   // toast() живёт в ui-hud.js и подключается раньше — но модуль не должен
   // падать, если его вдруг нет (отдельный харнесс, консоль).
   function say(message) { if (typeof toast === 'function') toast(message); }
+
+  // ===== Свой языковой пакет (js/i18n.js) =====
+  // Английский переводит игра, а не Google: подписи точные, title-подсказки
+  // тоже переводятся, и всё работает без сети. Остальные языки — виджет.
+  function packFor(code) {
+    return !!code && typeof I18N !== 'undefined' && I18N.supports(code);
+  }
+  function packOn() {
+    return typeof I18N !== 'undefined' && I18N.enabled();
+  }
+  function enablePack(code) {
+    remember(code);
+    // Пакет не использует Google: старая cookie и неудача виджета не мешают.
+    dropCookie();
+    if (failed) { failed = false; scriptRequested = false; }
+    // Сначала подписи и нотация: пады, колесо, список комбо и итог пьесы
+    // пересобираются в C-D-E, и словарь переводит уже их. Потом — сам словарь.
+    if (typeof applyLanguageNotation === 'function') applyLanguageNotation(code);
+    if (typeof refreshNotation === 'function') refreshNotation();
+    return I18N.enable(code);
+  }
 
   function readCookie(name) {
     const parts = ('; ' + document.cookie).split('; ' + name + '=');
@@ -242,15 +266,39 @@ var Translate = (function () {
   function apply(code) {
     const next = normalize(code);
     if (next === current && (widgetReady || !next)) return true;
+    current = next;
+
+    // Свой пакет включается сразу: ни сети, ни перезагрузки не нужно. Нотацию
+    // и подписи пересобирает enablePack — общий путь ниже его пропускает.
+    if (packFor(next)) {
+      // Из машинного перевода в пакет — только через перезагрузку: Google уже
+      // переписал DOM на чужой язык, и русских строк в нём больше нет.
+      if (widgetReady || scriptRequested) {
+        remember(next);
+        dropCookie();
+        location.reload();
+        return true;
+      }
+      enablePack(next);
+      syncSelect();
+      return true;
+    }
+    // Нотация подписей следует за языком: Google Translate не переводит
+    // до-ре-ми, поэтому C-D-E подставляет сама игра (см. ui-panel.js).
+    if (typeof applyLanguageNotation === 'function') applyLanguageNotation(next);
+    // Из пакета обратно на машинный перевод (или на русский): текст в DOM уже
+    // английский, отменить это без перезагрузки нельзя.
+    if (packOn()) {
+      remember(next);
+      dropCookie();
+      location.reload();
+      return true;
+    }
     if (isFile()) {
       say('Перевод работает только на сайте: при открытии файла с диска Google Translate недоступен.');
       syncSelect();
       return false;
     }
-    current = next;
-    // Нотация подписей следует за языком: Google Translate не переводит
-    // до-ре-ми, поэтому C-D-E подставляет сама игра (см. ui-panel.js).
-    if (typeof applyLanguageNotation === 'function') applyLanguageNotation(next);
 
     // Назад на русский: Google уже переписал DOM, поэтому перезагружаем страницу.
     if (!next) {
@@ -277,6 +325,8 @@ var Translate = (function () {
     ensureOption(saved);
     current = saved;
     sel.value = saved;
+    // Свой пакет не требует сети: включаем и на file://, и до загрузки виджета.
+    if (packFor(saved)) { enablePack(saved); return true; }
     // На file:// виджет не запускаем: без cookie и сети будет только шум.
     if (isFile()) return true;
     // Возвращающийся англоязычный игрок видит ту же нотацию, что и в прошлый
@@ -289,7 +339,10 @@ var Translate = (function () {
   }
 
   function snapshot() {
-    return { code: current, loaded: scriptRequested, ready: widgetReady, failed: failed };
+    return {
+      code: current, loaded: scriptRequested, ready: widgetReady,
+      failed: failed, pack: packOn()
+    };
   }
 
   return {

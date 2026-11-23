@@ -187,9 +187,12 @@ function setFormEnabled(on) {
   updateFormHUD();
 }
 
-function showFormResult() {
+// Итог пьесы рисуется отдельно от показа: смена языка/нотации (translate.js →
+// applyLanguageNotation) перерисовывает открытый экран, иначе в нём остались бы
+// названия нот прежней нотации.
+function renderFormResult() {
   const result = $('formResult');
-  if (!result) return;
+  if (!result) return false;
   const score = $('formResultScore');
   const melodyEl = $('formResultMelody');
   const list = $('formResultSections');
@@ -227,6 +230,13 @@ function showFormResult() {
       list.appendChild(row);
     });
   }
+  return true;
+}
+
+function showFormResult() {
+  const result = $('formResult');
+  if (!result) return;
+  if (!renderFormResult()) return;
   result.classList.add('show');
   result.setAttribute('aria-hidden', 'false');
   const again = $('formResultAgain');

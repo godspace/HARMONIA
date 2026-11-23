@@ -6,7 +6,7 @@
     <xhtml:link rel="alternate" hreflang="ru" href="https://godspace.github.io/HARMONIA/"/>
     <xhtml:link rel="alternate" hreflang="en" href="https://godspace.github.io/HARMONIA/en/"/>
     <xhtml:link rel="alternate" hreflang="x-default" href="https://godspace.github.io/HARMONIA/"/>
-    <lastmod>2026-11-22</lastmod>
+    <lastmod>2026-11-23</lastmod>
     <changefreq>monthly</changefreq>
     <priority>1.0</priority>
   </url>
@@ -15,8 +15,17 @@
     <xhtml:link rel="alternate" hreflang="ru" href="https://godspace.github.io/HARMONIA/"/>
     <xhtml:link rel="alternate" hreflang="en" href="https://godspace.github.io/HARMONIA/en/"/>
     <xhtml:link rel="alternate" hreflang="x-default" href="https://godspace.github.io/HARMONIA/"/>
-    <lastmod>2026-11-22</lastmod>
+    <lastmod>2026-11-23</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
+  </url>
+  <!-- Русский рассказ о проекте. Это отдельная страница, а не языковой
+       дубль: hreflang-пару с /en/ она не образует, иначе пришлось бы менять
+       кластер канонического / (см. README, «Языки интерфейса»). -->
+  <url>
+    <loc>https://godspace.github.io/HARMONIA/ru/</loc>
+    <lastmod>2026-11-23</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
   </url>
 </urlset>

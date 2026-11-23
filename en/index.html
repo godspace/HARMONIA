@@ -72,7 +72,8 @@
         <img src="../docs/screenshot.png" width="1600" height="1000"
              alt="HARMONIA simulator stage: seven coloured degree balls around a tonic sun, score and return-to-tonic panels above, chord pad and circle of fifths below">
         <figcaption>The stage: seven degree balls orbiting the tonic, the return-to-tonic indicator,
-          the chord pad and the settings panel. The interface is shown in Russian; English is one click away.</figcaption>
+          the chord pad and the settings panel. The screenshot is the Russian interface; English is
+          built in — pick it in the language menu or open <code>?lang=en</code>.</figcaption>
       </figure>
     </section>
 
@@ -241,16 +242,19 @@
     <section id="languages">
       <h2>Interface language</h2>
       <p>
-        The simulator is written in Russian, and the language list in the top menu switches the
-        interface to any language Google Translate supports. The widget is loaded only when you
-        pick a language, never on page load, and it is disabled on local files — so the page a
-        search engine sees stays a single, stable Russian document.
+        English is built into the simulator: its own labels, tooltips and the <b>C-D-E</b> note names,
+        with no machine translation in the way. Pick <b>English</b> in the language menu of the top bar
+        or open <a href="../index.html?lang=en">the simulator with <code>?lang=en</code></a> — the choice
+        is remembered. Every other language in that list goes through Google Translate: the widget is
+        loaded only after you pick a language, never on page load, and it is disabled on local files,
+        so the page a search engine sees stays one stable Russian document.
       </p>
       <p>
-        Musical symbols are deliberately left alone: solfège names, degree numbers, chord symbols,
-        key labels and the circle of fifths are language-independent and keep their exact meaning in
-        every translation. This page is the English entry point; the <a href="../">Russian version</a>
-        is the canonical one.
+        Musical symbols are deliberately left alone: note names, degree numbers, chord symbols, key
+        labels and the circle of fifths stay exact in every language — they are music, not prose. This
+        page is the English entry point, the <a href="../">Russian original</a> is the canonical one,
+        and a Russian overview of the project (the same story in the source language) lives at
+        <a href="../ru/" hreflang="ru" lang="ru">О проекте</a>.
       </p>
     </section>
 
@@ -300,6 +304,7 @@
       <nav aria-label="Footer">
         <a href="../index.html?lang=en">Open the simulator</a>
         <a href="../" hreflang="ru" lang="ru">Русская версия</a>
+        <a href="../ru/" hreflang="ru" lang="ru">О проекте</a>
         <a href="https://github.com/godspace/HARMONIA">GitHub</a>
       </nav>
     </div>

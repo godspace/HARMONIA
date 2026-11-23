@@ -9,6 +9,12 @@ window.addEventListener('error', function (e) {
 window.addEventListener('unhandledrejection', function (e) {
   window.__smokeErrors.push('rejection: ' + String(e.reason));
 });
+// Прогон должен начинаться по-русски: выбор языка прошлой сессии (пакет или
+// виджет) иначе включится до проверок и сдвинет нотацию, как у живого игрока.
+try {
+  localStorage.removeItem('harmonia.lang');
+  document.cookie = 'googtrans=;path=/;max-age=0';
+} catch (e) { /* приватный режим */ }
 </script>
 '@
 $post = @'
@@ -104,6 +110,22 @@ $post = @'
       throw new Error('Metrika must not load from file://');
     }
     if (document.documentElement.lang !== 'ru') throw new Error('html lang is not ru');
+  });
+
+  step('site-links', function () {
+    // Двери наружу из панели настроек: русский обзор проекта и английская
+    // страница. Адреса постоянные — их видят и поисковик, и игрок.
+    var ru = document.getElementById('aboutLink');
+    var en = document.getElementById('enSiteLink');
+    if (!ru || ru.getAttribute('href') !== 'ru/') {
+      throw new Error('link to the Russian overview is missing from the panel');
+    }
+    if (!en || en.getAttribute('href') !== 'en/') {
+      throw new Error('link to the English overview is missing from the panel');
+    }
+    if (!ru.closest('#panel') || !en.closest('#panel')) {
+      throw new Error('the overview links belong in the settings panel');
+    }
   });
 
   step('lang-switch', function () {
@@ -851,6 +873,111 @@ $post = @'
     if (st.form.enabled) throw new Error('form did not stop after recording test');
   });
 
+  step('en-pack', function () {
+    // Английский — свой пакет (js/i18n.js), а не машинный перевод: словарь
+    // точный, подсказки тоже переводятся, и всё работает без сети.
+    if (!HARMONIA.I18N) throw new Error('I18N is missing from the public API');
+    if (!HARMONIA.I18N.supports('en')) throw new Error('the English pack is not registered');
+    if (HARMONIA.I18N.supports('de')) throw new Error('German must stay on Google Translate');
+    if (HARMONIA.I18N.enabled()) throw new Error('the pack must be off by default');
+  });
+
+  step('en-switch', function () {
+    // Тот же путь, что и выбор языка в меню: пакет включает translate.js.
+    HARMONIA.Translate.apply('en');
+    if (!HARMONIA.I18N.enabled()) throw new Error('the pack did not turn on');
+    if (document.documentElement.lang !== 'en') throw new Error('html lang did not switch to en');
+    if (!HARMONIA.usingLetterNames()) throw new Error('English must use the C-D-E notation');
+    var st = HARMONIA.Translate.state();
+    if (st.code !== 'en' || st.pack !== true) throw new Error('translate state is wrong: ' + JSON.stringify(st));
+    if (st.loaded || st.ready) throw new Error('the English pack must not load the Google widget');
+    if ($('comboSel').options[0].textContent.indexOf('Combo ') !== 0) {
+      throw new Error('combo list is not English: ' + $('comboSel').options[0].textContent);
+    }
+    if (!/[A-G][♯♭]? (major|minor)/.test($('comboKey').textContent)) {
+      throw new Error('combo key is not in Latin notation: ' + $('comboKey').textContent);
+    }
+  });
+
+  step('en-labels', function () {
+    // Доводим интерфейс до состояния, где подписей больше всего: форма,
+    // пауза, тосты, запись, панель. Затем ищем забытые строки словаря.
+    var melodyAtStart = String($('formResultMelody').innerHTML);
+    HARMONIA.setDrawer('panel', true);
+    Array.prototype.forEach.call(document.querySelectorAll('#panel details'), function (d) { d.open = true; });
+    $('formBtn').click();
+    HARMONIA.nextCombo();
+    HARMONIA.setMode('minor');
+    HARMONIA.startRecording();
+    var target = HARMONIA.Composition.targetForBar(1);
+    if (target) HARMONIA.chordEvent(target, 0.9, 'keys');
+    HARMONIA.stopRecording(true);
+    $('pauseBtn').click();
+    HARMONIA.updateHUD();
+    // Подписи, поставленные пачкой за один тик, доводим синхронно: в игре их
+    // догоняет MutationObserver, но шаг харнесса не ждёт микро-задач.
+    HARMONIA.I18N.refresh();
+    var play = document.querySelector('#chordPad .chord-card');
+    if (!play) throw new Error('chord pad is empty');
+
+    var CYR = /[\u0400-\u04FF]/;
+    var bad = [];
+    function note(where, value) {
+      if (bad.length < 8) bad.push(where + ': ' + String(value).trim().slice(0, 70));
+    }
+    if (CYR.test(document.title)) note('title', document.title);
+    var walker = document.createTreeWalker(
+      document.body,
+      NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT,
+      {
+        acceptNode: function (node) {
+          if (node.nodeType === 1) {
+            var tag = node.nodeName;
+            if (tag === 'SCRIPT' || tag === 'STYLE' || tag === 'NOSCRIPT') return NodeFilter.FILTER_REJECT;
+            // Названия языков и сама нотация до-ре-ми — не текст интерфейса.
+            if (node.hasAttribute('data-i18n-skip')) return NodeFilter.FILTER_REJECT;
+            if (node.id === 'pMidiIn') return NodeFilter.FILTER_REJECT;
+            return NodeFilter.FILTER_SKIP;
+          }
+          return NodeFilter.FILTER_ACCEPT;
+        }
+      }
+    );
+    var node = walker.nextNode();
+    while (node) {
+      if (CYR.test(node.nodeValue)) {
+        note('#' + ((node.parentNode && (node.parentNode.id || node.parentNode.className)) || '?'), node.nodeValue);
+      }
+      node = walker.nextNode();
+    }
+    Array.prototype.forEach.call(
+      document.querySelectorAll('[title],[aria-label],[placeholder],[alt]'),
+      function (el) {
+        if (el.closest('[data-i18n-skip]') || el.id === 'pMidiIn') return;
+        ['title', 'aria-label', 'placeholder', 'alt'].forEach(function (name) {
+          var value = el.getAttribute(name);
+          if (value && CYR.test(value)) {
+            note(name + ' #' + (el.id || el.className || el.nodeName), value);
+          }
+        });
+      }
+    );
+    if (bad.length) {
+      throw new Error('Russian text left in the English UI → ' + bad.join(' | ') +
+        ' /// notation=' + HARMONIA.P.notation +
+        ' atStart=' + melodyAtStart.slice(0, 90) +
+        ' now=' + String($('formResultMelody').innerHTML).slice(0, 90));
+    }
+  });
+
+  step('en-back-to-ru', function () {
+    // Уход с пакета на машинный перевод/русский — перезагрузка (текст в DOM
+    // уже английский). Проверяем только запись выбора: reload в харнессе
+    // сломал бы прогон, поэтому apply('') не зовём.
+    if (HARMONIA.I18N.lang() !== 'en') throw new Error('the pack forgot its language');
+    if (HARMONIA.Translate.state().pack !== true) throw new Error('state lost the pack flag');
+  });
+
   check('console-errors', window.__smokeErrors.length === 0, window.__smokeErrors.join(' | '));
   var failed = results.filter(function (r) { return !r.ok; });
   document.body.innerHTML = '<pre id="smoke-result">' + JSON.stringify({
@@ -1020,5 +1147,148 @@ window.addEventListener('unhandledrejection', function (e) {
 '@
 $enHtml = $enHtml.Replace('</body>', $enPre + $enPost + '</body>')
 [IO.File]::WriteAllText((Join-Path $PWD 'en/smoke.html'), $enHtml, (New-Object Text.UTF8Encoding($false)))
-Write-Host 'smoke.html and en/smoke.html are built'
+
+# ===== Русская страница о проекте (ru/index.html) =====
+# Тот же принцип, что у английской: статичный обзор без скриптов. Проверяем
+# адреса, ссылки на симулятор и английскую версию, а также совпадение
+# FAQ-разметки с видимыми вопросами. Отчёт — ru/smoke.html, рядом с исходником,
+# чтобы относительные пути ../css и ../docs работали как на GitHub Pages.
+$ruSource = Join-Path $PWD 'ru/index.html'
+if (-not (Test-Path $ruSource)) { throw 'ru/index.html is missing' }
+$ruHtml = [IO.File]::ReadAllText($ruSource, [Text.Encoding]::UTF8)
+$ruPost = @'
+<script>
+(function () {
+  var results = [];
+  function check(name, cond, extra) {
+    results.push({ name: name, ok: !!cond, extra: extra == null ? '' : String(extra) });
+  }
+  function step(name, fn) {
+    try { fn(); check(name, true); }
+    catch (e) { check(name, false, (e && e.stack) || e); }
+  }
+  function attr(sel, name) {
+    var el = document.querySelector(sel);
+    return el ? el.getAttribute(name) : null;
+  }
+  function meta(sel) {
+    var el = document.querySelector(sel);
+    return el ? el.content : null;
+  }
+  var BASE = 'https://godspace.github.io/HARMONIA/';
+
+  step('lang', function () {
+    if (document.documentElement.lang !== 'ru') throw new Error('html lang is not ru');
+  });
+
+  step('head', function () {
+    if (document.title.indexOf('HARMONIA') === -1) throw new Error('page title lost the name');
+    if (document.title.indexOf('COMBOLIST') !== -1) throw new Error('COMBOLIST is in the page title');
+    var desc = meta('meta[name="description"]');
+    if (!desc || desc.length < 80) throw new Error('meta description is missing or too short');
+    var robots = meta('meta[name="robots"]');
+    if (!robots || robots.indexOf('index') === -1) throw new Error('robots meta is missing');
+    if (attr('link[rel="canonical"]', 'href') !== BASE + 'ru/') {
+      throw new Error('canonical URL is missing or wrong: ' + attr('link[rel="canonical"]', 'href'));
+    }
+    if (attr('link[rel="icon"]', 'href') !== '../favicon.svg') throw new Error('favicon is missing');
+    if (meta('meta[property="og:locale"]') !== 'ru_RU') throw new Error('og:locale is not ru_RU');
+    if (meta('meta[property="og:url"]') !== BASE + 'ru/') throw new Error('og:url is wrong');
+    var img = meta('meta[property="og:image"]');
+    if (!img || img.indexOf('/docs/screenshot.png') === -1) throw new Error('og:image is missing');
+  });
+  step('links', function () {
+    // Страница ведёт к симулятору (в исходном языке страницы) и к английскому
+    // обзору; обратно её видно из панели настроек и подвала en/index.html.
+    if (!document.querySelector('a.cta[href="../index.html"]')) {
+      throw new Error('the CTA must open the simulator');
+    }
+    if (!document.querySelector('a[href="../en/"][hreflang="en"]')) {
+      throw new Error('link to the English overview is missing');
+    }
+    var fig = document.querySelector('figure.shot img');
+    if (!fig || !fig.getAttribute('alt') || fig.getAttribute('alt').length < 40) {
+      throw new Error('the screenshot needs a descriptive alt');
+    }
+    if (fig.getAttribute('src') !== '../docs/screenshot.png') throw new Error('screenshot path is wrong');
+    if (fig.getAttribute('width') !== '1600' || fig.getAttribute('height') !== '1000') {
+      throw new Error('screenshot size is missing');
+    }
+  });
+
+  step('content', function () {
+    var h1 = document.querySelectorAll('h1');
+    if (h1.length !== 1) throw new Error('the page must have exactly one h1');
+    if (h1[0].textContent.indexOf('HARMONIA') === -1) throw new Error('h1 lost the name');
+    if (document.querySelectorAll('main section').length < 5) {
+      throw new Error('too few sections: the page is not a real overview');
+    }
+    if (document.querySelectorAll('.faq details').length < 5) {
+      throw new Error('the FAQ is too short');
+    }
+  });
+
+  step('json-ld', function () {
+    var ld = document.querySelector('script[type="application/ld+json"]');
+    if (!ld) throw new Error('JSON-LD is missing');
+    var data = JSON.parse(ld.textContent);
+    var nodes = (data['@graph'] || [data]);
+    function findType(type) {
+      return nodes.filter(function (n) { return n['@type'] === type; })[0];
+    }
+    var app = findType('WebApplication');
+    if (!app || app.name !== 'HARMONIA') throw new Error('WebApplication node is missing');
+    if (app.inLanguage !== 'ru') throw new Error('WebApplication is not in Russian');
+    if (app.url !== BASE + 'ru/') throw new Error('WebApplication url is wrong');
+    if (app.offers && app.offers.price !== '0') throw new Error('the offer is not free');
+    var faq = findType('FAQPage');
+    if (!faq || !faq.mainEntity || faq.mainEntity.length < 5) {
+      throw new Error('FAQPage node is missing or too short');
+    }
+    var visible = Array.prototype.map.call(
+      document.querySelectorAll('.faq summary'),
+      function (s) { return s.textContent.trim(); }
+    );
+    faq.mainEntity.forEach(function (q) {
+      if (visible.indexOf(q.name) === -1) throw new Error('FAQ question is not visible: ' + q.name);
+      if (!q.acceptedAnswer || !q.acceptedAnswer.text) {
+        throw new Error('FAQ answer is empty: ' + q.name);
+      }
+    });
+  });
+
+  step('no-scripts', function () {
+    if (document.querySelectorAll('script[src]').length !== 0) {
+      throw new Error('the overview page must not load external scripts');
+    }
+    if (document.getElementById('google_translate_element')) {
+      throw new Error('the translate widget must not be mounted on the overview page');
+    }
+  });
+
+  check('console-errors', window.__ruSmokeErrors.length === 0, window.__ruSmokeErrors.join(' | '));
+  var failed = results.filter(function (r) { return !r.ok; });
+  document.body.innerHTML = '<pre id="smoke-result">' + JSON.stringify({
+    ok: failed.length === 0,
+    failed: failed,
+    passed: results.filter(function (r) { return r.ok; }).map(function (r) { return r.name; }),
+    errors: window.__ruSmokeErrors
+  }) + '</pre>';
+})();
+</script>
+'@
+$ruPre = @'
+<script>
+window.__ruSmokeErrors = [];
+window.addEventListener('error', function (e) {
+  window.__ruSmokeErrors.push('error: ' + (e.message || e.type));
+});
+window.addEventListener('unhandledrejection', function (e) {
+  window.__ruSmokeErrors.push('rejection: ' + String(e.reason));
+});
+</script>
+'@
+$ruHtml = $ruHtml.Replace('</body>', $ruPre + $ruPost + '</body>')
+[IO.File]::WriteAllText((Join-Path $PWD 'ru/smoke.html'), $ruHtml, (New-Object Text.UTF8Encoding($false)))
+Write-Host 'smoke.html, en/smoke.html and ru/smoke.html are built'
 

@@ -152,6 +152,11 @@ input[type=range]::-moz-range-thumb {
 .pbtns { display: flex; gap: 6px; flex-wrap: wrap; }
 .pbtns.sound-preset { margin: 0 0 6px; }
 .pbtn { flex: 1 1 auto; text-align: center; }
+/* «О проекте» и «English overview» — ссылки в том же ряду, что и кнопки панели:
+   вид кнопки, но переход на статичную страницу. */
+a.pbtn { text-decoration: none; }
+a.pbtn:hover { text-decoration: none; }
+.extra-links { margin-top: 6px; }
 .pbtn.accent { color: #ffd166; border-color: rgba(255, 209, 102, 0.5); background: rgba(255, 209, 102, 0.1); }
 /* Запись мелодии: кнопки, выбор сохранённой записи и статус. */
 .rec-actions { display: flex; gap: 6px; margin-bottom: 7px; }

@@ -231,11 +231,13 @@ function updateHomeIndicator() {
       updateHUD();
     }, Math.min(1400, left + 80));
   }
+  // Подсказка собрана через « · », а не точками: так её можно перевести по
+  // частям (js/i18n.js) и не заводить шаблон на каждое сочетание счётчиков.
   panel.title = 'Возврат в тонику: ' +
-    (steps > 0 ? 'напряжение ' + steps + '/' + CFG.tonicStepCap + ', возврат даст +' + bonus : 'напряжения нет') +
+    (steps > 0 ? 'напряжение ' + steps + '/' + CFG.tonicStepCap + ' · возврат даст +' + bonus : 'напряжения нет') +
     (phrase.points ? ' · бонус фразы +' + phrase.points : '') +
-    '. Возвратов: ' + state.harmony.returns +
-    (beautyFresh ? '. Последний переход дал +' + state.harmony.lastBeauty : '');
+    ' · возвратов: ' + state.harmony.returns +
+    (beautyFresh ? ' · последний переход дал +' + state.harmony.lastBeauty : '');
 }
 function noteOctSuffix() {
   const oct = P.noteOct || 0;

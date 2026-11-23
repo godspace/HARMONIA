@@ -115,6 +115,9 @@ function refreshNotation() {
   if (typeof buildWheel === 'function') buildWheel();
   if (typeof fillComboSelect === 'function') fillComboSelect();
   if (typeof buildChordPad === 'function') buildChordPad();
+  // Итог пьесы тоже показывает ноты (диапазон мелодии): перерисовываем его,
+  // чтобы в нём не осталась прежняя нотация. Показ/скрытие — не его дело.
+  if (typeof renderFormResult === 'function') renderFormResult();
   if (typeof updateHUD === 'function') updateHUD();
 }
 function setNotation(mode) {
@@ -270,7 +273,8 @@ $('pExport').addEventListener('click', () => {
   c.drawImage(spriteCanvas, 0, 0);
   c.fillStyle = 'rgba(255,255,255,0.75)';
   c.font = '700 14px sans-serif'; c.textAlign = 'left';
-  c.fillText('HARMONIA · КОМБО ' + combo().id + ' · ' + keyNameOf(combo()), 20, 520);
+  // Подпись на экспорте рисуется в canvas, поэтому идёт через языковой пакет.
+  c.fillText(I18N.text('HARMONIA · КОМБО ' + combo().id + ' · ' + keyNameOf(combo())), 20, 520);
   const a = document.createElement('a');
   a.download = 'harmonia-combo-' + combo().id + '.png';
   a.href = ex.toDataURL('image/png');

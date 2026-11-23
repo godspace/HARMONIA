@@ -105,10 +105,10 @@
     <button id="muteBtn" class="ctl" aria-pressed="false" title="Звук (M)">🔊 Звук: вкл</button>
     <button id="pauseBtn" class="ctl" title="Пауза (Esc)">⏸ Пауза</button>
     <button id="restartBtn" class="ctl" title="Сессия заново (0)">↺ Сессия заново</button>
-    <label class="ctl lang-ctl" title="Язык интерфейса — машинный перевод Google Translate">
+    <label class="ctl lang-ctl" title="Язык интерфейса — английский встроен, остальные через Google Translate">
       🌐
       <select id="langSel" class="notranslate" translate="no" aria-label="Язык интерфейса">
-        <option value="" selected>Русский</option>
+        <option value="" selected data-i18n-skip>Русский</option>
         <option value="en">English</option>
         <option value="es">Español</option>
         <option value="pt">Português</option>
@@ -116,7 +116,7 @@
         <option value="fr">Français</option>
         <option value="it">Italiano</option>
         <option value="pl">Polski</option>
-        <option value="uk">Українська</option>
+        <option value="uk" data-i18n-skip>Українська</option>
         <option value="nl">Nederlands</option>
         <option value="tr">Türkçe</option>
         <option value="ar">العربية</option>
@@ -346,7 +346,7 @@
            тоже «как читать ноты». Выбор языка переключает её сам (translate.js). -->
       <div class="prow"><label for="pNotation">Нотация</label>
         <select id="pNotation" class="notranslate" translate="no" title="Названия нот: до-ре-ми или C-D-E. Переключается вместе с языком интерфейса">
-          <option value="sol" selected>до-ре-ми</option>
+          <option value="sol" selected data-i18n-skip>до-ре-ми</option>
           <option value="letters">C-D-E</option>
         </select>
       </div>
@@ -368,6 +368,13 @@
         <button class="pbtn" id="pReset">Сброс параметров</button>
         <button class="pbtn" id="pRandom">Случайно</button>
         <button class="pbtn accent" id="pExport">Экспорт PNG</button>
+      </div>
+      <!-- Страница о проекте: не настройка, но игрок ищет «всё остальное» именно
+           здесь. Две ссылки — по одной на язык сайта; адреса постоянные, а
+           подписи переводит языковой пакет (js/i18n.js). -->
+      <div class="pbtns extra-links">
+        <a class="pbtn" id="aboutLink" href="ru/" hreflang="ru" title="Как устроена HARMONIA: обзор, горячие клавиши, вопросы">О проекте</a>
+        <a class="pbtn" id="enSiteLink" href="en/" hreflang="en" lang="en" title="English overview of the project">English overview</a>
       </div>
     </details>
   </div>
@@ -468,6 +475,7 @@
   <!-- Модули без сборки, порядок = порядок зависимостей.
        Карта проекта и точки расширения — docs/ARCHITECTURE.md -->
   <script src="js/util.js"></script>
+  <script src="js/i18n.js"></script>
   <script src="js/config.js"></script>
   <script src="js/data.js"></script>
   <script src="js/harmony.js"></script>

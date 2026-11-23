@@ -34,12 +34,25 @@
   Google Translate только после явного выбора посетителя; шаг `lang-switch`
   в smoke-тесте проверяет, что до выбора скрипт не подключён. Машинный
   перевод не индексируется.
+- **Английский интерфейс — свой пакет** `js/i18n.js`, а не Google: словарь
+  `MAP`, шаблоны `RULES`, наблюдатель за подписями и `I18N.text()` для canvas.
+  Включается тем же `#langSel` (или `?lang=en`), работает без сети и на
+  `file://`, переводит в том числе `title`/`aria-label`. Шаг `en-labels` ищет
+  кириллицу в английском интерфейсе и падает, если строку забыли в словаре.
+  Остальные языки по-прежнему идут через Google Translate.
 - Англоязычная версия — отдельная статичная страница `en/index.html`
   (`css/landing.css`, без скриптов) с парой `hreflang` ru/en/x-default и
   `xhtml:link` в `sitemap.xml`. Вход — ссылка «EN» в топбаре (`#enLink`,
   внутри `.brand-group` рядом с названием, чтобы полоса не переносилась).
   Smoke-тест собирает и её (`en/smoke.html`): шаги `lang`, `head`, `hreflang`,
   `social`, `json-ld`, `content`, `no-scripts`, `console-errors`.
+- **Русский обзор проекта — `ru/index.html`** (`/ru/`): та же история, что на
+  английской странице, но в исходном языке. Свой `canonical`, Open Graph и
+  JSON-LD (`WebApplication` + `FAQPage`), в `sitemap.xml` — отдельная запись без
+  `xhtml:link` (кластер `ru → /` уже занят канонической страницей). Вход —
+  «О проекте» в панели настроек (`#aboutLink`, блок «Сессия») и подвал
+  `en/index.html`. Smoke: `ru/smoke.html`, шаги `lang`, `head`, `links`,
+  `content`, `json-ld`, `no-scripts`, `console-errors`.
 - Блок счёта на сцене называет комбо музыкально: под числом стоит `#comboKey`
   (`До мажор` / `C major`), а под ним — напоминание о пробеле `#spaceHint`
   (`Space · ещё N` → `Space → новое комбо`). На рубеже 300 и на +150/+300 сверх
@@ -102,14 +115,15 @@ Sitemap: https://godspace.github.io/HARMONIA/sitemap.xml
 ```text
 index.html            разметка, SEO/Open Graph/JSON-LD, Google-метатег
 en/index.html         англоязычная страница: статичный текст, без скриптов
-css/                  base, stage, overlays, panel, landing (en/index.html)
-js/                   приложение: harmony, audio, scene, viz, game, midi, render, translate, main
+ru/index.html         русский обзор проекта (/ru/): статичный текст, без скриптов
+css/                  base, stage, overlays, panel, landing (en/ и ru/)
+js/                   приложение: harmony, audio, scene, viz, game, midi, render, i18n, translate, main
 data/COMBOLIST.csv    единственный источник правды для 24 комбо
 tools/combolist.py    генератор js/data.js и проверка --check
-tools/_smoke_build.ps1 smoke-тест SEO и брендинга (ru + en)
+tools/_smoke_build.ps1 smoke-тест: игра + en/smoke.html + ru/smoke.html
 docs/ARCHITECTURE.md  карта модулей и потоков данных
 docs/screenshot.png   скриншот для README и og:image
-sitemap.xml           карта сайта: главная + en/ с xhtml:link alternates
+sitemap.xml           карта сайта: главная + en/ (xhtml:link) + ru/
 robots.txt            правила для пути HARMONIA
 .nojekyll             отключает Jekyll на GitHub Pages
 ```
@@ -124,7 +138,7 @@ python -m http.server 8080
 # проверка данных COMBOLIST
 python tools/combolist.py --check
 
-# smoke-тест: создаёт smoke.html, затем откройте его в браузере
+# smoke-тест: создаёт smoke.html, en/smoke.html и ru/smoke.html
 powershell -ExecutionPolicy Bypass -File tools/_smoke_build.ps1
 
 # состояние git

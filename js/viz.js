@@ -362,7 +362,9 @@ function vizChordOverlay(ctx, now) {
       CFG.chordBelt + 13, color, 0.2 + 0.5 * k);
   }
   // Ступень аккорда — единственная подпись, между солнцем и кольцом высот.
-  const deg = 'Аккорд ' + h.degree;
+  // 'Аккорд' — слово интерфейса, поэтому идёт через языковой пакет (i18n.js):
+  // canvas мимо DOM, и MutationObserver до него не достаёт.
+  const deg = I18N.text('Аккорд') + ' ' + h.degree;
   ctx.globalAlpha = 0.5 + 0.5 * k;
   ctx.font = '800 12px sans-serif';
   ctx.lineWidth = 3;
@@ -425,7 +427,7 @@ VIZ.circle = {
   center(ctx, now, live) {
     vizSun(ctx, now, live, 0.8);
     // Легенда инструмента: две координаты колеса объясняются на месте, а не в README.
-    if (P.guides) vizPlate(ctx, 'угол — квинты · радиус — высота', 0.55, VIZ_SAFE_Y[1] - 8, 104);
+    if (P.guides) vizPlate(ctx, I18N.text('угол — квинты · радиус — высота'), 0.55, VIZ_SAFE_Y[1] - 8, 104);
   },
   ball(ctx, b, now) {
     // В «круге» шаров нет: нажатие показывает себя рябью/вспышкой на станции,
@@ -508,7 +510,7 @@ function vizSpectrum(ctx, live) {
   ctx.textAlign = 'center';
   ctx.textBaseline = 'alphabetic';
   if (!bins) {
-    vizPlate(ctx, 'спектр включится вместе со звуком', 0.55);
+    vizPlate(ctx, I18N.text('спектр включится вместе со звуком'), 0.55);
     ctx.restore();
     return;
   }
@@ -534,7 +536,7 @@ function vizSpectrum(ctx, live) {
   ctx.lineWidth = 1;
   ctx.beginPath(); ctx.arc(RING_CX, RING_CY, SPEC_R1, 0, Math.PI * 2); ctx.stroke();
   const mu = spectralCentroid();
-  if (mu > 0 && live) vizPlate(ctx, 'μ ' + (mu / 1000).toFixed(2) + ' кГц', 1);
+  if (mu > 0 && live) vizPlate(ctx, 'μ ' + (mu / 1000).toFixed(2) + ' ' + I18N.text('кГц'), 1);
   ctx.restore();
 }
 VIZ.spectrum = {
