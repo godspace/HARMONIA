@@ -30,6 +30,16 @@ function closestBall(note, pc) {
 const MIDI_CONTROLLER = /(microkey|micro key|nanokey|minilab|keylab|keystep|launchkey|mpk|mini|oxygen|arturia|novation|akai|alesis|nektar|m-?audio|worlde|irig|komplete|korg micro)/i;
 const MIDI_PIANO = /(yamaha|roland|kawai|casio|clavia|nord|dgx|clp|ydp|korg b|korg c|p-?[0-9]{2,3}|fp-?[0-9]|es-?[0-9]{3}|px-?s?[0-9]|cp-?[0-9]|rd-?[0-9]|mp-?[0-9]|cn-?[0-9]|ap-?[0-9]|piano)/i;
 const ECHO_KEY = 'rithm.echo.';
+// Канал 10 (индекс 9) — стандартный набор ударных General MIDI. Пэд играет
+// барабан, но не становится нотой: ритм не участвует в гармонии и счёте.
+// Чего нет в таблице, звучит как тарелка — «что-то ударное» лучше тишины.
+const DRUM_MAP = {
+  35: 'kick', 36: 'kick',
+  38: 'snare', 40: 'snare',
+  42: 'hat', 44: 'hat',
+  46: 'openhat',
+  37: 'rim', 39: 'rim'
+};
 const Midi = {
   access: null,
   inputs: [],
@@ -111,6 +121,16 @@ const Midi = {
   handle(msg) {
     if (!this.activeId || (msg.target && msg.target.id !== this.activeId)) return;
     const data = msg.data, type = data[0] & 0xf0;
+    // Канал 10 — ударные. Ветка стоит первой и выходит сразу: пэд не попадает
+    // ни в слух (Heard), ни в распознавание трезвучий, ни в счёт, ни в запись —
+    // он играет ритм, а не гармонию. Velocity пэда — громкость удара.
+    if ((data[0] & 0x0f) === 9) {
+      if (type === 0x90 && data[2] > 0) {
+        initAudio();
+        drumHit(DRUM_MAP[data[1]] || 'hat', null, data[2] / 127);
+      }
+      return;
+    }
     if (type === 0x90 && data[2] > 0) this.noteOn(data[1], data[2] / 127);
     else if (type === 0x80 || (type === 0x90 && data[2] === 0)) this.noteOff(data[1]);
     else if (type === 0xb0) {

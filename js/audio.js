@@ -9,9 +9,9 @@
 // Одиночная нота при этом не одинока: noteChord() кладёт под неё диатоническое
 // трезвучие той же мягкой подложкой, что и у левой руки.
 let audioCtx = null, master = null, convolver = null, wetGain = null;
-// Раздельные шины громкости: одиночная нота и аккордовая подложка не должны
-// бороться за один ползунок. Шины стоят до master и после отдельных голосов.
-let noteGain = null, chordGain = null;
+// Раздельные шины громкости: одиночная нота, аккордовая подложка и барабаны не
+// должны бороться за один ползунок. Шины стоят до master и после голосов.
+let noteGain = null, chordGain = null, drumGain = null;
 // Активные «хвосты» под педалью: при выключении педали их можно погасить сразу.
 let pedalVoices = [];
 // Отложенное автотрезвучие: быстрая арпеджио-фраза отменяет предыдущий аккорд,
@@ -56,17 +56,18 @@ function makeImpulse(ctx, seconds, decay) {
 }
 // Громкость тембра: 0…2 (ползунки 0…150 % для запаса на тихие устройства).
 function voiceVolume(name) {
-  const v = name === 'note' ? P.noteVol : P.chordVol;
+  const v = name === 'note' ? P.noteVol : name === 'drum' ? P.drumVol : P.chordVol;
   return clamp(v == null ? 1 : v, 0, 2);
 }
-// Ползунки «Громкость нот / аккордов» меняют шины сразу, не дожидаясь
-// следующей ноты. Старые реверб-посылы остаются на своей громкости — это
-// незаметно на фоне коротких хвостов.
+// Ползунки «Громкость нот / аккордов / барабанов» меняют шины сразу, не
+// дожидаясь следующего звука. Старые реверб-посылы остаются на своей
+// громкости — это незаметно на фоне коротких хвостов.
 function applyVoiceVolumes() {
   if (!audioCtx) return;
   const t = audioCtx.currentTime;
   if (noteGain) noteGain.gain.setTargetAtTime(voiceVolume('note'), t, 0.04);
   if (chordGain) chordGain.gain.setTargetAtTime(voiceVolume('chord'), t, 0.04);
+  if (drumGain) drumGain.gain.setTargetAtTime(voiceVolume('drum'), t, 0.04);
 }
 function initAudio() {
   if (audioCtx) { if (audioCtx.state === 'suspended') audioCtx.resume(); return; }
@@ -77,10 +78,13 @@ function initAudio() {
   master.gain.value = state.muted ? 0 : 0.9;
   noteGain = audioCtx.createGain();
   chordGain = audioCtx.createGain();
+  drumGain = audioCtx.createGain();
   noteGain.gain.value = voiceVolume('note');
   chordGain.gain.value = voiceVolume('chord');
+  drumGain.gain.value = voiceVolume('drum');
   noteGain.connect(master);
   chordGain.connect(master);
+  drumGain.connect(master);
   const comp = audioCtx.createDynamicsCompressor();
   comp.threshold.value = -14; comp.knee.value = 18; comp.ratio.value = 3;
   comp.attack.value = 0.004; comp.release.value = 0.18;
@@ -141,6 +145,114 @@ function wetSend(node, wet) {
   const s = audioCtx.createGain();
   s.gain.value = wet;
   node.connect(s); s.connect(convolver);
+}
+// ===== Барабаны: синтез без семплов =====
+// Грув (js/groove.js) и MIDI-пэд на канале 10 приходят сюда. Каждый удар — это
+// два-три узла, а шум берётся из одного кэшированного буфера: генерировать
+// секунду шума на удар дорого и бессмысленно. Семплов и внешних файлов у
+// проекта нет — барабаны такие же синтезированные, как колокол и подложка.
+let noiseBuffer = null;
+function makeNoiseBuffer(ctx) {
+  const len = Math.floor(ctx.sampleRate * 0.5);
+  const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+  return buf;
+}
+function noiseSource() {
+  if (!audioCtx) return null;
+  if (!noiseBuffer || noiseBuffer.sampleRate !== audioCtx.sampleRate) {
+    noiseBuffer = makeNoiseBuffer(audioCtx);
+  }
+  const src = audioCtx.createBufferSource();
+  src.buffer = noiseBuffer;
+  return src;
+}
+// Тембры: у бочки — падающая синусоида и щелчок атаки, у малого — шум с телом,
+// у тарелок — только шум с ФВЧ. band — [срез, Q]; drop — [низ, верх] глиссандо
+// по частоте; body — высота тонального тела удара.
+const DRUM_TIMBRES = {
+  kick:    { peak: 0.95, decay: 0.34, wet: 0.05, drop: [140, 46], click: 880 },
+  snare:   { peak: 0.55, decay: 0.19, wet: 0.10, body: 186, band: [1500, 0.9] },
+  hat:     { peak: 0.30, decay: 0.05, wet: 0.04, band: [7600, 0.8] },
+  openhat: { peak: 0.28, decay: 0.24, wet: 0.06, band: [7000, 0.7] },
+  rim:     { peak: 0.46, decay: 0.10, wet: 0.08, body: 420, band: [2200, 1.4] }
+};
+// План удара — чистая функция без AudioNode: тем же приёмом, что noteChordPlan,
+// её проверяет smoke-тест, а drumHit() только назначает время.
+function drumPlan(kind, vel) {
+  const id = DRUM_TIMBRES[kind] ? kind : 'hat';
+  const t = DRUM_TIMBRES[id];
+  const v = clamp(vel == null ? 0.8 : vel, 0.05, 1);
+  return {
+    kind: id, vel: v,
+    peak: t.peak * v,
+    decay: t.decay,
+    // Голос живёт на 60 мс дольше огибающей: без запаса узел обрывается щелчком.
+    duration: t.decay + 0.06
+  };
+}
+// Удар. Возвращает план (для проверок) или null, если тракт ещё не открыт:
+// голова smoke-прогона работает без AudioContext, и это должно быть тишиной,
+// а не ошибкой.
+function drumHit(kind, when, vel) {
+  if (!audioCtx || !drumGain) return null;
+  const plan = drumPlan(kind, vel);
+  const t = when == null ? audioCtx.currentTime : Math.max(when, audioCtx.currentTime);
+  const tmb = DRUM_TIMBRES[plan.kind];
+  const out = audioCtx.createGain();
+  out.gain.value = 1;
+  out.connect(drumGain);
+  wetSend(out, voiceVolume('drum') * tmb.wet);
+
+  // Бочка: падающая синусоида + короткий «щелчок педали» — он делает удар
+  // слышимым на ноутбуке, где 46 Гц почти не воспроизводятся.
+  if (tmb.drop) {
+    const osc = audioCtx.createOscillator(), env = audioCtx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(tmb.drop[0], t);
+    osc.frequency.exponentialRampToValueAtTime(tmb.drop[1], t + 0.09);
+    env.gain.setValueAtTime(0.0001, t);
+    env.gain.exponentialRampToValueAtTime(plan.peak, t + 0.004);
+    env.gain.exponentialRampToValueAtTime(0.0001, t + plan.decay);
+    osc.connect(env); env.connect(out);
+    osc.start(t); osc.stop(t + plan.duration);
+    const click = audioCtx.createOscillator(), clickEnv = audioCtx.createGain();
+    click.type = 'triangle';
+    click.frequency.setValueAtTime(tmb.click, t);
+    clickEnv.gain.setValueAtTime(plan.peak * 0.18, t);
+    clickEnv.gain.exponentialRampToValueAtTime(0.0001, t + 0.014);
+    click.connect(clickEnv); clickEnv.connect(out);
+    click.start(t); click.stop(t + 0.02);
+  }
+
+  // Шум: малый и тарелки. Малый — полоса с телом, тарелки — срез сверху.
+  const noise = noiseSource();
+  if (noise && tmb.band) {
+    const band = audioCtx.createBiquadFilter(), env = audioCtx.createGain();
+    band.type = plan.kind === 'snare' || plan.kind === 'rim' ? 'bandpass' : 'highpass';
+    band.frequency.value = tmb.band[0];
+    band.Q.value = tmb.band[1];
+    env.gain.setValueAtTime(0.0001, t);
+    env.gain.exponentialRampToValueAtTime(plan.peak, t + 0.003);
+    env.gain.exponentialRampToValueAtTime(0.0001, t + plan.decay);
+    noise.connect(band); band.connect(env); env.connect(out);
+    noise.start(t); noise.stop(t + plan.duration);
+  }
+
+  // Тональное тело: у малого — «пластик», у рима — щелчок обода.
+  if (tmb.body) {
+    const body = audioCtx.createOscillator(), env = audioCtx.createGain();
+    body.type = plan.kind === 'snare' ? 'triangle' : 'square';
+    body.frequency.setValueAtTime(tmb.body, t);
+    body.frequency.exponentialRampToValueAtTime(tmb.body * 0.72, t + plan.decay);
+    env.gain.setValueAtTime(0.0001, t);
+    env.gain.exponentialRampToValueAtTime(plan.peak * 0.5, t + 0.003);
+    env.gain.exponentialRampToValueAtTime(0.0001, t + plan.decay);
+    body.connect(env); env.connect(out);
+    body.start(t); body.stop(t + plan.duration);
+  }
+  return plan;
 }
 // Отпускание педали: гасим все голоса, которым педаль продлила хвост.
 // Список очищаем — новые ноты создадут свои записи.

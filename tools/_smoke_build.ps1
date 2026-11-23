@@ -931,6 +931,122 @@ $post = @'
     if (st.form.enabled) throw new Error('form did not stop after recording test');
   });
 
+  step('groove-patterns', function () {
+    // Паттерны — это строки шагов: длина строки и есть размер такта. Опечатку
+    // в строке звук не заметит (шаги добиваются точками), поэтому её ловим тут.
+    var cfg = HARMONIA.CFG.groove;
+    Object.keys(cfg.patterns).forEach(function (id) {
+      var p = cfg.patterns[id];
+      var want = p.meter === 3 ? 12 : 16;
+      ['kick', 'snare', 'hat'].forEach(function (lane) {
+        if (String(p[lane]).length !== want) {
+          throw new Error(id + '.' + lane + ' must be ' + want + ' steps, got ' + String(p[lane]).length);
+        }
+      });
+      if (!p.label) throw new Error(id + ' has no label');
+    });
+    function kinds(id, step, meter) {
+      return HARMONIA.groovePlan(id, step, meter).map(function (h) { return h.kind; }).join(',');
+    }
+    if (kinds('straight', 0, 4) !== 'kick,hat') throw new Error('straight step 0 = ' + kinds('straight', 0, 4));
+    if (kinds('straight', 4, 4) !== 'snare,hat') throw new Error('straight step 4 = ' + kinds('straight', 4, 4));
+    // Акцент на сильной доле громче обычного удара: иначе бочка «плоская».
+    if (HARMONIA.groovePlan('straight', 0, 4)[0].vel !== 1) throw new Error('downbeat is not accented');
+    if (HARMONIA.groovePlan('straight', 8, 4)[0].vel >= 1) throw new Error('backbeat must be softer than the downbeat');
+    // Шаг за тактом заворачивается в начало, а не пропадает.
+    if (JSON.stringify(HARMONIA.groovePlan('straight', 16, 4)) !==
+        JSON.stringify(HARMONIA.groovePlan('straight', 0, 4))) {
+      throw new Error('step 16 must wrap to the start of the bar');
+    }
+    if (JSON.stringify(HARMONIA.groovePlan('waltz', 12, 3)) !==
+        JSON.stringify(HARMONIA.groovePlan('waltz', 0, 3))) {
+      throw new Error('the waltz bar must be 12 steps');
+    }
+    // План удара: velocity масштабирует громкость, неизвестный инструмент
+    // становится тарелкой, а не тишиной.
+    var soft = HARMONIA.drumPlan('kick', 0.2), hard = HARMONIA.drumPlan('kick', 1);
+    if (!(hard.peak > soft.peak)) throw new Error('velocity does not scale the hit');
+    if (HARMONIA.drumPlan('nope').kind !== 'hat') throw new Error('unknown kit piece must fall back to the hat');
+    if (typeof HARMONIA.DRUM_TIMBRES !== 'object') throw new Error('drum timbres are missing');
+    // drumHit без открытого тракта — тишина, а не ошибка (голова харнесса).
+    var hit = HARMONIA.drumHit('rim', null, 0.5);
+    if (hit && hit.kind !== 'rim') throw new Error('drumHit returned the wrong plan');
+  });
+
+  step('groove-toggle', function () {
+    var G = HARMONIA.Groove;
+    if (G.on || HARMONIA.P.grooveOn) throw new Error('groove must be off by default');
+    if ($('grooveToggle').getAttribute('aria-pressed') !== 'false') {
+      throw new Error('toggle shows the wrong state at boot');
+    }
+    $('grooveToggle').click();
+    if (!G.on || !HARMONIA.P.grooveOn) throw new Error('toggle did not turn the groove on');
+    if ($('grooveToggle').getAttribute('aria-pressed') !== 'true') throw new Error('toggle is not pressed');
+    // Список фигур собран из CFG.groove.patterns — новая фигура не требует
+    // правок разметки.
+    var sel = $('groovePattern');
+    if (sel.options.length !== Object.keys(HARMONIA.CFG.groove.patterns).length) {
+      throw new Error('pattern list does not match CFG.groove.patterns');
+    }
+    sel.value = 'waltz';
+    sel.dispatchEvent(new Event('change', { bubbles: true }));
+    if (G.patternId !== 'waltz' || HARMONIA.P.groovePattern !== 'waltz') {
+      throw new Error('pattern did not reach the groove');
+    }
+    if (G.meter() !== 3) throw new Error('the waltz must play in 3/4');
+    var bpm = $('pGrooveBpm');
+    bpm.value = '96';
+    bpm.dispatchEvent(new Event('input', { bubbles: true }));
+    if (Math.abs(HARMONIA.P.grooveBpm - 96) > 0.001) throw new Error('groove tempo did not reach P');
+    if ($('vGrooveBpm').textContent.indexOf('96') !== 0) {
+      throw new Error('tempo readout is wrong: ' + $('vGrooveBpm').textContent);
+    }
+    // Обратно в тишину: по умолчанию джем идёт без долей.
+    $('grooveToggle').click();
+    if (G.on || HARMONIA.P.grooveOn) throw new Error('toggle did not turn the groove off');
+    sel.value = 'straight';
+    sel.dispatchEvent(new Event('change', { bubbles: true }));
+    if (G.patternId !== 'straight') throw new Error('pattern did not go back to straight');
+  });
+
+  step('groove-follows-form', function () {
+    var st = HARMONIA.state, G = HARMONIA.Groove;
+    $('grooveToggle').click();
+    if (!G.on) throw new Error('groove did not turn on');
+    // Джем: свои часы и свой темп из панели.
+    if (G._clockSource() !== 'jam') throw new Error('the jam must use the groove clock');
+    if (G.bpm() !== HARMONIA.P.grooveBpm) throw new Error('jam tempo is not the panel tempo');
+    // Пьеса: темп и размер ведёт Transport, ползунок темпа гаснет.
+    $('formBtn').click();
+    if (!st.form.running) throw new Error('form did not start');
+    G.paint();
+    if (G._clockSource() !== 'form') throw new Error('the piece must drive the groove');
+    if (G.bpm() !== HARMONIA.Transport.bpm) throw new Error('groove tempo does not follow the piece');
+    if (G.meter() !== 4) throw new Error('groove meter does not follow the piece');
+    if (!$('pGrooveBpm').disabled) throw new Error('jam tempo must be disabled while the piece runs');
+    // Пока пьеса идёт, вместо своего темпа показываем «ведёт пьеса»: числа BPM
+    // в подписи быть не должно.
+    if ($('vGrooveBpm').textContent.indexOf('BPM') !== -1) {
+      throw new Error('readout must not show the jam tempo while the piece runs: ' + $('vGrooveBpm').textContent);
+    }
+    // Пауза останавливает грув вместе с сессией: планировщик молчит.
+    $('pauseBtn').click();
+    if (!st.paused) throw new Error('pause did not engage');
+    if (G.update() !== false) throw new Error('paused groove still plans hits');
+    $('pauseBtn').click();
+    if (st.paused) throw new Error('resume did not work');
+    // Возврат в джем отдаёт груву собственные часы.
+    $('formStop').click();
+    G.paint();
+    if (G._clockSource() !== 'jam') throw new Error('groove did not return to the jam clock');
+    if ($('pGrooveBpm').disabled) throw new Error('jam tempo must come back after the piece');
+    if ($('vGrooveBpm').textContent.indexOf('BPM') === -1) {
+      throw new Error('readout did not return to the jam tempo: ' + $('vGrooveBpm').textContent);
+    }
+    $('grooveToggle').click();
+    if (G.on) throw new Error('groove did not turn off');
+  });
+
   step('en-pack', function () {
     // Английский — свой пакет (js/i18n.js), а не машинный перевод: словарь
     // точный, подсказки тоже переводятся, и всё работает без сети.

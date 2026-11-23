@@ -22,7 +22,8 @@ fitStage();
 // Публичный отладочный API: консоль, автотесты, будущие харнессы.
 window.HARMONIA = {
   state, P, CFG, COMBOS, ORDER, INPUT, Midi, Translate, I18N, VIZ, viz, Heard,
-  Transport, Composition, setFormEnabled, updateFormHUD,
+  Transport, Groove, Composition, setFormEnabled, updateFormHUD,
+  groovePattern, grooveSteps, groovePlan,
   harmonicChords, updateHUD, playHarmonic, chordEvent, pressCode, releaseCode, runCommand, loadCombo, setMode, startSession,
   beginFromOverlay, INTRO_KEYS, introPress, introState, introStart,
   drawers, drawerOpen, drawerIntro, setDrawer, toggleDrawer, setDrawerIntro, initDrawers,
@@ -41,7 +42,7 @@ window.HARMONIA = {
   scheduleAdaptiveApply, applyPendingAdaptiveAnchor,
   shiftNoteOctave, applyNoteLayout,
   noteChord, noteChordPlan, noteChordHarmony, scheduleNoteChord, cancelPendingNoteChord,
-  BELL_TIMBRES, voiceVolume, applyVoiceVolumes,
+  BELL_TIMBRES, DRUM_TIMBRES, voiceVolume, applyVoiceVolumes, drumHit, drumPlan,
   startRecording, stopRecording, playSelected, stopPlayback, deleteSelectedRecording,
   getRecordings: () => recordings,
   toggleSound, audioRms, spectralCentroid, resetVizLayers, vizDebug, setViz, cycleViz

@@ -96,6 +96,8 @@ bindRange('pNoteTone', 'vNoteTone', 'tone', 0.01, v => v + '%');
 // пересоздания голосов.
 bindRange('pNoteVol', 'vNoteVol', 'noteVol', 0.01, v => v + '%', applyVoiceVolumes);
 bindRange('pChordVol', 'vChordVol', 'chordVol', 0.01, v => v + '%', applyVoiceVolumes);
+// Барабаны — своя шина: громкость не должна спорить с нотами и аккордами.
+bindRange('pDrumVol', 'vDrumVol', 'drumVol', 0.01, v => v + '%', applyVoiceVolumes);
 // Октава мелодии: высота нот сдвигается, а шар остаётся на своей ступени.
 bindSelect('pNoteOct', 'noteOct', v => parseInt(v, 10), () => {
   if (typeof updateNoteBadges === 'function') updateNoteBadges();
@@ -204,6 +206,45 @@ syncers.push(paintDir); paintDir();
 bindSelect('pQuality', 'quality', v => v);
 bindSelect('pPalette', 'palette', v => v, applyPalette);
 bindSelect('pBassOct', 'bassOct', v => parseInt(v, 10));
+// ===== Барабаны · грув =====
+// Состояние живёт в Groove: ему нужны часы и сетка, а P хранит только выбор
+// игрока, чтобы «Сброс параметров» возвращал и его. Список фигур собирается из
+// CFG.groove.patterns — новая фигура появляется без правок разметки.
+function bindGroove() {
+  const toggle = $('grooveToggle');
+  const sel = $('groovePattern');
+  if (sel) {
+    sel.textContent = '';
+    Object.keys(CFG.groove.patterns).forEach(id => {
+      const opt = document.createElement('option');
+      opt.value = id;
+      opt.textContent = CFG.groove.patterns[id].label;
+      sel.appendChild(opt);
+    });
+    sel.value = P.groovePattern;
+    sel.addEventListener('change', () => Groove.setPattern(sel.value));
+  }
+  if (toggle) {
+    toggle.addEventListener('click', () => {
+      // Клик — пользовательский жест: можно открывать аудиотракт.
+      initAudio();
+      Groove.setOn(!Groove.on);
+    });
+  }
+  // Темп джема: в пьесе ползунок выключен, барабаны ведёт Transport.
+  const bpm = $('pGrooveBpm');
+  if (bpm) bpm.addEventListener('input', () => Groove.setBpm(parseFloat(bpm.value)));
+  syncers.push(() => {
+    Groove.setPattern(P.groovePattern);
+    Groove.setOn(P.grooveOn);
+    Groove.setBpm(P.grooveBpm);
+    Groove.paint();
+  });
+  Groove.patternId = CFG.groove.patterns[P.groovePattern] ? P.groovePattern : 'straight';
+  Groove.on = !!P.grooveOn;
+  Groove.paint();
+}
+bindGroove();
 // ===== Меню визуализации =====
 // Кнопки собираются из реестра VIZ, поэтому новый режим появляется в панели
 // без правок разметки: достаточно добавить запись в VIZ и ключ в VIZ_ORDER.

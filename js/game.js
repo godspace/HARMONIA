@@ -255,6 +255,7 @@ function startSession() {
   $('pauseBtn').textContent = '⏸ Пауза';
   loadCombo(0, false);
   if (typeof Composition !== 'undefined') Composition.onSessionStart();
+  if (typeof Groove !== 'undefined') Groove.onSessionStart();
   toast('КОМБО ' + combo().id + ' · ' + keyNameOf(combo()), 'good');
 }
 function setPaused(p) {
@@ -275,6 +276,9 @@ function setPaused(p) {
   if (p) releaseAllHolds();
   if (p) Midi.panic();
   if (typeof Composition !== 'undefined') Composition.setPaused(p);
+  // Барабаны останавливаются вместе с сессией: пауза — это тишина, а не «только
+  // без гармонии». После продолжения грув встаёт на то же место.
+  if (typeof Groove !== 'undefined') Groove.setPaused(p);
   $('pauseBtn').textContent = p ? '▶ Продолжить' : '⏸ Пауза';
   if (p) {
     $('modalTitle').textContent = 'Пауза';

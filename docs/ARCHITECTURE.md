@@ -33,8 +33,9 @@
 | `data` | CSV и разбор | `CSV`, `COMBOS`, `ORDER` |
 | `harmony` | аккорды комбо и весь лад | `HARMONY`, `PALETTE_SLOTS`, `INPUT`, `harmonicChords()`, `diatonicPalette()`, `handNoteBalls()`, `smartNoteWindow()`, `smartChordDegrees()`, `smartTargetDegree()`, `smartHarmonyForNote()`, `chordOnDegree()`, `classifyTriad()`, `describeTriad()`, `noteRole()` |
 | `state` | изменяемое состояние сессии | `state`, `state.adaptive`, `combo()`, `rootMidi()`, `playable()` |
-| `audio` | синтез и тракт | `initAudio`, `bell`, `noteChordPlan`, `noteChord`, `scheduleNoteChord`, `cancelPendingNoteChord`, `echoNote`, `holdStart/Stop`, `bass` |
+| `audio` | синтез и тракт | `initAudio`, `bell`, `noteChordPlan`, `noteChord`, `scheduleNoteChord`, `cancelPendingNoteChord`, `echoNote`, `holdStart/Stop`, `bass`, `drumHit`, `drumPlan`, `DRUM_TIMBRES` |
 | `transport` | часы необязательной формы | `Transport.start/update/pause/resume/stop`, `beatsPerBar`, `countInBeats`, `setBpm`, `setMetronome` |
+| `groove` | необязательный грув (барабаны) | `Groove` (`on`, `setOn`, `setPattern`, `setBpm`, `update`, `setPaused`, `paint`, `statusText`, `_clockSource`, `bpm`, `meter`), `groovePattern`, `grooveSteps`, `groovePlan`, `GROOVE_LANES` |
 | `composition` | драматургия и очки пьесы | `Composition.start/stop/restart`, `sectionForBar`, `targetForBar`, `onBeat`, `onNote`, `onChord`, `finishPiece` |
 | `scene` | канвасы, семь шаров, частицы | `balls`, `buildBalls`, `applyPalette`, `clearPen` |
 | `viz` | геометрия и картинка режима | `VIZ`, `VIZ_ORDER`, `viz()`, `setViz`, `vizDebug` |
@@ -322,11 +323,40 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
   `points`), а `recordEvent()` добавляет к событию `form: { bar, beat, section }`,
   если пьеса идёт. Это метаданные, а не отдельный формат аудио.
 
+## Грув: необязательные барабаны
+
+Грув — второй необязательный слой после формы, но независимый: `P.grooveOn = false`
+по умолчанию, поэтому джем идёт без долей, пока игрок сам не включит барабаны в
+панели. Данные — `CFG.groove.patterns` (строки шагов, `o`/`x`/`g`/`.`), планирование —
+`js/groove.js`, звук — `drumHit()` в `js/audio.js`.
+
+- **Часы.** `Groove._clockSource()` отдаёт `'form'`, когда `state.form.running` и
+  `Transport.running`: тогда барабаны берут `Transport._t0`, `bpm` и `beatsPerBar`,
+  то есть садятся на сетку пьесы и не разъезжаются с метрономом. В джеме источник —
+  собственный `_ownT0` на `P.grooveBpm`, а размер берётся из паттерна (`вальс` → 3/4).
+  `Groove.setPaused()` сдвигает `_ownT0` на длительность паузы: в пьесе это уже
+  делает `Transport.resume()`.
+- **Планирование.** `update()` вызывается из `render.js` рядом с `Transport.update()`.
+  Шаг считается как `floor((now - base) / dur)`, где `dur` — шестнадцатая; удары
+  планируются с упреждением `CFG.groove.lookahead` по часам `AudioContext`. Если
+  кадр отстал, пачка пропущенных шагов не догоняется. `groovePlan()` — чистая
+  функция (аналог `noteChordPlan`), поэтому smoke-тест проверяет фигуры без аудио.
+- **Только ритм.** Барабаны не вызывают ни `Heard`, ни `noteChord`, ни
+  `Composition.onNote`: MIDI-пэд канала 10 (`Midi.handle()`, `DRUM_MAP`) играет звук
+  и сразу выходит из обработчика. Запись тоже не видит ударов — `rec.groove`
+  оставлен на будущую версию, чтобы формат файлов не менялся молча.
+- **Панель.** `#groovePg` (`#grooveToggle`, `#groovePattern`, `#pGrooveBpm`,
+  `#grooveStatus`) привязывается в `ui-panel.js` (`bindGroove`): список фигур
+  строится из `CFG.groove.patterns`, состояние живёт в `Groove`, а `P` хранит выбор
+  игрока и участвует в «Сбросе параметров». Пока пьеса идёт, ползунок темпа
+  выключен и показывает «ведёт пьеса».
+
 ## Звук
 
 `initAudio()` строит `master → компрессор → destination` и параллельный посыл в
-свёрточный реверб (`wetGain` ← `P.reverb`). Перед `master` стоят две шины громкости:
-`noteGain` (`P.noteVol`, по умолчанию 0.25) и `chordGain` (`P.chordVol`, 1).
+свёрточный реверб (`wetGain` ← `P.reverb`). Перед `master` стоят три шины громкости:
+`noteGain` (`P.noteVol`, по умолчанию 0.25), `chordGain` (`P.chordVol`, 1) и
+`drumGain` (`P.drumVol`, 0.55).
 `routeVoice()` отправляет сухой сигнал в нужную шину, а реверб-посыл масштабирует
 той же громкостью; `applyVoiceVolumes()` меняет шины на лету из панели **Звук**.
 Голоса:
@@ -520,6 +550,10 @@ Translate через `translate.js` (тот же приём, что в сосе�
 | Подтверждение старта пробелом | `introStart()` + класс `ready` на `#startOverlay` + `.ip-after` / `.kb-space-start` в `index.html` |
 | Веса красоты переходов/фраз | `CFG.beauty` + `harmonyTransitionBeauty()`, `harmonyPhraseBeauty()` |
 | Громкость нот/аккордов | `P.noteVol`/`P.chordVol` + `noteGain`/`chordGain` в `audio.js` |
+| Новая фигура барабанов | `CFG.groove.patterns` (строки шагов `o`/`x`/`g`/`.`) — список в панели строится сам |
+| Ещё один инструмент набора | `DRUM_TIMBRES` + ветка в `drumHit()` + строка в `DRUM_MAP` (`midi.js`) |
+| Часы/темп грува | `Groove._clockSource()`/`bpm()`/`meter()`; в пьесе ведёт `Transport`, в джеме `P.grooveBpm` |
+| Громкость барабанов | `P.drumVol` + шина `drumGain` (`audio.js`, `voiceVolume('drum')`) |
 | Новый параметр панели | `DEFAULTS` → разметка `.prow` → `bindRange/bindToggle` |
 | Длина/секции/цели пьесы | `CFG.composition` (`bars`, `sections`, `plans`, бонусы) |
 | Темп, размер, отсчёт, метроном | `P.form*` + `Transport.start/setBpm/setMetronome` |
@@ -575,3 +609,10 @@ Translate через `translate.js` (тот же приём, что в сосе�
 - Форма: `HARMONIA.Composition.start()` → отсчёт, `state.form.phase === 'countin'`,
   затем `state.transport.bar === 1`; сыграть `targetForBar(1)` → `state.form.barTargetHit`;
   проверить финал, `#formResult.show`, блокировку `Esc` и возврат в джем.
+- Грув: `HARMONIA.Groove.setOn(true)` в джеме → `Groove.hits` растёт; `setPattern('waltz')`
+  → `meter() === 3`; старт формы → `_clockSource() === 'form'`, `bpm()` равен
+  `Transport.bpm`, `#pGrooveBpm.disabled`; возврат в джем → снова свои часы. Шаги
+  `groove-patterns` (длины строк, акценты, заворот такта, `drumPlan`),
+  `groove-toggle` (кнопка, список фигур, ползунок темпа) и `groove-follows-form`
+  держат это в headless-прогоне.
+

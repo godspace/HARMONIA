@@ -290,6 +290,19 @@
       </div>
     </details>
 
+    <!-- Грув — отдельный необязательный слой: он даёт джему пульс, не включая
+         пьесу. Игровых клавиш у барабанов нет (ручная игра — MIDI-пэд, канал 10),
+         поэтому проба пальцев и легенда остаются прежними. -->
+    <details class="pg" id="groovePg">
+      <summary>Барабаны · грув</summary>
+      <button class="tg" id="grooveToggle" aria-pressed="false" title="Барабаны играют сами по выбранному паттерну">Барабаны: выкл</button>
+      <div class="prow"><label for="groovePattern">Паттерн</label>
+        <select id="groovePattern" title="Фигура барабанов"></select>
+      </div>
+      <div class="prow"><label for="pGrooveBpm">Темп грува</label><input type="range" id="pGrooveBpm" min="40" max="180" step="2" value="84" title="Темп джема; в пьесе барабаны ведёт форма"><output id="vGrooveBpm"></output></div>
+      <div class="form-status" id="grooveStatus" aria-live="polite">Грув выключен: джем идёт без долей.</div>
+    </details>
+
     <div class="pg" id="recPg">
       <h3>Запись мелодии</h3>
       <div class="rec-actions">
@@ -354,6 +367,7 @@
       <div class="prow"><label for="pNoteTone">Яркость нот</label><input type="range" id="pNoteTone" min="50" max="180" step="10" value="100"><output id="vNoteTone"></output></div>
       <div class="prow"><label for="pNoteVol">Громкость нот</label><input type="range" id="pNoteVol" min="0" max="150" step="5" value="25" title="Громкость одиночных нот, 0–150 %"><output id="vNoteVol"></output></div>
       <div class="prow"><label for="pChordVol">Громкость аккордов</label><input type="range" id="pChordVol" min="0" max="150" step="5" value="100" title="Громкость аккордовой подложки и баса, 0–150 %"><output id="vChordVol"></output></div>
+      <div class="prow"><label for="pDrumVol">Громкость барабанов</label><input type="range" id="pDrumVol" min="0" max="150" step="5" value="55" title="Громкость синтезированных барабанов, 0–150 %"><output id="vDrumVol"></output></div>
       <div class="prow"><label for="pNoteOct">Октава нот</label>
         <select id="pNoteOct" title="Сдвиг нот правой руки: −1, 0 или +1 октава"><option value="-1">−1</option><option value="0">0</option><option value="1" selected>+1</option></select>
       </div>
@@ -501,6 +515,7 @@
   <script src="js/state.js"></script>
   <script src="js/audio.js"></script>
   <script src="js/transport.js"></script>
+  <script src="js/groove.js"></script>
   <script src="js/composition.js"></script>
   <script src="js/scene.js"></script>
   <script src="js/viz.js"></script>

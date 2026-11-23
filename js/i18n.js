@@ -245,6 +245,32 @@ var I18N = (function () {
     'Яркость нот': 'Note brightness',
     'Громкость нот': 'Note volume',
     'Громкость аккордов': 'Chord volume',
+    'Громкость барабанов': 'Drum volume',
+    'Громкость синтезированных барабанов, 0–150 %':
+      'Volume of the synthesized drums, 0–150 %',
+    // ===== Барабаны · грув =====
+    // Строку статуса игра собирает из частей через « · », поэтому переводим
+    // слова и короткие фразы, а не целые предложения с числами.
+    'Барабаны · грув': 'Drums · groove',
+    'Барабаны: выкл': 'Drums: off',
+    'Барабаны: вкл': 'Drums: on',
+    'Барабаны играют сами по выбранному паттерну':
+      'The drums play themselves on the selected pattern',
+    'Паттерн': 'Pattern',
+    'Фигура барабанов': 'Drum pattern',
+    'прямой': 'straight',
+    'полупустой': 'halftime',
+    'шаффл': 'shuffle',
+    'баллада': 'ballad',
+    'вальс': 'waltz',
+    'Темп грува': 'Groove tempo',
+    'Темп джема; в пьесе барабаны ведёт форма':
+      'Jam tempo; in a piece the form drives the drums',
+    'ведёт пьеса': 'led by the piece',
+    'свой темп': 'own tempo',
+    'Грув': 'Groove',
+    'Грув выключен: джем идёт без долей.':
+      'Groove is off: the jam runs without beats.',
     'Октава нот': 'Note octave',
     'Октава баса': 'Bass octave',
     'Подложка аккорда: вкл': 'Chord pad: on',

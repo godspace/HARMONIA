@@ -13,6 +13,9 @@ function render() {
   const maxSeg = P.quality === 'high' ? 1.5 : 3;
 
   if (live && typeof Transport !== 'undefined') Transport.update();
+  // Грув живёт на своём планировщике: в пьесе он берёт часы Transport, в джеме
+  // считает сам. Порядок важен — часы пьесы тикают первыми.
+  if (live && typeof Groove !== 'undefined') Groove.update();
   if (live) {
     state.clock += dt;
     state.energyAcc += dt;
