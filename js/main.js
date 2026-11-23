@@ -28,6 +28,10 @@ window.HARMONIA = {
   togglePedal, updateSpaceNext, advanceCombo, canAdvanceCombo, comboAdvanceReady,
   nextCombo, prevCombo, nextComboTarget, prevComboTarget,
   diatonicPalette, chordOnDegree, classifyTriad, describeTriad, noteRole, scaleNoteNames, harmonyDebug,
+  // Нотация подписей: до-ре-ми ↔ C-D-E и тональности комбо.
+  noteLabel, chordLabel, keyNameOf, sharpLabel, letterNoteName, usingLetterNames,
+  setNotation, refreshNotation, applyLanguageNotation, notationForLang, resetNotationCaches,
+  getBalls: () => balls,
   harmonyFunction, harmonyTransitionBeauty, harmonyOpeningBeauty, harmonyPhraseBeauty,
   handNoteBalls, NOTE_KEYS,
   smartNoteWindow, smartChordDegrees, smartTargetDegree, smartAdaptiveDegree,

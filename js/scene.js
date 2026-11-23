@@ -40,7 +40,7 @@ function buildBalls() {
     const midi = T + slot.offset;
     const r = CFG.rMax * Math.pow(2, (midi - top) / 12);
     return {
-      midi, pc: ((midi % 12) + 12) % 12, name: c.scaleNames[i + 1],
+      midi, pc: ((midi % 12) + 12) % 12, name: noteLabel(c.scaleNames[i + 1]),
       color: PALETTES[P.palette].balls[i], idx: i,
       r, phi: 0, boost: 0, theta: 0, ringsDone: 0,
       x: RING_CX + r, y: RING_CY, baseRadius: 12, radius: 12,

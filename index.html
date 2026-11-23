@@ -155,6 +155,17 @@
         <div class="score-box">
           <div class="score-title">Счёт комбо</div>
           <div class="score-value" id="scoreVal">0</div>
+          <!-- Музыкальное имя комбо: счёт принадлежит тональности, поэтому она
+               стоит прямо под числом. Нотация (до-ре-ми / C-D-E) следует за
+               языком интерфейса, поэтому строка не переводится. -->
+          <div class="score-key notranslate" id="comboKey" translate="no">До мажор</div>
+          <!-- Напоминание о пробеле: до рубежа — сколько очков осталось, после —
+               что сделает пробел. Текст ставит updateSpaceNext(); блок мягко
+               подсвечивается на рубеже (nudgeSpace). -->
+          <div class="score-space" id="spaceHint">
+            <b class="notranslate" translate="no">Space</b>
+            <span id="spaceHintText">ещё 300</span>
+          </div>
         </div>
 
         <!-- Пьеса — необязательный слой. В свободном джеме блок скрыт целиком. -->
@@ -331,6 +342,14 @@
         <select id="pBassOct"><option value="-1" selected>−1</option><option value="0">0</option><option value="1">+1</option></select>
       </div>
       <button class="tg" id="pPad" aria-pressed="true">Подложка аккорда: вкл</button>
+      <!-- Нотация — не звук, а подпись; стоит рядом с октавами, потому что это
+           тоже «как читать ноты». Выбор языка переключает её сам (translate.js). -->
+      <div class="prow"><label for="pNotation">Нотация</label>
+        <select id="pNotation" class="notranslate" translate="no" title="Названия нот: до-ре-ми или C-D-E. Переключается вместе с языком интерфейса">
+          <option value="sol" selected>до-ре-ми</option>
+          <option value="letters">C-D-E</option>
+        </select>
+      </div>
       <button class="tg" id="pSmartHand" aria-pressed="true" title="Клик: умное переключение аккордов вкл → выкл → снова вкл. Без умного режима правая рука играет фиксированные корни J I O P [, а автотрезвучия строятся от самой ноты.">Умное переключение: вкл</button>
       <button class="tg" id="pSustain" aria-pressed="true" title="Педаль: нажата / отпущена (кнопка панели; MIDI CC64)">Педаль: нажата</button>
     </details>

@@ -53,6 +53,8 @@ const INPUT = {
 
 // Имена нот берём из самого комбо, чтобы в бемольных тональностях
 // не появлялись диезы; для недостающих ступеней — диезный запас.
+// Возвращает исходные (русские) имена CSV: нотация применяется при подписи,
+// а не при разборе данных.
 function comboNoteNames() {
   const c = combo(), map = {};
   c.chords.forEach((names, ci) => names.forEach((n, ni) => {
@@ -60,6 +62,15 @@ function comboNoteNames() {
     if (!(pc in map)) map[pc] = n;
   }));
   return map;
+}
+// Смена нотации меняет только подписи, но кэши держат уже готовые строки:
+// их нужно сбросить, иначе HUD покажет имена в прежней нотации.
+function resetNotationCaches() {
+  scaleNameKey = '';
+  scaleNameMap = null;
+  paletteKey = '';
+  harmonyKey = '';
+  handKey = '';
 }
 // ===== Умная раскладка: пять безопасных нот из семи =====
 // Правая рука не получает «все подряд» ступени: из семи нот лада выбираются
@@ -276,7 +287,8 @@ function harmonicChords() {
     ? 'smart:' + smartSongAnchor() + ':' + smartTargetDegree() + ':' +
       (state.adaptive.window || []).join(',') + ':' + chordKey
     : 'roots';
-  const key = state.mode + '#' + state.comboIdx + '#' + modeKey;
+  const key = state.mode + '#' + state.comboIdx + '#' + (usingLetterNames() ? 'letters' : 'sol') +
+    '#' + modeKey;
   if (key === harmonyKey) return harmonyList;
   if (P.smartHand) {
     harmonyList = adaptiveChordList();
@@ -285,10 +297,11 @@ function harmonicChords() {
     harmonyList = HARMONY[state.mode].map(slot => {
       const rootPc = (base + slot.offset) % 12;
       const pcs = [0, slot.third, 7].map(iv => (rootPc + iv) % 12);
-      const names = pcs.map(pc => map[pc] || SHARP_NAMES[pc]);
+      // map хранит имена CSV; недостающие ступени берём по pitch class.
+      const names = pcs.map(pc => map[pc] || sharpLabel(pc));
       return Object.assign({}, slot, {
         rootPc, pcs, names,
-        name: names.map(cap).join('-')
+        name: chordLabel(names)
       });
     });
   }
@@ -338,13 +351,14 @@ function scalePcs() {
   return pcs;
 }
 // Имена семи ступеней берём из самого комбо: CSV хранит правильное написание
-// (до/ре♭/соль#), поэтому в палитре нет случайных диезов.
+// (до/ре♭/соль#), поэтому в палитре нет случайных диезов. Подпись проходит через
+// noteLabel(), поэтому в буквенной нотации карта сразу содержит C/D♭/G♯.
 let scaleNameKey = '', scaleNameMap = null;
 function scaleNoteNames() {
-  const key = state.mode + '#' + state.comboIdx;
+  const key = state.mode + '#' + state.comboIdx + '#' + (usingLetterNames() ? 'letters' : 'sol');
   if (key === scaleNameKey) return scaleNameMap;
   const c = combo(), t = c.triads, sn = c.scaleNames, map = {};
-  const put = (k, pc) => { if (!(pc in map)) map[pc] = sn[k]; };
+  const put = (k, pc) => { if (!(pc in map)) map[pc] = noteLabel(sn[k]); };
   put(1, t[0][0]); put(3, t[0][1]); put(5, t[0][2]);
   put(4, t[1][0]); put(6, t[1][1]);
   put(7, t[2][1]); put(2, t[2][2]);
@@ -354,15 +368,15 @@ function scaleNoteNames() {
 // Палитра импровизации: семь аккордов лада с именами, функциями и цветом.
 let paletteKey = '', paletteList = [];
 function diatonicPalette() {
-  const key = state.mode + '#' + state.comboIdx;
+  const key = state.mode + '#' + state.comboIdx + '#' + (usingLetterNames() ? 'letters' : 'sol');
   if (key === paletteKey) return paletteList;
   const c = combo(), base = ((c.root % 12) + 12) % 12, map = scaleNoteNames();
   paletteList = PALETTE_SLOTS[state.mode].map((slot, i) => {
     const rootPc = (base + slot.offset) % 12;
     const pcs = [0, slot.third, slot.fifth].map(iv => (rootPc + iv) % 12);
-    const names = pcs.map(pc => map[pc] || SHARP_NAMES[pc]);
+    const names = pcs.map(pc => map[pc] || sharpLabel(pc));
     return Object.assign({ idx: i, kind: 'diatonic' }, slot, {
-      rootPc, pcs, names, name: names.map(cap).join('-'),
+      rootPc, pcs, names, name: chordLabel(names),
       pcsKey: pcs.slice().sort((a, b) => a - b).join(',')
     });
   });
@@ -451,9 +465,12 @@ function describeTriad(pcs) {
   const hit = palette.find(h => h.pcsKey === key);
   if (hit) return Object.assign({ kind: 'diatonic' }, hit);
   const names = scaleNoteNames();
-  const list = triad.pcs.map(pc => names[pc] || SHARP_NAMES[pc]);
-  const formName = triad.quality === 'maj' ? 'мажор' : triad.quality === 'min' ? 'минор'
-    : triad.quality === 'dim' ? 'уменьшённое' : 'увеличенное';
+  const list = triad.pcs.map(pc => names[pc] || sharpLabel(pc));
+  const formName = usingLetterNames()
+    ? (triad.quality === 'maj' ? 'major' : triad.quality === 'min' ? 'minor'
+      : triad.quality === 'dim' ? 'diminished' : 'augmented')
+    : (triad.quality === 'maj' ? 'мажор' : triad.quality === 'min' ? 'минор'
+      : triad.quality === 'dim' ? 'уменьшённое' : 'увеличенное');
   const out = {
     kind: 'chroma', degree: 'краска', hint: 'краска', quality: triad.quality,
     rootPc: triad.rootPc, third: triad.third, fifth: triad.fifth,

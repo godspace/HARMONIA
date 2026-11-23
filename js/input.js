@@ -121,7 +121,7 @@ $('restartBtn').addEventListener('click', () => {
 $('modeSel').addEventListener('change', (e) => setMode(e.target.value));
 $('comboSel').addEventListener('change', (e) => {
   loadCombo(parseInt(e.target.value, 10), true);
-  toast('КОМБО ' + combo().id + ' · ' + combo().keyName);
+  toast('КОМБО ' + combo().id + ' · ' + keyNameOf(combo()));
 });
 $('comboPrev').addEventListener('click', prevCombo);
 $('comboNext').addEventListener('click', nextCombo);

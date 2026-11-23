@@ -23,3 +23,47 @@ function notePc(name) {
   }
   return ((pc % 12) + 12) % 12;
 }
+
+// ===== Нотация: до-ре-ми и C-D-E =====
+// COMBOLIST хранит ноты по-русски (до, фа♯, си♭) — это первоисточник, и трогать
+// его ради подписей нельзя. Но для англоязычного игрока «до-ми-соль» — ребус, а
+// Google Translate нотацию не переводит (и не должен: «соль» — это ещё и соль,
+// а «J» превращается в «ICH»). Поэтому все подписи проходят через noteLabel():
+// при P.notation === 'letters' «до-ми-соль» становится C-E-G, а тональность —
+// «C major». Музыка при этом не меняется: pitch classes остаются числами.
+const NOTE_LETTER = { 'до': 'C', 'ре': 'D', 'ми': 'E', 'фа': 'F', 'соль': 'G', 'ля': 'A', 'си': 'B' };
+const LETTER_NAMES = ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'B'];
+const SOLFEGE_LANGS = { ru: 1, uk: 1 };
+function usingLetterNames() { return typeof P !== 'undefined' && P.notation === 'letters'; }
+// Имя ноты из CSV в буквах: «ре♭» → «D♭», «фа♯» → «F♯», «ре♯♯» → «D♯♯».
+// Знак альтерации сохраняется: в бемольной тональности D♭ читается, а C♯ — нет.
+function letterNoteName(name) {
+  const raw = String(name == null ? '' : name);
+  const m = raw.match(/^(до|ре|ми|фа|соль|ля|си)([#♯♭b♮x]*)$/);
+  if (!m) return raw;
+  let out = NOTE_LETTER[m[1]];
+  for (const ch of m[2]) {
+    if (ch === '#' || ch === '♯') out += '♯';
+    else if (ch === '♭' || ch === 'b') out += '♭';
+    else if (ch === 'x') out += '♯♯'; // дубль-диез: рендерится в любом шрифте
+  }
+  return out;
+}
+// Подпись ноты в текущей нотации — единственная точка, через которую имена нот
+// попадают в DOM и на сцену.
+function noteLabel(name) { return usingLetterNames() ? letterNoteName(name) : String(name == null ? '' : name); }
+// Хроматическая нота по pitch class, когда ступень не входит в лад.
+function sharpLabel(pc) {
+  const p = ((Math.round(pc) % 12) + 12) % 12;
+  return usingLetterNames() ? LETTER_NAMES[p] : SHARP_NAMES[p];
+}
+// Трезвучие: ['до','ми','соль'] → «До-Ми-Соль» / «C-E-G».
+function chordLabel(names) {
+  return (names || []).map(n => cap(noteLabel(n))).join('-');
+}
+// Тональность комбо: «До мажор» / «C major». keyNameLatin считается при разборе
+// CSV и не зависит от текущего выбора, поэтому переключение нотации мгновенно.
+function keyNameOf(c) {
+  if (!c) return '';
+  return usingLetterNames() ? (c.keyNameLatin || c.keyName || '') : (c.keyName || '');
+}

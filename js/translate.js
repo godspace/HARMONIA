@@ -213,8 +213,10 @@ var Translate = (function () {
 
   // Музыкальные обозначения машинный перевод только портит: «соль» — это и нота,
   // и соль, а клавиша «J» превращается в «ICH». Такие узлы помечаем notranslate.
+  // Строка тональности рядом со счётом входит сюда же: её нотация выбирается
+  // игрой (P.notation), а Google перевёл бы «До мажор» как «Before major».
   const SHIELD = [
-    '#noteRow', '#chordPad', '#fifthsWheel', '#homeDeg', '#homeNote',
+    '#noteRow', '#chordPad', '#fifthsWheel', '#homeDeg', '#homeNote', '#comboKey',
     '#startOverlay .kb-key', '#spaceNext .sn-key', '.hints kbd'
   ];
 
@@ -246,6 +248,9 @@ var Translate = (function () {
       return false;
     }
     current = next;
+    // Нотация подписей следует за языком: Google Translate не переводит
+    // до-ре-ми, поэтому C-D-E подставляет сама игра (см. ui-panel.js).
+    if (typeof applyLanguageNotation === 'function') applyLanguageNotation(next);
 
     // Назад на русский: Google уже переписал DOM, поэтому перезагружаем страницу.
     if (!next) {
@@ -274,6 +279,9 @@ var Translate = (function () {
     sel.value = saved;
     // На file:// виджет не запускаем: без cookie и сети будет только шум.
     if (isFile()) return true;
+    // Возвращающийся англоязычный игрок видит ту же нотацию, что и в прошлый
+    // раз: язык помнится, значит и буквы должны включиться сразу.
+    if (typeof applyLanguageNotation === 'function') applyLanguageNotation(saved);
     arm(saved);
     pending = saved;
     loadWidget();

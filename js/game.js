@@ -223,12 +223,12 @@ function advanceCombo() {
 function nextCombo() {
   const target = nextComboTarget();
   applyComboRoute(target.mode, target.idx, true);
-  toast('КОМБО ' + combo().id + ' · ' + combo().keyName, 'good');
+  toast('КОМБО ' + combo().id + ' · ' + keyNameOf(combo()), 'good');
 }
 function prevCombo() {
   const target = prevComboTarget();
   applyComboRoute(target.mode, target.idx, true);
-  toast('КОМБО ' + combo().id + ' · ' + combo().keyName);
+  toast('КОМБО ' + combo().id + ' · ' + keyNameOf(combo()));
 }
 function startSession() {
   if (typeof discardRecording === 'function') discardRecording();
@@ -250,7 +250,7 @@ function startSession() {
   $('pauseBtn').textContent = '⏸ Пауза';
   loadCombo(0, false);
   if (typeof Composition !== 'undefined') Composition.onSessionStart();
-  toast('КОМБО ' + combo().id + ' · ' + combo().keyName, 'good');
+  toast('КОМБО ' + combo().id + ' · ' + keyNameOf(combo()), 'good');
 }
 function setPaused(p) {
   if (!state.running) return;
@@ -274,7 +274,7 @@ function setPaused(p) {
   if (p) {
     $('modalTitle').textContent = 'Пауза';
     $('modalText').textContent = 'Орбиты и звук остановлены. Продолжение — с того же места.';
-    $('modalStats').textContent = `Счёт комбо: ${state.score} · Кольца: ${state.rings} · ${combo().keyName}`;
+    $('modalStats').textContent = `Счёт комбо: ${state.score} · Кольца: ${state.rings} · ${keyNameOf(combo())}`;
     $('modal').style.display = 'flex';
   } else {
     $('modal').style.display = 'none';

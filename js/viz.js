@@ -205,7 +205,7 @@ const CIRCLE_LABEL_R = CFG.chordBelt - 10;
 // октав в тексте нет: октаву читает радиус (r = rMax·2^(Δ/12)), а не вторая точка.
 function vizStationText(pc, names) {
   const n = names || scaleNoteNames();
-  return n[pc] || SHARP_NAMES[pc];
+  return n[pc] || sharpLabel(pc);
 }
 // Подписи всех 12 станций: тоника золотая, тоны тональности ярче «чужих» станций.
 // Станция, на которой стоит шар, подписана как голос — его цветом; отдельной подписи
@@ -269,10 +269,12 @@ function vizBoxGap(box, x, y) {
   return Math.hypot(Math.max(box.x0 - x, 0, x - box.x1), Math.max(box.y0 - y, 0, y - box.y1));
 }
 // Габариты всех 12 подписей станций круга — для проверок «подпись ни на что не налезла».
-// Кэш по тональности и составу шаров: текст зависит только от них.
+// Кэш по тональности, составу шаров и нотации: ширина C и «до» разная, поэтому
+// буквенная нотация обязана сбрасывать кэш.
 let vizStationBoxCache = { key: '', boxes: [] };
 function vizStationBoxes() {
-  const key = state.mode + '#' + state.comboIdx + '|' + balls.map(b => b.pc).join(',');
+  const key = state.mode + '#' + state.comboIdx + '#' + (usingLetterNames() ? 'letters' : 'sol') +
+    '|' + balls.map(b => b.pc).join(',');
   if (vizStationBoxCache.key === key) return vizStationBoxCache.boxes;
   const names = scaleNoteNames(), boxes = [];
   for (let s = 0; s < 12; s++) {

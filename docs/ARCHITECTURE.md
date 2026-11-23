@@ -146,7 +146,27 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
   кнопка под аккордами) проверяет `comboAdvanceReady()`: `state.score` должен
   достичь `CFG.comboAdvanceAt` (300), игра не должна стоять на паузе или
   проигрывать запись. `updateSpaceNext()` показывает прогресс, включает кнопку
-  и пульсацию после рубежа.
+  и пульсацию после рубежа, а заодно ведёт подсказку у счёта: `updateSpaceHint()`
+  пишет `ещё N` / `→ новое комбо`, `nudgeSpace()` на рубеже (и на +150/+300 сверх
+  него) дважды подсвечивает `.score-box` и коротко подпрыгивает кнопкой
+  (`#spaceNext.attn`). Это единственное напоминание: тост занят названием
+  аккорда, поэтому модальных окон и повторов в тосте нет.
+- `#comboKey` под счётом — музыкальное имя комбо (`keyNameOf(combo())`, то есть
+  `До мажор` / `C major`): счёт принадлежит тональности, а после старта топбар с
+  `#comboSel` скрыт. Строка помечена `notranslate` и входит в `SHIELD`, иначе
+  Google перевёл бы «До мажор» как «Before major». То же имя стоит в центре
+  круга тональностей (`paintWheel`): `№1 · До мажор · 0/12`.
+- Нотация подписей — `P.notation` (`sol` | `letters`). Данные и звук её не
+  знают: `util.js` держит `letterNoteName()`/`noteLabel()`/`chordLabel()`/
+  `keyNameOf()`/`sharpLabel()`, а `data.js` считает `keyNameLatin` при разборе
+  CSV. Через `noteLabel()` проходят `scaleNoteNames()`, `diatonicPalette()`,
+  `harmonicChords()`, `describeTriad()`, имена шаров (`buildBalls`) и станции
+  круга (`vizStationText`), поэтому переключение не пересобирает сцену.
+  Кэши (`scaleNameKey`, `paletteKey`, `harmonyKey`, `handKey`) включают нотацию,
+  а `resetNotationCaches()` + `refreshNotation()` переписывают подписи на месте.
+  Язык выбирает нотацию сам: `notationForLang()`/`applyLanguageNotation()` из
+  `translate.js` (кириллица — `sol`, латиница — `letters`), ручной выбор —
+  **Звук → Нотация** (`#pNotation`).
 - `state.score` — счёт текущего комбо, а не всей сессии: `loadCombo()` обнуляет его
   при каждом входе в комбо. HUD справа — индикатор возврата в тонику: ступень,
   шкала `state.harmony.steps` и число `state.harmony.returns`; прогресс шагов
@@ -433,6 +453,8 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
 | Новая палитра | `PALETTES` + `<option>` в `index.html` |
 | Новая визуализация | `VIZ` + `VIZ_ORDER` (`project/guides/center/ball/ring`) — меню и цифры `1`–`3` строятся сами |
 | Порог Space-перехода | `CFG.comboAdvanceAt` + `advanceCombo()` / `updateSpaceNext()` |
+| Напоминание о пробеле у счёта | `updateSpaceHint` / `nudgeSpace` + `#spaceHint`, `#comboKey` в `index.html` (`css/stage.css`) |
+| Нотация подписей (до-ре-ми ↔ C-D-E) | `P.notation` + `noteLabel`/`chordLabel`/`keyNameOf` (`util.js`), `resetNotationCaches`/`refreshNotation`, `notationForLang` (`ui-panel.js`), `applyLanguageNotation` (`translate.js`) |
 | Состав стартовой пробы | `INTRO_KEYS` + `introPress()` + `data-key` на клавишах в `index.html` |
 | Подтверждение старта пробелом | `introStart()` + класс `ready` на `#startOverlay` + `.ip-after` / `.kb-space-start` в `index.html` |
 | Веса красоты переходов/фраз | `CFG.beauty` + `harmonyTransitionBeauty()`, `harmonyPhraseBeauty()` |
@@ -478,7 +500,11 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
   пересборку окна при возврате в smart, цель такта пьесы и её карточку Q,
   отсутствие переезда под зажатой клавишей, подавление автотрезвучия на
   полутоновом столкновении, гармонизацию без smart и переход Space после 300
-  с чередованием мажора и минора.
+  с чередованием мажора и минора. Шаг `space-hint` проверяет строку под счётом
+  (`ещё N` → `Space → новое комбо`, класс `attn` на рубеже, имя тональности в
+  `#comboKey` и его `translate="no"`), шаг `notation` — до-ре-ми ↔ C-D-E:
+  карточка `C-E-G`, `C major` в списке комбо и под счётом, буквы на шарах,
+  `G-B-D` в палитре и возврат к сольфеджио кнопкой панели и кодом языка.
 - `tools/_visual_build.ps1` + headless `--screenshot` дают `visual.png` для
   быстрой проверки вёрстки без ручного клика.
 - Форма: `HARMONIA.Composition.start()` → отсчёт, `state.form.phase === 'countin'`,

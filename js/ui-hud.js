@@ -130,7 +130,7 @@ function buildWheel() {
     g.setAttribute('class', 'wnode');
     const c = document.createElementNS(SVGNS, 'circle');
     c.setAttribute('cx', x.toFixed(2)); c.setAttribute('cy', y.toFixed(2)); c.setAttribute('r', 16);
-    const label = cap(COMBOS[id].chords[0][0]) + (state.mode === 'minor' ? 'm' : '');
+    const label = cap(noteLabel(COMBOS[id].chords[0][0])) + (state.mode === 'minor' ? 'm' : '');
     const t = document.createElementNS(SVGNS, 'text');
     t.setAttribute('x', x.toFixed(2)); t.setAttribute('y', (y + 3.4).toFixed(2));
     t.setAttribute('text-anchor', 'middle');
@@ -140,7 +140,7 @@ function buildWheel() {
     g.appendChild(c); g.appendChild(t);
     g.addEventListener('click', () => {
       loadCombo(i, true);
-      toast('КОМБО ' + combo().id + ' · ' + combo().keyName);
+      toast('КОМБО ' + combo().id + ' · ' + keyNameOf(combo()));
     });
     svg.appendChild(g);
     wheelNodes.push({ g, c, t });
@@ -170,7 +170,10 @@ function paintWheel() {
   });
   if (wheelCenter) {
     wheelCenter.textContent = '№' + combo().id;
-    wheelSub.textContent = (state.mode === 'major' ? 'мажор' : 'минор') + ' · сыграно ' +
+    // Тональность словами — то, чего не хватало блоку «Комбо»: «№1» без
+    // «До мажор» не говорит, в какой тональности играет колесо. Число после
+    // точки — сколько комбо этого лада уже сыграно (зелёные узлы на круге).
+    wheelSub.textContent = keyNameOf(combo()) + ' · ' +
       state.played[state.mode].filter(Boolean).length + '/' + ORDER[state.mode].length;
   }
 }
@@ -192,7 +195,7 @@ function updateHomeIndicator() {
   if (!panel) return;
   const c = combo();
   const tonicDeg = (c.degrees && c.degrees.length ? c.degrees[0] : 'I');
-  const tonicNote = c.chords && c.chords[0] && c.chords[0][0] ? c.chords[0][0] : '—';
+  const tonicNote = c.chords && c.chords[0] && c.chords[0][0] ? noteLabel(c.chords[0][0]) : '—';
   const steps = Math.max(0, Math.min(CFG.tonicStepCap, state.harmony.steps || 0));
   const phrase = harmonyPhraseBeauty(state.harmony.phrase || []);
   const bonus = CFG.tonicBonus * steps + phrase.points;
@@ -289,6 +292,10 @@ function updateNoteHints() {
 }
 function updateHUD() {
   $('scoreVal').textContent = state.score;
+  // Тональность стоит рядом со счётом: счёт принадлежит комбо, а комбо — это
+  // тональность («До мажор»). Так игрок видит, где он на круге, не открывая меню.
+  const keyEl = $('comboKey');
+  if (keyEl) keyEl.textContent = keyNameOf(combo());
   const cycleDone = state.played[state.mode][state.comboIdx];
   updateHomeIndicator();
   renderPalette();
@@ -305,6 +312,54 @@ function updateHUD() {
   if (typeof updateFormHUD === 'function') updateFormHUD();
   updateSpaceNext();
 }
+// ===== Напоминание о пробеле =====
+// Очки игрок видит в левом верхнем углу, а кнопка перехода живёт внизу под
+// аккордами — и после 300 очков её легко не заметить: руки заняты, взгляд на
+// счёте. Рядом со счётом появляется короткая строка «Space · ещё N», после
+// рубежа — «Space → новое комбо». Это не модальное окно и не тост (тост занят
+// названием аккорда), а тихое напоминание в том месте, куда игрок и так смотрит.
+// Блок счёта мягко подсвечивается на рубеже и ещё дважды, если игрок решил
+// играть дальше; после третьего раза мигалка замолкает до смены комбо.
+let spaceNudgeKey = '', spaceNudgeStage = 0, spaceNudgeTimer = null;
+function resetSpaceNudge(key) {
+  if (spaceNudgeTimer) { clearTimeout(spaceNudgeTimer); spaceNudgeTimer = null; }
+  document.querySelectorAll('.score-box.attn, #spaceNext.attn')
+    .forEach(el => el.classList.remove('attn'));
+  spaceNudgeKey = key;
+  spaceNudgeStage = 0;
+}
+function updateSpaceHint(ready, threshold) {
+  const hint = $('spaceHint');
+  const text = $('spaceHintText');
+  if (!hint || !text) return;
+  hint.classList.toggle('ready', !!ready);
+  // До рубежа — сколько очков осталось, после — что именно сделает пробел.
+  text.textContent = ready
+    ? '→ новое комбо'
+    : 'ещё ' + Math.max(0, threshold - Math.min(state.score, threshold));
+}
+function nudgeSpace(ready, threshold) {
+  const key = state.mode + '#' + state.comboIdx;
+  if (key !== spaceNudgeKey) resetSpaceNudge(key);
+  if (!ready) return;
+  // Этапы: рубеж, +половина рубежа, +рубеж. Дальше не напоминаем: игрок,
+  // который сознательно тянет длинное комбо, не должен получать мигалку.
+  const step = Math.max(1, Math.round(threshold / 2));
+  const stage = Math.min(3, 1 + Math.floor((state.score - threshold) / step));
+  if (stage <= spaceNudgeStage) return;
+  spaceNudgeStage = stage;
+  const targets = [document.querySelector('.score-box'), $('spaceNext')].filter(Boolean);
+  targets.forEach(el => {
+    el.classList.remove('attn');
+    void el.offsetWidth;
+    el.classList.add('attn');
+  });
+  if (spaceNudgeTimer) clearTimeout(spaceNudgeTimer);
+  spaceNudgeTimer = setTimeout(() => {
+    spaceNudgeTimer = null;
+    targets.forEach(el => el.classList.remove('attn'));
+  }, 3200);
+}
 // Кнопка Space под аккордами: до рубежа показывает прогресс, после —
 // включает пульсацию готовности. Переход выполняет advanceCombo(), который
 // сам проверяет порог, поэтому клик и клавиша идут одним путём.
@@ -320,18 +375,20 @@ function updateSpaceNext() {
   btn.dataset.mode = target.mode;
   const label = $('spaceNextText');
   const progress = $('spaceNextProgress');
-  if (label) label.textContent = 'новое комбо · ' + next.keyName;
+  if (label) label.textContent = 'новое комбо · ' + keyNameOf(next);
   if (progress) progress.textContent = ready ? 'готово' : Math.min(state.score, threshold) + ' / ' + threshold;
   const hint = ready
-    ? 'Пробел — перейти в КОМБО ' + next.id + ' · ' + next.keyName
-    : 'После ' + threshold + ' очков пробел переключит на КОМБО ' + next.id + ' · ' + next.keyName;
+    ? 'Пробел — перейти в КОМБО ' + next.id + ' · ' + keyNameOf(next)
+    : 'После ' + threshold + ' очков пробел переключит на КОМБО ' + next.id + ' · ' + keyNameOf(next);
   btn.title = hint;
   btn.setAttribute('aria-label', hint);
   btn.setAttribute('aria-disabled', String(!ready));
+  updateSpaceHint(ready, threshold);
+  nudgeSpace(ready, threshold);
 }
 function fillComboSelect() {
   $('comboSel').innerHTML = ORDER[state.mode]
-    .map((id, i) => `<option value="${i}">КОМБО ${id} · ${COMBOS[id].keyName}</option>`)
+    .map((id, i) => `<option value="${i}">КОМБО ${id} · ${keyNameOf(COMBOS[id])}</option>`)
     .join('');
   $('comboSel').value = String(state.comboIdx);
 }
@@ -348,7 +405,7 @@ function updateHeardChip() {
   el.classList.toggle('pedal', !!state.heard.sustain);
   if (!pcs.length) { el.textContent = 'Слышу: —'; return; }
   const names = scaleNoteNames();
-  const list = pcs.slice(0, 4).map(pc => names[pc] || SHARP_NAMES[pc]).join('-') +
+  const list = pcs.slice(0, 4).map(pc => names[pc] || sharpLabel(pc)).join('-') +
     (pcs.length > 4 ? ' …' : '');
   el.innerHTML = 'Слышу: <b>' + list + '</b>' +
     (t ? ' → <em>' + t.degree + '</em> · ' + t.hint : '');

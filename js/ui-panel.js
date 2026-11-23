@@ -100,6 +100,46 @@ bindRange('pChordVol', 'vChordVol', 'chordVol', 0.01, v => v + '%', applyVoiceVo
 bindSelect('pNoteOct', 'noteOct', v => parseInt(v, 10), () => {
   if (typeof updateNoteBadges === 'function') updateNoteBadges();
 });
+// ===== Нотация подписей: до-ре-ми / C-D-E =====
+// Русский интерфейс живёт на сольфеджио, латинские языки ждут букв. Google
+// Translate нотацию не переводит (и не должен: «соль» — это ещё и соль),
+// поэтому нотацию переключает игра: выбор языка зовёт applyLanguageNotation(),
+// а панель даёт ручной выбор. Смена нотации не трогает ни звук, ни геометрию:
+// шары не пересобираются, меняются только подписи.
+function refreshNotation() {
+  if (typeof resetNotationCaches === 'function') resetNotationCaches();
+  if (typeof balls !== 'undefined' && balls.length) {
+    const c = combo();
+    balls.forEach((b, i) => { b.name = noteLabel(c.scaleNames[i + 1]); });
+  }
+  if (typeof buildWheel === 'function') buildWheel();
+  if (typeof fillComboSelect === 'function') fillComboSelect();
+  if (typeof buildChordPad === 'function') buildChordPad();
+  if (typeof updateHUD === 'function') updateHUD();
+}
+function setNotation(mode) {
+  const next = mode === 'letters' ? 'letters' : 'sol';
+  const sel = $('pNotation');
+  if (sel && sel.value !== next) sel.value = next;
+  if (P.notation === next) return false;
+  P.notation = next;
+  refreshNotation();
+  return true;
+}
+// Кириллические языки остаются на до-ре-ми, всем остальным — буквы: так ждёт
+// европейский и американский игрок, и так подписи не приходится переводить.
+function notationForLang(code) {
+  const base = String(code || '').split('-')[0].toLowerCase();
+  return base === '' || SOLFEGE_LANGS[base] ? 'sol' : 'letters';
+}
+function applyLanguageNotation(code) { setNotation(notationForLang(code)); }
+if ($('pNotation')) {
+  $('pNotation').addEventListener('change', () => {
+    if (!setNotation($('pNotation').value)) return;
+    toast(P.notation === 'letters' ? 'Нотация: C-D-E' : 'Нотация: до-ре-ми');
+  });
+}
+syncers.push(() => { if ($('pNotation')) $('pNotation').value = P.notation; });
 bindToggle('pGuides', 'guides', 'Направляющие: вкл', 'Направляющие: выкл');
 bindToggle('pTails', 'tails', 'Кометные хвосты: вкл', 'Кометные хвосты: выкл');
 bindToggle('pPad', 'pad', 'Подложка аккорда: вкл', 'Подложка аккорда: выкл');
@@ -196,6 +236,9 @@ $('pReset').addEventListener('click', () => {
   // Сброс мог вернуть режим по умолчанию: старые точки истории в другой геометрии не нужны.
   if (P.viz !== vizBefore) resetVizLayers();
   syncAll(); applyPalette(); syncParticles(); clearPen();
+  // Нотация тоже вернулась к «до-ре-ми»: подписи нужно переписать сразу,
+  // иначе карточки и шар останутся в прежней нотации до смены комбо.
+  refreshNotation();
   if (!P.sustain) releaseAllHolds();
   toast('Параметры сброшены');
 });
@@ -227,7 +270,7 @@ $('pExport').addEventListener('click', () => {
   c.drawImage(spriteCanvas, 0, 0);
   c.fillStyle = 'rgba(255,255,255,0.75)';
   c.font = '700 14px sans-serif'; c.textAlign = 'left';
-  c.fillText('HARMONIA · КОМБО ' + combo().id + ' · ' + combo().keyName, 20, 520);
+  c.fillText('HARMONIA · КОМБО ' + combo().id + ' · ' + keyNameOf(combo()), 20, 520);
   const a = document.createElement('a');
   a.download = 'harmonia-combo-' + combo().id + '.png';
   a.href = ex.toDataURL('image/png');

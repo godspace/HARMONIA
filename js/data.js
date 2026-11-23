@@ -99,6 +99,10 @@ const ORDER = { major: [], minor: [] };
       COMBOS[id] = {
         id, mode: modes[k], chords: chords[k], triads, root,
         keyName: cap(t[0]) + (modes[k] === 'major' ? ' мажор' : ' минор'),
+        // Латинская нотация для англоязычного интерфейса: «До мажор» → «C major».
+        // Считается здесь один раз, поэтому переключение P.notation ничего не
+        // пересобирает — keyNameOf() просто выбирает готовую строку.
+        keyNameLatin: letterNoteName(t[0]) + (modes[k] === 'major' ? ' major' : ' minor'),
         // Ступени 2 и 7 берутся из V-аккорда не по порядку: d = [V, VII, II].
         scaleNames: { 1: t[0], 2: d[2], 3: t[1], 4: s[0], 5: t[2], 6: s[1], 7: d[1] },
         third: (triads[0][1] - root + 12) % 12,

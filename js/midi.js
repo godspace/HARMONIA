@@ -7,7 +7,7 @@
 // в Heard и участвует в распознавании трезвучий. Note-off и CC64 ведут «хвосты»,
 // velocity — громкость. Расширение (послекасание, пэды) — в Midi.handle().
 function midiNoteName(note) {
-  return SHARP_NAMES[((note % 12) + 12) % 12] + (Math.floor(note / 12) - 1);
+  return sharpLabel(note) + (Math.floor(note / 12) - 1);
 }
 function setMidiStatus(kind, text) {
   const el = $('midi-status');

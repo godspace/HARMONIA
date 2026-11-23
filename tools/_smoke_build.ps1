@@ -391,6 +391,108 @@ $post = @'
     HARMONIA.updateHUD();
   });
 
+  step('space-hint', function () {
+    // Блок счёта — второе место после кнопки, где игрок узнаёт про пробел:
+    // до рубежа там остаток очков, после — что сделает пробел. На рубеже блок
+    // мягко подсвечивается (класс attn), чтобы подсказку заметили без тоста.
+    var st = HARMONIA.state;
+    var gate = HARMONIA.CFG.comboAdvanceAt;
+    HARMONIA.setMode('major');
+    HARMONIA.loadCombo(0, false);
+    st.score = 0;
+    HARMONIA.updateHUD();
+    var hint = $('spaceHint');
+    var text = $('spaceHintText');
+    var box = document.querySelector('.score-box');
+    if (!hint || !text) throw new Error('the score block has no Space hint');
+    if (hint.classList.contains('ready')) throw new Error('Space hint is armed at zero score');
+    if (text.textContent.indexOf(String(gate)) === -1) {
+      throw new Error('Space hint lost the remaining points: ' + text.textContent);
+    }
+    if (box.classList.contains('attn')) throw new Error('the score block nudged below the gate');
+    st.score = gate - 25;
+    HARMONIA.updateHUD();
+    if (text.textContent.indexOf('25') === -1) {
+      throw new Error('Space hint did not count down: ' + text.textContent);
+    }
+    st.score = gate;
+    HARMONIA.updateHUD();
+    if (!hint.classList.contains('ready')) throw new Error('Space hint is not ready at ' + gate);
+    if (!box.classList.contains('attn')) throw new Error('the score block did not nudge at ' + gate);
+    var keyEl = $('comboKey');
+    var comboName = HARMONIA.keyNameOf(HARMONIA.COMBOS[HARMONIA.ORDER[st.mode][st.comboIdx]]);
+    if (!keyEl || keyEl.textContent !== comboName) {
+      throw new Error('the score block does not name the combo key: ' +
+        (keyEl && keyEl.textContent) + ' vs ' + comboName);
+    }
+    if (keyEl.getAttribute('translate') !== 'no' || !keyEl.classList.contains('notranslate')) {
+      throw new Error('the key name must stay out of machine translation');
+    }
+    if (keyEl.textContent.indexOf('\u043c\u0430\u0436\u043e\u0440') === -1) {
+      throw new Error('the key name is not musical: ' + keyEl.textContent);
+    }
+    if ($('fifthsWheel').textContent.indexOf(comboName) === -1) {
+      throw new Error('the circle of fifths does not show the key name');
+    }
+    st.score = 0;
+    HARMONIA.updateHUD();
+    if (hint.classList.contains('ready')) throw new Error('Space hint stayed ready after the score reset');
+  });
+
+  step('notation', function () {
+    // Автоматический перевод не трогает названия нот: до-ре-ми для латинских
+    // языков заменяет сама игра (P.notation), иначе англоязычный игрок видит
+    // «до-ми-соль» вместо C-E-G.
+    var P = HARMONIA.P;
+    HARMONIA.setMode('major');
+    HARMONIA.loadCombo(0, false);
+    function tonicName() {
+      var el = document.querySelector('#chordPad .chord-card.tonic .cc-name');
+      return el ? el.textContent : '';
+    }
+    if (P.notation !== 'sol') throw new Error('notation must start as solfège');
+    if (tonicName() !== '\u0414\u043e-\u041c\u0438-\u0421\u043e\u043b\u044c') {
+      throw new Error('solfège chord names are missing: ' + tonicName());
+    }
+    if ($('comboKey').textContent !== '\u0414\u043e \u043c\u0430\u0436\u043e\u0440') {
+      throw new Error('solfège key name is wrong: ' + $('comboKey').textContent);
+    }
+    HARMONIA.applyLanguageNotation('en');
+    if (!HARMONIA.usingLetterNames()) throw new Error('English did not switch to letter notation');
+    if (P.notation !== 'letters') throw new Error('P.notation did not follow the language');
+    if (tonicName() !== 'C-E-G') throw new Error('tonic chord is not C-E-G: ' + tonicName());
+    if ($('comboKey').textContent !== 'C major') {
+      throw new Error('the key name is not C major: ' + $('comboKey').textContent);
+    }
+    if ($('comboSel').options[0].textContent.indexOf('C major') === -1) {
+      throw new Error('the combo list did not switch notation: ' + $('comboSel').options[0].textContent);
+    }
+    if ($('pNotation').value !== 'letters') throw new Error('the panel did not follow the notation');
+    if ($('fifthsWheel').textContent.indexOf('C major') === -1) {
+      throw new Error('the circle of fifths stayed in solfège');
+    }
+    var ballNames = HARMONIA.getBalls().map(function (b) { return b.name; }).join(',');
+    if (ballNames !== 'C,D,E,F,G,A,B') throw new Error('stage labels are not letters: ' + ballNames);
+    if (HARMONIA.diatonicPalette()[4].name !== 'G-B-D') {
+      throw new Error('palette name is not G-B-D: ' + HARMONIA.diatonicPalette()[4].name);
+    }
+    if (HARMONIA.scaleNoteNames()[0] !== 'C') throw new Error('scale names are not letters');
+    if (HARMONIA.handNoteBalls().length !== 5) throw new Error('notation changed the right hand');
+    $('pNotation').value = 'sol';
+    $('pNotation').dispatchEvent(new Event('change', { bubbles: true }));
+    if (P.notation !== 'sol') throw new Error('the panel switch did not return to solfège');
+    if (tonicName() !== '\u0414\u043e-\u041c\u0438-\u0421\u043e\u043b\u044c') {
+      throw new Error('solfège names did not come back: ' + tonicName());
+    }
+    HARMONIA.applyLanguageNotation('ru');
+    if (P.notation !== 'sol') throw new Error('Russian did not keep solfège');
+    HARMONIA.applyLanguageNotation('de');
+    if (P.notation !== 'letters') throw new Error('Latin languages must use letters');
+    HARMONIA.applyLanguageNotation('');
+    if (P.notation !== 'sol') throw new Error('empty language must mean Russian');
+    HARMONIA.updateHUD();
+  });
+
   step('melody-layout', function () {
     if (!HARMONIA.P.smartHand) {
       throw new Error('free jam must start with smart chord switching');
