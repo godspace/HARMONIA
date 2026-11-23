@@ -36,7 +36,7 @@
 | `state` | изменяемое состояние сессии | `state`, `state.adaptive`, `combo()`, `rootMidi()`, `playable()` |
 | `audio` | синтез и тракт | `initAudio`, `bell`, `noteChordPlan`, `noteChord`, `scheduleNoteChord`, `cancelPendingNoteChord`, `echoNote`, `holdStart/Stop`, `bass`, `drumHit`, `drumPlan`, `DRUM_TIMBRES` |
 | `transport` | часы необязательной формы | `Transport.start/update/pause/resume/stop`, `beatsPerBar`, `countInBeats`, `setBpm`, `setMetronome` |
-| `groove` | необязательный грув (барабаны) | `Groove` (`on`, `setOn`, `setPattern`, `setBpm`, `update`, `setPaused`, `paint`, `statusText`, `_clockSource`, `bpm`, `meter`), `groovePattern`, `grooveSteps`, `groovePlan`, `GROOVE_LANES` |
+| `groove` | необязательный грув (барабаны) | `Groove` (`on`, `preview`, `setOn`, `startPreview`, `setPattern`, `setBpm`, `update`, `setPaused`, `paint`, `statusText`, `_clockSource`, `bpm`, `meter`), `toggleGroove`, `groovePattern`, `grooveSteps`, `groovePlan`, `GROOVE_LANES` |
 | `composition` | драматургия и очки пьесы | `Composition.start/stop/restart`, `sectionForBar`, `targetForBar`, `onBeat`, `onNote`, `onChord`, `finishPiece` |
 | `scene` | канвасы, семь шаров, частицы | `balls`, `buildBalls`, `applyPalette`, `clearPen` |
 | `viz` | геометрия и картинка режима | `VIZ`, `VIZ_ORDER`, `viz()`, `setViz`, `vizDebug` |
@@ -60,7 +60,7 @@
 клавиша / MIDI / клик по пэду
         │
         ▼
-INPUT.commands ──► runCommand ──► nextCombo / setMode / setPaused / togglePedal / mute …
+INPUT.commands ──► runCommand ──► nextCombo / setMode / setPaused / togglePedal / toggleGroove / mute …
 MIDI ──► Midi.noteOn/noteOff ──► echoNote (если звучит ноутбук) ──► Heard.on/off
                                           │  пауза CFG.recognizeMs
                                           ▼
@@ -100,19 +100,27 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
 - `state.started` поднимает только `beginFromOverlay()`: стартовое окно нельзя
   закрыть кликом мимо клавиш. Пока оно открыто, клавиатура отдаёт десять
   `INTRO_KEYS` пробе `introPress()` (повтор не считается, каждая клавиша отвечает
-  звуком до старта); десятая вызывает `introFinish()` — окно получает класс
-  `ready`, но остаётся на экране: `Space` на схеме загорается и подписывается
-  «начать», строка инструкции сменяется на «нажмите пробел». Сессию открывает
-  только `introStart()` (пробел или клик по этой клавише): он ставит `fade`, и
-  через `CFG.introFadeMs` вызывается `beginFromOverlay()`. Это тот же жест, что в
-  игре открывает новое комбо, поэтому реакция закрепляется до первой ноты.
-  Клик по клавише на схеме идёт тем же путём, поэтому проба работает и без
-  физической клавиатуры.
+  звуком до старта). Десятая вызывает `introFinish()` — окно получает класс
+  `drums`, но не `ready`: строка просит `Enter`, а он зовёт `introDrums()` и
+  `Groove.startPreview()`. Барабаны звучат ещё до первой ноты: часы грува свои, а
+  `state.running` для preview не нужен (единственное исключение в
+  `Groove.update()`). Только после этого `introDrumsReady()` ставит `ready`:
+  `Space` на схеме загорается и подписывается «начать», строка инструкции
+  сменяется на «нажмите пробел». Сессию открывает только `introStart()` (пробел
+  или клик по этой клавише): он ставит `fade`, и через `CFG.introFadeMs`
+  вызывается `beginFromOverlay()`. Это тот же жест, что в игре открывает новое
+  комбо, поэтому реакция закрепляется до первой ноты. Пробел до барабанов молчит:
+  он лишь показывает подсказку на `Enter`. Клик по клавише на схеме идёт тем же
+  путём, поэтому проба работает и без физической клавиатуры.
   Экран почти без текста: `h1` + одна строка инструкции со счётчиком
   `#introCount`; прогресс несут сами клавиши (`introKeyEl()` ставит `.hit` и
-  снимает `.need`), дорожки точек и кнопки старта больше нет. Тексты обоих
-  состояний живут в `index.html` (`.ip-before` / `.ip-after`), JS только
-  переключает класс `ready`. `#startOverlay`
+  снимает `.need`), дорожки точек и кнопки старта больше нет. Тексты трёх
+  состояний живут в `index.html` (`.ip-before` / `.ip-drums` / `.ip-after`), JS
+  только переключает классы `drums` и `ready`. Подсказка `#kbTip` (`showKeyTip()`
+  / `hideKeyTip()` в `js/input.js`) объясняет клавишу при наведении и после
+  нажатия: текст лежит в `data-tip`, языковой пакет переводит его как обычный
+  атрибут, а стрелки намеренно оставлены без пузырька — у них готовая подпись
+  «лад / комбо». `#startOverlay`
   лежит на уровне `body`, вне `#game-container`: `fitStage()` масштабирует только
   сцену, иначе клавиши на телефоне сжимались бы до нечитаемых.
   MIDI-нота, запись и пьеса тоже входят через `beginFromOverlay()` — это
@@ -145,7 +153,8 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
   номер комбо (мажор и минор одной пары — соседние строки COMBOLIST),
   пересобирает колесо и шары. `nextCombo()`/`prevCombo()` идут по чередующемуся
   маршруту: мажор → минор той же пары, минор → мажор следующей. Ручные
-  `Enter`/`↑` и `Backspace`/`↓` доступны всегда, а `advanceCombo()` (Space или
+  `↑`/`↓` и `Backspace` доступны всегда, `Enter` принадлежит барабанам, а
+  `advanceCombo()` (Space или
   кнопка под аккордами) проверяет `comboAdvanceReady()`: `state.score` должен
   достичь `CFG.comboAdvanceAt` (300), игра не должна стоять на паузе или
   проигрывать запись. `updateSpaceNext()` показывает прогресс, включает кнопку
@@ -327,8 +336,12 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
 ## Грув: необязательные барабаны
 
 Грув — второй необязательный слой после формы, но независимый: `P.grooveOn = false`
-по умолчанию, поэтому джем идёт без долей, пока игрок сам не включит барабаны в
-панели. Данные — `CFG.groove.patterns` (строки шагов, `o`/`x`/`g`/`.`), планирование —
+в `DEFAULTS`, поэтому джем не начинает с долей сам. Включает его игрок, и первый
+раз это происходит на стартовой пробе: `Enter` запускает барабаны до первой ноты.
+В игре та же клавиша и кнопка панели делают одно и то же (`toggleGroove()` в
+`js/groove.js`), поэтому у слоя есть живой ключ, а не только настройка в меню.
+По умолчанию выбрана `баллада`, громкость 20 %: подложка не спорит с первыми
+аккордами. Данные — `CFG.groove.patterns` (строки шагов, `o`/`x`/`g`/`.`), планирование —
 `js/groove.js`, звук — `drumHit()` в `js/audio.js`.
 
 - **Часы.** `Groove._clockSource()` отдаёт `'form'`, когда `state.form.running` и
@@ -338,6 +351,9 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
   `Groove.setPaused()` сдвигает `_ownT0` на длительность паузы: в пьесе это уже
   делает `Transport.resume()`.
 - **Планирование.** `update()` вызывается из `render.js` рядом с `Transport.update()`.
+  Исключение — `Groove.preview`: стартовая проба включила барабаны, а сессия ещё
+  не начата, и `state.running` для грува не обязателен. `onSessionStart()` снимает
+  preview и пересчитывает часы, поэтому дальше действуют обычные правила.
   Шаг считается как `floor((now - base) / dur)`, где `dur` — шестнадцатая; удары
   планируются с упреждением `CFG.groove.lookahead` по часам `AudioContext`. Если
   кадр отстал, пачка пропущенных шагов не догоняется. `groovePlan()` — чистая
@@ -350,14 +366,15 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
   `#grooveStatus`) привязывается в `ui-panel.js` (`bindGroove`): список фигур
   строится из `CFG.groove.patterns`, состояние живёт в `Groove`, а `P` хранит выбор
   игрока и участвует в «Сбросе параметров». Пока пьеса идёт, ползунок темпа
-  выключен и показывает «ведёт пьеса».
+  выключен и показывает «ведёт пьеса». Подсказка кнопки напоминает про `Enter` —
+  так клавиша находится и без чтения легенды.
 
 ## Звук
 
 `initAudio()` строит `master → компрессор → destination` и параллельный посыл в
 свёрточный реверб (`wetGain` ← `P.reverb`). Перед `master` стоят три шины громкости:
 `noteGain` (`P.noteVol`, по умолчанию 0.25), `chordGain` (`P.chordVol`, 1) и
-`drumGain` (`P.drumVol`, 0.55).
+`drumGain` (`P.drumVol`, 0.20).
 `routeVoice()` отправляет сухой сигнал в нужную шину, а реверб-посыл масштабирует
 той же громкостью; `applyVoiceVolumes()` меняет шины на лету из панели **Звук**.
 Голоса:
@@ -577,8 +594,9 @@ Translate через `translate.js` (тот же приём, что в сосе�
   `HARMONIA.Midi.noteOn(60, 0.9)`, `HARMONIA.Heard.pcs()`, `HARMONIA.harmonyDebug()`,
   `HARMONIA.vizDebug()`, `HARMONIA.setViz('spectrum')`, `HARMONIA.cycleViz()`.
 - Headless-прогон (Chrome): открыть `index.html`, пройти пробу
-  (`HARMONIA.INTRO_KEYS.forEach(code => HARMONIA.introPress(code))`), нажать
-  пробел (`HARMONIA.introStart()`) или вызвать `HARMONIA.beginFromOverlay()`,
+  (`HARMONIA.INTRO_KEYS.forEach(code => HARMONIA.introPress(code))`), включить
+  барабаны (`HARMONIA.introPress('Enter')`), нажать пробел
+  (`HARMONIA.introStart()`) или вызвать `HARMONIA.beginFromOverlay()`,
   проверить `HARMONIA.state.visited`, `score`,
   число `.chord-card`, отсутствие ошибок в консоли;
   затем `Midi.noteOn(60/64/67)` → `state.heard.triad.degree === 'I'`.
@@ -586,12 +604,16 @@ Translate через `translate.js` (тот же приём, что в сосе�
   boot/intro-drill/free-jam/форма/грув/запись/smart-раскладка/английский пакет),
   `en/smoke.html` (статика английского лендинга) и `ru/smoke.html` (статика
   русского обзора). Headless Chrome с `--dump-dom` оставляет в
-  `<pre id="smoke-result">` строку `ok:true`. Шаг `intro-drill` держит стартовое
-  окно открытым, пока не нажаты десять клавиш: одна строка инструкции и счётчик
-  `0 / 10 → 10 / 10`, клавиатура не уже 85 % ширины окна и выше двух строк
-  текста, повтор не двигает счёт, после десятой все клавиши `.hit`, окно получает
-  `.ready` с подсвеченным `Space` и подсказкой `.ip-after`, а сессия стартует
-  только после пробела (`.fade`, затем `CFG.introFadeMs`). Шаги `default-sound`,
+  `<pre id="smoke-result">` строку `ok:true`. Шаг `intro-tips` проверяет подсказки: они есть у двенадцати
+  игровых клавиш и нет у стрелок, `title` не дублирует пузырёк, наведение
+  показывает `#kbTip` над клавишей и внутри окна, уход — прячет. Шаг `intro-drill`
+  держит стартовое окно открытым, пока не нажаты десять клавиш: одна строка
+  инструкции и счётчик `0 / 10 → 10 / 10`, клавиатура не уже 85 % ширины окна и
+  выше двух строк текста, повтор не двигает счёт, после десятой все клавиши
+  `.hit`, окно получает `.drums` и просит `Enter`; пробел в этот момент сессию не
+  открывает, `Enter` включает барабаны в режиме `preview`, и только затем
+  появляется `.ready` с подсвеченным `Space` и подсказкой `.ip-after`, а сессия
+  стартует после пробела (`.fade`, затем `CFG.introFadeMs`). Шаги `default-sound`,
   `melody-layout`,
   `space-combo-advance`, `smart-hand-window`, `smart-resume-window`,
   `diminished-anchor`, `smart-form-target`, `adaptive-defer` и
@@ -614,7 +636,9 @@ Translate через `translate.js` (тот же приём, что в сосе�
   → `meter() === 3`; старт формы → `_clockSource() === 'form'`, `bpm()` равен
   `Transport.bpm`, `#pGrooveBpm.disabled`; возврат в джем → снова свои часы. Шаги
   `groove-patterns` (длины строк, акценты, заворот такта, `drumPlan`),
-  `groove-toggle` (кнопка, список фигур, ползунок темпа), `groove-follows-form`
+  `groove-toggle` (кнопка, список фигур, ползунок темпа, дефолты `DEFAULTS`:
+  выключено, баллада, 20 %), `groove-enter` (`Enter` включает и выключает грув и
+  не двигает комбо), `groove-follows-form`
   (смена источника часов и подписи) и `groove-hits` (планировщик: удары растут,
   быстрый темп даёт больше шагов, выключенный грув молчит) держат это в
   headless-прогоне.

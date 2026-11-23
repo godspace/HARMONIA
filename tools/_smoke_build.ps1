@@ -192,6 +192,44 @@ $post = @'
     if ($('panelTab').classList.contains('show')) throw new Error('panel tab must stay hidden during the drill');
   });
 
+  step('intro-tips', function () {
+    // Знакомство с клавишами — не чтение легенды: у каждой игровой клавиши
+    // есть подсказка, и она всплывает над клавишей при наведении.
+    var tips = document.querySelectorAll('#startOverlay .kb-key[data-tip]');
+    if (tips.length !== 12) throw new Error('the scheme must explain twelve keys, got ' + tips.length);
+    Array.prototype.forEach.call(tips, function (el) {
+      if (!el.dataset.tip || el.dataset.tip.length < 8) {
+        throw new Error('empty tip on ' + el.textContent);
+      }
+      // Две подсказки сразу (native title и своя) спорили бы друг с другом.
+      if (el.getAttribute('title')) throw new Error('native title fights the custom tip on ' + el.textContent);
+    });
+    // Стрелки не объясняем: у них уже есть подпись «лад / комбо».
+    if (document.querySelectorAll('#startOverlay .kb-arrow[data-tip]').length) {
+      throw new Error('arrows must not get a tooltip');
+    }
+    var tip = $('kbTip');
+    if (!tip) throw new Error('the intro tooltip element is missing');
+    if (tip.classList.contains('show')) throw new Error('the tip must start hidden');
+    var q = document.querySelector('#startOverlay .kb-key[data-key="KeyQ"]');
+    q.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }));
+    if (!tip.classList.contains('show')) throw new Error('hovering a key must show its tip');
+    if (tip.getAttribute('aria-hidden') !== 'false') {
+      throw new Error('the visible tip is still hidden from screen readers');
+    }
+    if (tip.textContent !== q.dataset.tip && tip.textContent !== HARMONIA.I18N.text(q.dataset.tip)) {
+      throw new Error('the tip does not explain the key: ' + tip.textContent);
+    }
+    // Пузырёк стоит над клавишей и не вылезает за окно.
+    var box = document.querySelector('#startOverlay').getBoundingClientRect();
+    var r = q.getBoundingClientRect(), t = tip.getBoundingClientRect();
+    if (!t.width || !t.height) throw new Error('the tip has no size');
+    if (t.bottom > r.top + 1) throw new Error('the tip must sit above the key');
+    if (t.left < box.left - 1 || t.right > box.right + 1) throw new Error('the tip left the screen');
+    q.dispatchEvent(new PointerEvent('pointerout', { bubbles: true, relatedTarget: document.body }));
+    if (tip.classList.contains('show')) throw new Error('leaving the key must hide the tip');
+  });
+
   step('intro-drill', function () {
     var overlay = $('startOverlay');
     if (!overlay || overlay.style.display === 'none') throw new Error('start overlay must be visible before start');
@@ -250,24 +288,51 @@ $post = @'
     HARMONIA.introPress(HARMONIA.INTRO_KEYS[9]);
     st = HARMONIA.introState();
     if (!st.done || st.count !== 10) throw new Error('drill did not finish after ten keys');
-    if (!st.ready || st.starting) throw new Error('ten keys must arm Space without starting');
+    // Десять клавиш — ещё не старт: второй шаг пробы — Enter и барабаны.
+    if (st.drums || st.ready || st.starting) throw new Error('ten keys must not arm Space before the drums');
     if (count.textContent.indexOf('10 / 10') === -1) throw new Error('intro counter did not finish: ' + count.textContent);
-    if (!overlay.classList.contains('ready')) throw new Error('start overlay must arm Space after the drill');
-    if (overlay.classList.contains('fade')) throw new Error('start overlay must wait for Space');
+    if (!overlay.classList.contains('drums') || overlay.classList.contains('ready')) {
+      throw new Error('the overlay must ask for Enter after the drill');
+    }
+    if (overlay.classList.contains('fade')) throw new Error('start overlay must wait for Enter');
+    if (window.getComputedStyle(document.querySelector('#startOverlay .ip-drums')).display === 'none') {
+      throw new Error('the drums prompt is hidden after the drill');
+    }
+    if (window.getComputedStyle(document.querySelector('#startOverlay .ip-before')).display !== 'none') {
+      throw new Error('drill prompt must give way to the drums prompt');
+    }
     if (document.querySelectorAll('#startOverlay .kb-key.hit').length !== 10) {
       throw new Error('pressed keys are not marked on the keyboard');
     }
+    // Пробел до барабанов молчит: он только напоминает, что нужен Enter.
+    pressSpace();
+    if (HARMONIA.introState().starting || HARMONIA.state.started) {
+      throw new Error('Space started the session before the drums');
+    }
+    if (HARMONIA.Groove.on) throw new Error('Space must not turn the drums on');
+    // Enter включает барабаны прямо на стартовом экране — грув звучит до ноты.
+    window.dispatchEvent(new KeyboardEvent('keydown', {
+      code: 'Enter', key: 'Enter', bubbles: true, cancelable: true
+    }));
+    st = HARMONIA.introState();
+    if (!HARMONIA.Groove.on || !HARMONIA.P.grooveOn) throw new Error('Enter did not turn the drums on');
+    if (!HARMONIA.Groove.preview) throw new Error('the intro groove must run in preview mode');
+    if (!st.drums || !st.ready || st.starting) throw new Error('Enter must arm Space after the drums');
+    if (!overlay.classList.contains('ready') || overlay.classList.contains('drums')) {
+      throw new Error('the overlay must arm Space after the drums');
+    }
+    if (!document.querySelector('#startOverlay .kb-enter.hit')) throw new Error('Enter is not marked on the keyboard');
+    if (window.getComputedStyle(document.querySelector('#startOverlay .ip-after')).display === 'none') {
+      throw new Error('Space prompt is hidden after the drums');
+    }
+    if (window.getComputedStyle(document.querySelector('#startOverlay .ip-drums')).display !== 'none') {
+      throw new Error('drums prompt must give way to the Space prompt');
+    }
+    if (HARMONIA.state.started) throw new Error('drill must not start the session without Space');
     // Пробел — не подсказка, а единственный путь дальше: клавиша на схеме
     // подсвечена и подписана «начать», а строка инструкции сменилась.
     var spaceKey = document.querySelector('#startOverlay .kb-space[data-key="Space"]');
     if (!spaceKey) throw new Error('the intro Space key is not wired for the start');
-    if (window.getComputedStyle(document.querySelector('#startOverlay .ip-after')).display === 'none') {
-      throw new Error('Space prompt is hidden after the drill');
-    }
-    if (window.getComputedStyle(document.querySelector('#startOverlay .ip-before')).display !== 'none') {
-      throw new Error('drill prompt must give way to the Space prompt');
-    }
-    if (HARMONIA.state.started) throw new Error('drill must not start the session without Space');
     HARMONIA.introPress(HARMONIA.INTRO_KEYS[0]);
     if (HARMONIA.introState().count !== 10) throw new Error('drill recounted after it finished');
     pressSpace();
@@ -293,6 +358,10 @@ $post = @'
     if (!HARMONIA.state.started || !HARMONIA.state.running) throw new Error('session did not start');
     if (HARMONIA.state.form.enabled) throw new Error('form enabled itself in free jam');
     if ($('formHud').classList.contains('on')) throw new Error('form HUD visible in free jam');
+    // Проба включала барабаны: сессия подхватывает их, но уже без preview —
+    // дальше грув живёт по обычным правилам (пауза, часы, выключение).
+    if (HARMONIA.Groove.preview) throw new Error('the intro preview outlived the session start');
+    if (!HARMONIA.Groove.on) throw new Error('the drums from the intro must keep playing');
   });
 
   step('drawers-after-start', function () {
@@ -975,9 +1044,18 @@ $post = @'
 
   step('groove-toggle', function () {
     var G = HARMONIA.Groove;
-    if (G.on || HARMONIA.P.grooveOn) throw new Error('groove must be off by default');
+    // Грув включается клавишей Enter на стартовой пробе, поэтому «по умолчанию»
+    // проверяем по DEFAULTS, а не по текущему состоянию: панель должна работать
+    // и после того, как игрок уже слышал барабаны.
+    if (HARMONIA.DEFAULTS.grooveOn !== false) throw new Error('groove must be off in DEFAULTS');
+    if (HARMONIA.DEFAULTS.groovePattern !== 'ballad') throw new Error('the ballad must be the default pattern');
+    if (Math.abs(HARMONIA.DEFAULTS.drumVol - 0.2) > 1e-6) {
+      throw new Error('the default drum volume must be 20 %');
+    }
+    G.setOn(false);
+    if (G.on || HARMONIA.P.grooveOn) throw new Error('groove did not go quiet for the panel test');
     if ($('grooveToggle').getAttribute('aria-pressed') !== 'false') {
-      throw new Error('toggle shows the wrong state at boot');
+      throw new Error('toggle shows the wrong state');
     }
     $('grooveToggle').click();
     if (!G.on || !HARMONIA.P.grooveOn) throw new Error('toggle did not turn the groove on');
@@ -1007,6 +1085,30 @@ $post = @'
     sel.value = 'straight';
     sel.dispatchEvent(new Event('change', { bubbles: true }));
     if (G.patternId !== 'straight') throw new Error('pattern did not go back to straight');
+  });
+
+  step('groove-enter', function () {
+    // Enter — тот же переключатель, что кнопка панели, но не ход по комбо:
+    // маршрут остался у ↑/↓, Backspace и Space после 300.
+    var G = HARMONIA.Groove, st = HARMONIA.state;
+    function pressEnter() {
+      window.dispatchEvent(new KeyboardEvent('keydown', {
+        code: 'Enter', key: 'Enter', bubbles: true, cancelable: true
+      }));
+    }
+    G.setOn(false);
+    var mode = st.mode, idx = st.comboIdx, score = st.score;
+    pressEnter();
+    if (!G.on || !HARMONIA.P.grooveOn) throw new Error('Enter did not turn the drums on');
+    if ($('grooveToggle').getAttribute('aria-pressed') !== 'true') {
+      throw new Error('the panel did not follow Enter');
+    }
+    if (st.mode !== mode || st.comboIdx !== idx || st.score !== score) {
+      throw new Error('Enter must not touch the combo or the score');
+    }
+    pressEnter();
+    if (G.on || HARMONIA.P.grooveOn) throw new Error('Enter did not turn the drums off');
+    if (st.mode !== mode || st.comboIdx !== idx) throw new Error('Enter moved the combo');
   });
 
   step('groove-follows-form', function () {
@@ -1162,10 +1264,10 @@ $post = @'
       node = walker.nextNode();
     }
     Array.prototype.forEach.call(
-      document.querySelectorAll('[title],[aria-label],[placeholder],[alt]'),
+      document.querySelectorAll('[title],[aria-label],[placeholder],[alt],[data-tip]'),
       function (el) {
         if (el.closest('[data-i18n-skip]') || el.id === 'pMidiIn') return;
-        ['title', 'aria-label', 'placeholder', 'alt'].forEach(function (name) {
+        ['title', 'aria-label', 'placeholder', 'alt', 'data-tip'].forEach(function (name) {
           var value = el.getAttribute(name);
           if (value && CYR.test(value)) {
             note(name + ' #' + (el.id || el.className || el.nodeName), value);

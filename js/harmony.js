@@ -39,8 +39,11 @@ const INPUT = {
     return NOTE_KEYS.indexOf(code);
   },
   commands: {
-    Enter: 'next', Backspace: 'prev',
-    // Стрелки: ←/→ — лад, ↑/↓ — комбо. Enter/Backspace остаются для комбо.
+    // Enter — барабаны: одна клавиша включает и выключает грув, и на стартовой
+    // пробе ей же включают его впервые. Комбо идут по ↑/↓, Backspace и Space
+    // после 300 — Enter перестал быть их дублем, чтобы у грува был живой ключ.
+    Enter: 'groove', Backspace: 'prev',
+    // Стрелки: ←/→ — лад, ↑/↓ — комбо.
     ArrowUp: 'next', ArrowDown: 'prev', ArrowLeft: 'major', ArrowRight: 'minor',
     KeyM: 'mute', KeyC: 'clear', Escape: 'pause', Digit0: 'restart', Space: 'comboAdvance',
     Minus: 'octDown', Equal: 'octUp',

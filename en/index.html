@@ -115,8 +115,9 @@
         how the combo ends. Press it — or <kbd>Space</kbd> — and the combo advances without a single
         modal window: major hands over to the minor of the same pair, minor hands over to the major
         of the next pair. The modes alternate, the score of the new combo starts from zero, and the
-        circle of fifths keeps turning. <kbd>Enter</kbd> and <kbd>Backspace</kbd> walk the same route
-        by hand. The musical name of the current key (C major, F♯ minor…) sits right under the
+        circle of fifths keeps turning. <kbd>↑</kbd>/<kbd>↓</kbd> and <kbd>Backspace</kbd> walk the
+        same route by hand, while <kbd>Enter</kbd> belongs to the drums. The musical name of the
+        current key (C major, F♯ minor…) sits right under the
         score, so the stage never hides which combo you are playing.
       </p>
     </section>
@@ -156,9 +157,10 @@
         </div>
         <div class="card">
           <h3>Add a drum groove</h3>
-          <p>An optional backing layer, off by default: straight, half-time, shuffle, ballad or
-            waltz, at the tempo and in the meter of the piece. Drums never earn points and never get
-            recorded; a MIDI pad on channel 10 plays the same kit by hand.</p>
+          <p>An optional backing layer: press <kbd>Enter</kbd> to switch it on — first on the start
+            screen, then in the game with the same key or the panel toggle. Straight, half-time,
+            shuffle, ballad (the default) or waltz. Drums never earn points and never get recorded; a
+            MIDI pad on channel 10 plays the same kit by hand.</p>
         </div>
         <div class="card">
           <h3>Three visualisations</h3>
@@ -179,10 +181,12 @@
         <li>The start screen asks you to press <b>ten highlighted keys</b>: <kbd>Q</kbd> <kbd>W</kbd>
           <kbd>E</kbd> <kbd>R</kbd> <kbd>F</kbd> for the left hand and <kbd>J</kbd> <kbd>I</kbd>
           <kbd>O</kbd> <kbd>P</kbd> <kbd>[</kbd> for the right one. Each key answers with a sound;
-          a repeat is not counted. You can also click the keyboard picture, so the entrance works
-          on a tablet.</li>
-        <li>When the counter reaches <b>10 / 10</b>, the Space key lights up. Press <kbd>Space</kbd>
-          and the session begins — the same gesture that opens a new combo in the game.</li>
+          a repeat is not counted. Hover a key on the picture and a tip explains what it does. You
+          can also click the keyboard picture, so the entrance works on a tablet.</li>
+        <li>At <b>10 / 10</b> the screen asks for <kbd>Enter</kbd>: it starts the drums, so the groove
+          is already playing before the first note. Then the Space key lights up — press
+          <kbd>Space</kbd> and the session begins, the same gesture that opens a new combo in the
+          game.</li>
         <li>Play chord changes with the left hand and add melody notes with the right one. The score
           of the current combo grows with every meaningful harmonic turn.</li>
         <li>At 300 points press <kbd>Space</kbd> to move on: the mode flips and the circle of fifths
@@ -193,11 +197,12 @@
         <table class="keys">
           <caption>Keyboard map. Every action is also available from the menus.</caption>
           <tbody>
-            <tr><th>Start: ten highlighted keys, then Space</th><td><kbd>Q</kbd> <kbd>W</kbd> <kbd>E</kbd> <kbd>R</kbd> <kbd>F</kbd> + <kbd>J</kbd> <kbd>I</kbd> <kbd>O</kbd> <kbd>P</kbd> <kbd>[</kbd> → <kbd>Space</kbd></td></tr>
+            <tr><th>Start: ten highlighted keys, then Enter (drums), then Space</th><td><kbd>Q</kbd> <kbd>W</kbd> <kbd>E</kbd> <kbd>R</kbd> <kbd>F</kbd> + <kbd>J</kbd> <kbd>I</kbd> <kbd>O</kbd> <kbd>P</kbd> <kbd>[</kbd> → <kbd>Enter</kbd> → <kbd>Space</kbd></td></tr>
             <tr><th>Left hand: supertonic, subdominant, dominant, submediant, tonic</th><td><kbd>Q</kbd> <kbd>W</kbd> <kbd>E</kbd> <kbd>R</kbd> <kbd>F</kbd></td></tr>
             <tr><th>Right hand: five melody notes around the chord</th><td><kbd>J</kbd> <kbd>I</kbd> <kbd>O</kbd> <kbd>P</kbd> <kbd>[</kbd></td></tr>
             <tr><th>Melody octave up / down</th><td><kbd>=</kbd> / <kbd>−</kbd></td></tr>
-            <tr><th>Next / previous combo</th><td><kbd>Enter</kbd> / <kbd>Backspace</kbd> or <kbd>↑</kbd> / <kbd>↓</kbd></td></tr>
+            <tr><th>Next / previous combo</th><td><kbd>↑</kbd> / <kbd>↓</kbd> or <kbd>Backspace</kbd></td></tr>
+            <tr><th>Drums: on / off</th><td><kbd>Enter</kbd></td></tr>
             <tr><th>New combo after 300 points</th><td><kbd>Space</kbd></td></tr>
             <tr><th>Mode: major / minor</th><td><kbd>←</kbd> / <kbd>→</kbd></td></tr>
             <tr><th>Visualisation: orbits, spectrum, circle</th><td><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd></td></tr>
@@ -246,10 +251,11 @@
       </p>
       <h3>Drums</h3>
       <p>
-        The drum layer is off by default and never turns itself on: one toggle, a list of patterns —
-        straight, half-time, shuffle, ballad or waltz — and its own volume. In a jam the drums keep
-        their own tempo; in a piece they follow the form, so the slider greys out and the readout
-        says “led by the piece”. The kit is synthesised with Web Audio: no samples, no network
+        The drum layer never turns itself on: <kbd>Enter</kbd> starts it on the start screen, and the
+        same key or the panel toggle does it during the game. A list of patterns — straight,
+        half-time, shuffle, ballad (the default) or waltz — and its own volume, 20 %. In a jam the
+        drums keep their own tempo; in a piece they follow the form, so the slider greys out and the
+        readout says “led by the piece”. The kit is synthesised with Web Audio: no samples, no network
         requests. It is deliberately deaf to the game — drums never earn points, never enter the
         recognition pool and never land in a recording. The same kit plays by hand from a MIDI pad
         on channel 10.
@@ -314,9 +320,10 @@
       <details>
         <summary>Are there drums?</summary>
         <p>Optional. A synthesised kit plays a groove behind the jam or the piece — straight,
-          half-time, shuffle, ballad or waltz — off by default and with its own volume. Drums are a
-          backing layer only: they never earn points, never enter the recognition and never get
-          recorded. A MIDI pad on channel 10 plays the same kit by hand.</p>
+          half-time, shuffle, ballad or waltz — and <kbd>Enter</kbd> switches it on at the start
+          screen or during the game. Drums are a backing layer only: they never earn points, never
+          enter the recognition and never get recorded. A MIDI pad on channel 10 plays the same kit
+          by hand.</p>
       </details>
     </section>
 
@@ -394,7 +401,7 @@
           {
             "@type": "Question",
             "name": "Are there drums?",
-            "acceptedAnswer": { "@type": "Answer", "text": "Optional. A synthesised kit plays a groove behind the jam or the piece — straight, half-time, shuffle, ballad or waltz — off by default and with its own volume. Drums are a backing layer only: they never earn points, never enter the recognition and never get recorded. A MIDI pad on channel 10 plays the same kit by hand." }
+            "acceptedAnswer": { "@type": "Answer", "text": "Optional. A synthesised kit plays a groove behind the jam or the piece — straight, half-time, shuffle, ballad or waltz — and Enter switches it on at the start screen or during the game. Drums are a backing layer only: they never earn points, never enter the recognition and never get recorded. A MIDI pad on channel 10 plays the same kit by hand." }
           }
         ]
       }

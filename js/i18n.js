@@ -34,7 +34,7 @@ var I18N = (function () {
   // Какие языки игра переводит сама. Остальные — через Google Translate.
   const PACKS = { en: 1 };
   const CYR = /[\u0400-\u04FF]/;
-  const ATTRS = ['title', 'aria-label', 'placeholder', 'alt'];
+  const ATTRS = ['title', 'aria-label', 'placeholder', 'alt', 'data-tip'];
   // Составные подписи режутся по этим разделителям и переводятся по частям.
   // « · » в конце — для обрубков, которые начинаются прямо с точки: после
   // обрезки пробелов текст « · диапазон » приходит как «· диапазон».
@@ -117,8 +117,8 @@ var I18N = (function () {
     'Выбор комбо по кругу тональностей': 'Pick a combo on the circle of fifths',
     '‹ Назад': '‹ Back',
     'Далее ›': 'Next ›',
-    'Space после 300 · Enter / Backspace · клик по тональности — сразу':
-      'Space after 300 · Enter / Backspace · click a key to jump there',
+    'Space после 300 · Backspace / ↑ / ↓ · клик по тональности — сразу':
+      'Space after 300 · Backspace / ↑ / ↓ · click a key to jump there',
     'Форма · пьеса': 'Form · piece',
     'Форма: свободный джем': 'Form: free jam',
     'Форма: пьеса включена': 'Form: piece is on',
@@ -254,8 +254,8 @@ var I18N = (function () {
     'Барабаны · грув': 'Drums · groove',
     'Барабаны: выкл': 'Drums: off',
     'Барабаны: вкл': 'Drums: on',
-    'Барабаны играют сами по выбранному паттерну':
-      'The drums play themselves on the selected pattern',
+    'Барабаны играют сами по выбранному паттерну (Enter)':
+      'The drums play themselves on the selected pattern (Enter)',
     'Паттерн': 'Pattern',
     'Фигура барабанов': 'Drum pattern',
     'прямой': 'straight',
@@ -308,33 +308,45 @@ var I18N = (function () {
     'десять': 'ten',
     'подсвеченных клавиш — на клавиатуре или по схеме':
       'highlighted keys — on your keyboard or on the picture',
+    // Второй шаг пробы: Enter включает барабаны, и только потом активен пробел.
+    'Клавиши на месте — включите барабаны:':
+      'All the keys are in place — start the drums:',
     'Клавиши на месте — нажмите': 'All the keys are in place — press',
     'пробел': 'Space',
     ', чтобы начать': ' to start',
     'Левая рука · аккорды': 'Left hand · chords',
     'Правая рука · ноты': 'Right hand · notes',
-    'Схема клавиатуры: Q W E R F — аккорды левой руки, J I O P [ — ноты правой. Нажмите все десять подсвеченных клавиш, затем пробел, чтобы начать':
-      'Keyboard map: Q W E R F play the left-hand chords, J I O P [ the right-hand notes. Press all ten highlighted keys, then Space to start',
+    'Схема клавиатуры: Q W E R F — аккорды левой руки, J I O P [ — ноты правой. Нажмите все десять подсвеченных клавиш, затем Enter — включатся барабаны, затем пробел, чтобы начать':
+      'Keyboard map: Q W E R F play the left-hand chords, J I O P [ the right-hand notes. Press all ten highlighted keys, then Enter to start the drums, then Space to begin',
     'комбо': 'combo',
+    'барабаны': 'drums',
     'начать': 'start',
     'лад / комбо': 'mode / combo',
-    'Пробел — начать игру; в игре — новое комбо':
-      'Space — start the game; in play — a new combo',
+    'Пробел — начать игру; в игре — новое комбо после 300 очков':
+      'Space — start the game; in play — a new combo after 300 points',
     'Стрелки: лад и комбо': 'Arrows: mode and combo',
     '↑ — следующее комбо': '↑ — next combo',
     '← — мажор': '← — major',
     '↓ — предыдущее комбо': '↓ — previous combo',
     '→ — минор': '→ — minor',
-    'Q · II — супертоника': 'Q · II — supertonic',
-    'W · IV — субдоминанта': 'W · IV — subdominant',
-    'E · V — доминанта': 'E · V — dominant',
-    'R · VI — субмедианта': 'R · VI — submediant',
-    'F · I — тоника': 'F · I — tonic',
-    'J · нота 1': 'J · note 1',
-    'I · нота 2': 'I · note 2',
-    'O · нота 3': 'O · note 3',
-    'P · нота 4': 'P · note 4',
-    '[ · нота 5': '[ · note 5',
+    // Подсказки на схеме (data-tip): клавиша и её роль одной строкой.
+    'Enter — барабаны: включить или выключить грув':
+      'Enter — drums: turn the groove on or off',
+    'Q · II — супертоника: шаг к доминанте': 'Q · II — supertonic: a step to the dominant',
+    'W · IV — субдоминанта: уводит от тоники': 'W · IV — subdominant: leads away from the tonic',
+    'E · V — доминанта: тянет назад в тонику': 'E · V — dominant: pulls back to the tonic',
+    'R · VI — субмедианта: мягкий уход': 'R · VI — submediant: a soft detour',
+    'F · I — тоника: дом, сюда возвращаются': 'F · I — tonic: home, where you return',
+    'J · нота 1: безопасная ступень вокруг аккорда':
+      'J · note 1: a safe step around the chord',
+    'I · нота 2: безопасная ступень вокруг аккорда':
+      'I · note 2: a safe step around the chord',
+    'O · нота 3: безопасная ступень вокруг аккорда':
+      'O · note 3: a safe step around the chord',
+    'P · нота 4: безопасная ступень вокруг аккорда':
+      'P · note 4: a safe step around the chord',
+    '[ · нота 5: безопасная ступень вокруг аккорда':
+      '[ · note 5: a safe step around the chord',
 
     // ===== Строка состояния =====
     'Web MIDI: проверка…': 'Web MIDI: checking…',
@@ -343,6 +355,7 @@ var I18N = (function () {
     '= октава ·': '= octave ·',
     '= лад ·': '= mode ·',
     '= комбо ·': '= combo ·',
+    '= барабаны ·': '= drums ·',
     '= новое комбо после 300 ·': '= new combo after 300 ·',
     '= визуализация ·': '= visualisation ·',
     '= пауза · MIDI: трезвучие = аккорд': '= pause · MIDI: triad = chord',

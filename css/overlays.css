@@ -48,6 +48,14 @@
   font-weight: 800; letter-spacing: 0.4px; color: #ffd166;
   font-variant-numeric: tabular-nums;
 }
+/* Второй шаг пробы: десять клавиш собраны, но пробел ещё не активен — окно
+   просит Enter, и он включает барабаны. Текст живёт в разметке (.ip-drums),
+   JS переключает только класс drums; счётчик 10 / 10 уже зелёный. */
+.intro-lead .ip-drums { display: none; }
+#startOverlay.drums .ip-before,
+#startOverlay.drums .ip-after { display: none; }
+#startOverlay.drums .ip-drums { display: inline; }
+#startOverlay.drums .ip-count { color: #74cc3d; }
 /* После пробы инструкция меняется целиком: одна короткая строка про пробел.
    Счётчик остаётся 10 / 10 и зеленеет, чтобы «готово» читалось без текста. */
 .intro-lead .ip-after { display: none; }
@@ -151,6 +159,15 @@
 }
 #startOverlay.ready .kb-space-role { display: none; }
 #startOverlay.ready .kb-space-start { display: inline; }
+/* Enter на шаге барабанов — та же подсветка, что у пробела после пробы:
+   клавиша становится единственным путём дальше, и её видно без чтения строки. */
+#startOverlay.drums .kb-enter {
+  border-style: solid; border-color: #ffd166; cursor: pointer;
+  background: rgba(255, 209, 102, 0.18);
+  box-shadow: 0 0 16px rgba(255, 209, 102, 0.5), inset 0 -2px 0 rgba(0, 0, 0, 0.22);
+  animation: introSpaceReady 1.7s ease-in-out infinite;
+}
+#startOverlay.drums .kb-enter b { color: #fff6dc; }
 #startOverlay.ready .kb-space b,
 #startOverlay.ready .kb-space-start { color: #fff6dc; }
 /* Пробел нажат: свечение снимается сразу, а текст «начать» остаётся до конца
@@ -175,6 +192,20 @@
   font-size: clamp(7px, 0.7vw, 9px); line-height: 1.1;
   color: #7e88a6; text-transform: uppercase; letter-spacing: 0.3px; white-space: nowrap;
 }
+/* Подсказка клавиши (#kbTip): один пузырёк на всё окно, позицию считает
+   showKeyTip() по прямоугольнику клавиши. Висит над клавишей, мышь не
+   перехватывает и на телефоне не мешает нажимать. */
+.kb-tip {
+  position: absolute; z-index: 3; max-width: min(280px, 46vw);
+  padding: 7px 11px;
+  font-size: clamp(10px, 1.15vw, 13px); line-height: 1.35; font-weight: 600;
+  text-align: center; color: #f2f6ff; background: rgba(16, 20, 31, 0.96);
+  border: 1px solid rgba(255, 209, 102, 0.5); border-radius: 9px;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.45);
+  transform: translate(-50%, -100%); pointer-events: none;
+  opacity: 0; transition: opacity 0.12s ease;
+}
+.kb-tip.show { opacity: 1; }
 @keyframes introKeyPulse {
   0%, 72%, 100% { transform: translateY(0); background: rgba(255, 255, 255, 0.055); box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.22); }
   5% { transform: translateY(-2px); background: rgba(255, 255, 255, 0.16); border-color: var(--lit); box-shadow: 0 0 12px var(--lit), inset 0 -2px 0 rgba(0, 0, 0, 0.22); }
@@ -187,7 +218,9 @@
 @media (prefers-reduced-motion: reduce) {
   .kb-key.on { animation: none; }
   #startOverlay.ready .kb-space { animation: none; }
+  #startOverlay.drums .kb-enter { animation: none; }
   #startOverlay { transition: none; }
+  .kb-tip { transition: none; }
 }
 .btnrow { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
 .big-btn {

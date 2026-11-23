@@ -269,7 +269,7 @@
         <button class="pbtn" id="pPrevCombo">‹ Назад</button>
         <button class="pbtn accent" id="pNextCombo">Далее ›</button>
       </div>
-      <div class="wheel-hint">Space после 300 · Enter / Backspace · клик по тональности — сразу</div>
+      <div class="wheel-hint">Space после 300 · Backspace / ↑ / ↓ · клик по тональности — сразу</div>
     </div>
 
     <details class="pg" id="formPg" open>
@@ -295,7 +295,7 @@
          поэтому проба пальцев и легенда остаются прежними. -->
     <details class="pg" id="groovePg">
       <summary>Барабаны · грув</summary>
-      <button class="tg" id="grooveToggle" aria-pressed="false" title="Барабаны играют сами по выбранному паттерну">Барабаны: выкл</button>
+      <button class="tg" id="grooveToggle" aria-pressed="false" title="Барабаны играют сами по выбранному паттерну (Enter)">Барабаны: выкл</button>
       <div class="prow"><label for="groovePattern">Паттерн</label>
         <select id="groovePattern" title="Фигура барабанов"></select>
       </div>
@@ -367,7 +367,7 @@
       <div class="prow"><label for="pNoteTone">Яркость нот</label><input type="range" id="pNoteTone" min="50" max="180" step="10" value="100"><output id="vNoteTone"></output></div>
       <div class="prow"><label for="pNoteVol">Громкость нот</label><input type="range" id="pNoteVol" min="0" max="150" step="5" value="25" title="Громкость одиночных нот, 0–150 %"><output id="vNoteVol"></output></div>
       <div class="prow"><label for="pChordVol">Громкость аккордов</label><input type="range" id="pChordVol" min="0" max="150" step="5" value="100" title="Громкость аккордовой подложки и баса, 0–150 %"><output id="vChordVol"></output></div>
-      <div class="prow"><label for="pDrumVol">Громкость барабанов</label><input type="range" id="pDrumVol" min="0" max="150" step="5" value="55" title="Громкость синтезированных барабанов, 0–150 %"><output id="vDrumVol"></output></div>
+      <div class="prow"><label for="pDrumVol">Громкость барабанов</label><input type="range" id="pDrumVol" min="0" max="150" step="5" value="20" title="Громкость синтезированных барабанов, 0–150 %"><output id="vDrumVol"></output></div>
       <div class="prow"><label for="pNoteOct">Октава нот</label>
         <select id="pNoteOct" title="Сдвиг нот правой руки: −1, 0 или +1 октава"><option value="-1">−1</option><option value="0">0</option><option value="1" selected>+1</option></select>
       </div>
@@ -416,14 +416,17 @@
 
 <div id="status-row">
   <div id="midi-status"><span class="dot"></span><span id="midiText">Web MIDI: проверка…</span></div>
-  <div class="hints"><kbd>Q</kbd> <kbd>W</kbd> <kbd>E</kbd> <kbd>R</kbd> <kbd>F</kbd> = аккорды · <span id="noteHints"><kbd>J</kbd> <kbd>I</kbd> <kbd>O</kbd> <kbd>P</kbd> <kbd>[</kbd></span> = ноты · <kbd>−</kbd><kbd>=</kbd> = октава · <kbd>←</kbd><kbd>→</kbd> = лад · <kbd>↑</kbd><kbd>↓</kbd> = комбо · <kbd>Enter</kbd> / <kbd>Backspace</kbd> = комбо · <kbd>Space</kbd> = новое комбо после 300 · <kbd>1</kbd>–<kbd>3</kbd> = визуализация · <kbd>Esc</kbd> = пауза · MIDI: трезвучие = аккорд</div>
+  <div class="hints"><kbd>Q</kbd> <kbd>W</kbd> <kbd>E</kbd> <kbd>R</kbd> <kbd>F</kbd> = аккорды · <span id="noteHints"><kbd>J</kbd> <kbd>I</kbd> <kbd>O</kbd> <kbd>P</kbd> <kbd>[</kbd></span> = ноты · <kbd>−</kbd><kbd>=</kbd> = октава · <kbd>←</kbd><kbd>→</kbd> = лад · <kbd>↑</kbd><kbd>↓</kbd> = комбо · <kbd>Backspace</kbd> = комбо · <kbd>Enter</kbd> = барабаны · <kbd>Space</kbd> = новое комбо после 300 · <kbd>1</kbd>–<kbd>3</kbd> = визуализация · <kbd>Esc</kbd> = пауза · MIDI: трезвучие = аккорд</div>
 </div>
 
   <!-- Стартовый экран: проба пальцев. Текста ровно две строки — название и
        «нажмите десять подсвеченных клавиш» со счётчиком, а всё остальное место
        занимает схема настоящей клавиатуры. Когда десять клавиш собраны, строка
-       меняется на «нажмите пробел», а Space на схеме загорается: сессия
-       начинается тем же жестом, который в игре открывает новое комбо.
+       просит нажать Enter: он включает барабаны, и грув звучит ещё до первой
+       ноты. После этого загорается пробел — сессия начинается тем же жестом,
+       который в игре открывает новое комбо.
+       Подсказка #kbTip объясняет клавишу при наведении и нажатии: новичок
+       узнаёт роль кнопки на самой схеме, а не из легенды внизу экрана.
        Экран фиксирован к окну, а не лежит внутри сцены: #game-container
        масштабируется transform'ом (fitStage), и внутри него клавиши на телефоне
        сжимались бы до нечитаемых. -->
@@ -431,10 +434,11 @@
     <h1 class="intro-title">HARMONIA — симулятор гармонии · 24 комбо</h1>
     <p class="intro-lead">
       <span class="ip-before">Нажмите <b>десять</b> подсвеченных клавиш — на клавиатуре или по схеме</span>
+      <span class="ip-drums">Клавиши на месте — включите барабаны: <b>Enter</b></span>
       <span class="ip-after" aria-live="polite">Клавиши на месте — нажмите <b>пробел</b>, чтобы начать</span>
       <span class="ip-count" id="introCount" aria-live="polite">0 / 10</span>
     </p>
-    <div class="intro-keyboard" role="group" aria-label="Схема клавиатуры: Q W E R F — аккорды левой руки, J I O P [ — ноты правой. Нажмите все десять подсвеченных клавиш, затем пробел, чтобы начать">
+    <div class="intro-keyboard" role="group" aria-label="Схема клавиатуры: Q W E R F — аккорды левой руки, J I O P [ — ноты правой. Нажмите все десять подсвеченных клавиш, затем Enter — включатся барабаны, затем пробел, чтобы начать">
       <div class="kb-hands">
         <span class="kb-hand lh"><i></i>Левая рука · аккорды</span>
         <span class="kb-hand rh"><i></i>Правая рука · ноты</span>
@@ -442,17 +446,17 @@
       <div class="kb-board">
             <div class="kb-row kb-top">
               <span class="kb-key dim kb-tab">Tab</span>
-              <span class="kb-key lh on need home" data-key="KeyQ" style="--i:0" title="Q · II — супертоника"><b>Q</b><span>II</span></span>
-              <span class="kb-key lh on need" data-key="KeyW" style="--i:1" title="W · IV — субдоминанта"><b>W</b><span>IV</span></span>
-              <span class="kb-key lh on need" data-key="KeyE" style="--i:2" title="E · V — доминанта"><b>E</b><span>V</span></span>
-              <span class="kb-key lh on need" data-key="KeyR" style="--i:3" title="R · VI — субмедианта"><b>R</b><span>VI</span></span>
+              <span class="kb-key lh on need home" data-key="KeyQ" style="--i:0" data-tip="Q · II — супертоника: шаг к доминанте"><b>Q</b><span>II</span></span>
+              <span class="kb-key lh on need" data-key="KeyW" style="--i:1" data-tip="W · IV — субдоминанта: уводит от тоники"><b>W</b><span>IV</span></span>
+              <span class="kb-key lh on need" data-key="KeyE" style="--i:2" data-tip="E · V — доминанта: тянет назад в тонику"><b>E</b><span>V</span></span>
+              <span class="kb-key lh on need" data-key="KeyR" style="--i:3" data-tip="R · VI — субмедианта: мягкий уход"><b>R</b><span>VI</span></span>
               <span class="kb-key dim">T</span>
               <span class="kb-key dim">Y</span>
               <span class="kb-key dim">U</span>
-              <span class="kb-key rh on need" data-key="KeyI" style="--i:5" title="I · нота 2"><b>I</b><span>2</span></span>
-              <span class="kb-key rh on need" data-key="KeyO" style="--i:6" title="O · нота 3"><b>O</b><span>3</span></span>
-              <span class="kb-key rh on need" data-key="KeyP" style="--i:7" title="P · нота 4"><b>P</b><span>4</span></span>
-              <span class="kb-key rh on need" data-key="BracketLeft" style="--i:8" title="[ · нота 5"><b>[</b><span>5</span></span>
+              <span class="kb-key rh on need" data-key="KeyI" style="--i:5" data-tip="I · нота 2: безопасная ступень вокруг аккорда"><b>I</b><span>2</span></span>
+              <span class="kb-key rh on need" data-key="KeyO" style="--i:6" data-tip="O · нота 3: безопасная ступень вокруг аккорда"><b>O</b><span>3</span></span>
+              <span class="kb-key rh on need" data-key="KeyP" style="--i:7" data-tip="P · нота 4: безопасная ступень вокруг аккорда"><b>P</b><span>4</span></span>
+              <span class="kb-key rh on need" data-key="BracketLeft" style="--i:8" data-tip="[ · нота 5: безопасная ступень вокруг аккорда"><b>[</b><span>5</span></span>
               <span class="kb-key dim">]</span>
             </div>
             <div class="kb-row kb-home">
@@ -460,15 +464,15 @@
               <span class="kb-key dim">A</span>
               <span class="kb-key dim">S</span>
               <span class="kb-key dim">D</span>
-              <span class="kb-key lh on need home" data-key="KeyF" style="--i:4" title="F · I — тоника"><b>F</b><span>I</span></span>
+              <span class="kb-key lh on need home" data-key="KeyF" style="--i:4" data-tip="F · I — тоника: дом, сюда возвращаются"><b>F</b><span>I</span></span>
               <span class="kb-key dim">G</span>
               <span class="kb-key dim">H</span>
-              <span class="kb-key rh on need home" data-key="KeyJ" style="--i:9" title="J · нота 1"><b>J</b><span>1</span></span>
+              <span class="kb-key rh on need home" data-key="KeyJ" style="--i:9" data-tip="J · нота 1: безопасная ступень вокруг аккорда"><b>J</b><span>1</span></span>
               <span class="kb-key dim">K</span>
               <span class="kb-key dim">L</span>
               <span class="kb-key dim">;</span>
               <span class="kb-key dim">'</span>
-              <span class="kb-key cmd kb-enter"><b>Enter</b><span>комбо</span></span>
+              <span class="kb-key cmd kb-enter" data-key="Enter" data-tip="Enter — барабаны: включить или выключить грув"><b>Enter</b><span>барабаны</span></span>
             </div>
             <div class="kb-row kb-bottom">
               <span class="kb-key dim kb-shift">Shift</span>
@@ -487,7 +491,7 @@
             <div class="kb-row kb-space-row">
               <span class="kb-key dim kb-mod">Ctrl</span>
               <span class="kb-key dim kb-mod">Alt</span>
-              <span class="kb-key cmd kb-space" data-key="Space" title="Пробел — начать игру; в игре — новое комбо"><b>Space</b><span class="kb-space-role">комбо</span><span class="kb-space-start">начать</span></span>
+              <span class="kb-key cmd kb-space" data-key="Space" data-tip="Пробел — начать игру; в игре — новое комбо после 300 очков"><b>Space</b><span class="kb-space-role">комбо</span><span class="kb-space-start">начать</span></span>
               <span class="kb-key dim kb-mod">Alt</span>
               <span class="kb-arrows" aria-label="Стрелки: лад и комбо">
                 <span class="kb-key cmd kb-arrow up" title="↑ — следующее комбо"><b>↑</b></span>
@@ -499,6 +503,10 @@
             </div>
       </div>
     </div>
+    <!-- Пузырёк подсказки: один на окно, позицию считает showKeyTip() по
+         прямоугольнику клавиши. Мышь он не перехватывает. -->
+    <div class="kb-tip" id="kbTip" role="tooltip" aria-hidden="true"></div>
+
   </div>
 
   <!-- Точка монтирования Google Translate. Виджет живёт вне экрана: язык

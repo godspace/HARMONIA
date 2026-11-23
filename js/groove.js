@@ -55,8 +55,12 @@ function groovePlan(id, step, meter) {
 
 const Groove = {
   on: false,
-  patternId: 'straight',
+  patternId: 'ballad',
   hits: 0,
+  // Стартовая проба: сессия ещё не начата, а барабаны уже звучат — иначе
+  // клавишу Enter на экране знакомства нечем проверить. Снимается стартом
+  // сессии, поэтому в игре грув живёт только по обычным правилам.
+  preview: false,
   _src: '',
   _ownT0: 0,
   _mark: null,
@@ -89,10 +93,24 @@ const Groove = {
     P.grooveOn = next;
     if (next === this.on) return this.on;
     this.on = next;
+    if (!next) this.preview = false;
     this._src = '';
     this._mark = null;
     if (next && typeof initAudio === 'function') initAudio();
     this.paint();
+    return this.on;
+  },
+
+  // Проба пальцев: Enter включает барабаны до первой ноты. Часы свои — сцена
+  // ещё не live; сессия подхватывает уже звучащий грув (onSessionStart снимает
+  // preview и пересчитывает t0), поэтому пульс не обрывается на старте.
+  startPreview() {
+    if (typeof initAudio === 'function') initAudio();
+    this.preview = true;
+    this.setOn(true);
+    this._src = 'jam';
+    this._ownT0 = this._now();
+    this._mark = null;
     return this.on;
   },
 
@@ -120,7 +138,10 @@ const Groove = {
   },
 
   // Новая сессия — новый отсчёт: старые часы джема больше не имеют смысла.
+  // Проба могла оставить грув звучащим, но «стартовый» режим снимается: дальше
+  // барабаны подчиняются обычным правилам сессии (пауза, часы формы).
   onSessionStart() {
+    this.preview = false;
     this._src = '';
     this._mark = null;
     this.hits = 0;
@@ -139,8 +160,11 @@ const Groove = {
   },
 
   // Вызывается каждый кадр из render.js, пока сессия live и не на паузе.
+  // Исключение — preview: стартовый экран ещё не начал сессию, но грув уже
+  // должен звучать, иначе Enter на пробе ничего не демонстрирует.
   update() {
-    if (!this.on || !state.running || state.paused) return false;
+    if (!this.on || state.paused) return false;
+    if (!state.running && !this.preview) return false;
     if (typeof audioCtx === 'undefined' || !audioCtx) return false;
     const now = this._now();
     const src = this._clockSource();
@@ -228,3 +252,12 @@ const Groove = {
     return 'Грув: ' + label + ' · ' + tempo;
   }
 };
+
+// Enter и кнопка панели делают одно и то же: ключ — такой же пользовательский
+// жест, поэтому аудиотракт открывается и здесь. Выключение молчит сразу:
+// setOn сбрасывает часы, и следующий шаг уже не планируется.
+function toggleGroove() {
+  if (typeof Groove === 'undefined') return false;
+  if (typeof initAudio === 'function') initAudio();
+  return Groove.setOn(!Groove.on);
+}

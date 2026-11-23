@@ -21,7 +21,7 @@ Translate.mount();
 fitStage();
 // Публичный отладочный API: консоль, автотесты, будущие харнессы.
 window.HARMONIA = {
-  state, P, CFG, COMBOS, ORDER, INPUT, Midi, Translate, I18N, VIZ, viz, Heard,
+  state, P, DEFAULTS, CFG, COMBOS, ORDER, INPUT, Midi, Translate, I18N, VIZ, viz, Heard,
   Transport, Groove, Composition, setFormEnabled, updateFormHUD,
   groovePattern, grooveSteps, groovePlan,
   harmonicChords, updateHUD, playHarmonic, chordEvent, pressCode, releaseCode, runCommand, loadCombo, setMode, startSession,

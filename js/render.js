@@ -14,8 +14,9 @@ function render() {
 
   if (live && typeof Transport !== 'undefined') Transport.update();
   // Грув живёт на своём планировщике: в пьесе он берёт часы Transport, в джеме
-  // считает сам. Порядок важен — часы пьесы тикают первыми.
-  if (live && typeof Groove !== 'undefined') Groove.update();
+  // считает сам. Порядок важен — часы пьесы тикают первыми. Режим preview —
+  // стартовая проба: сессия ещё не начата, а барабаны уже звучат.
+  if (typeof Groove !== 'undefined' && (live || Groove.preview)) Groove.update();
   if (live) {
     state.clock += dt;
     state.energyAcc += dt;
