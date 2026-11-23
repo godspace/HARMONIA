@@ -280,10 +280,14 @@ function buildVizMenu() {
 $('pClear').addEventListener('click', () => { clearPen(); toast('След очищен'); });
 $('pReset').addEventListener('click', () => {
   const vizBefore = P.viz;
+  // Подача станции могла быть принудительной (P.stationStyle): после сброса
+  // шары должны вернуться к октаве характера, а не остаться в прежней.
+  const stationBefore = P.stationStyle;
   Object.assign(P, DEFAULTS);
   // Сброс мог вернуть режим по умолчанию: старые точки истории в другой геометрии не нужны.
   if (P.viz !== vizBefore) resetVizLayers();
   syncAll(); applyPalette(); syncParticles(); clearPen();
+  if (P.stationStyle !== stationBefore) { releaseAllHolds(); buildBalls(); }
   // Нотация тоже вернулась к «до-ре-ми»: подписи нужно переписать сразу,
   // иначе карточки и шар останутся в прежней нотации до смены комбо.
   refreshNotation();

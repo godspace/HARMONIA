@@ -1291,6 +1291,95 @@ $post = @'
     if (HARMONIA.Translate.state().pack !== true) throw new Error('state lost the pack flag');
   });
 
+  step('station-style', function () {
+    // Характер станции меняет подачу (голоса, бас, октаву, тембр), но не ноты.
+    // Шаг держит три инварианта: эталон на первой паре, различие соседей по
+    // кругу и неизменный набор pitch class у каждого аккорда каждой станции.
+    var H = HARMONIA, P = H.P;
+    var S = H.STATION_STYLES;
+    if (!S || S.length !== 12) throw new Error('expected twelve station characters');
+    var axes = ['voicing', 'bass', 'register', 'touch'];
+    var base = H.stationStyleAt(0);
+    if (base.id !== 'neutral' || base.voicing !== 'closed' || base.bass !== 'nearest' ||
+        base.register !== 0 || base.touch !== 'bell') {
+      throw new Error('the first pair must sound exactly like before: ' + JSON.stringify(base));
+    }
+    var ids = S.map(function (s) { return s.id; });
+    if (ids.filter(function (id, i) { return ids.indexOf(id) === i; }).length !== 12) {
+      throw new Error('station ids are not unique');
+    }
+    S.forEach(function (s, i) {
+      if (s.register !== 0 && s.register !== 12) {
+        throw new Error('bad station octave: ' + s.register);
+      }
+      var prev = S[(i + S.length - 1) % S.length];
+      var diff = axes.filter(function (k) { return prev[k] !== s[k]; }).length;
+      if (diff < 2) {
+        throw new Error('stations ' + ((i + S.length - 1) % S.length) + '/' + i +
+          ' differ only in ' + diff + ' axis');
+      }
+    });
+    // Подача не добавляет и не убирает ни одного pitch class: у каждого аккорда
+    // каждой станции набор тот же, что у трезвучия {корень, терция, квинта}.
+    var savedStyle = P.stationStyle, savedMode = H.state.mode, savedIdx = H.state.comboIdx;
+    P.stationStyle = 'auto';
+    ['major', 'minor'].forEach(function (mode) {
+      H.state.mode = mode;
+      H.ORDER[mode].forEach(function (id, idx) {
+        H.state.comboIdx = idx;
+        var style = H.stationStyleFor(idx);
+        var T = 48 + H.COMBOS[id].root + style.register;
+        if (H.rootMidi() !== T) throw new Error('the station octave is not applied to rootMidi');
+        H.harmonicChords().forEach(function (h) {
+          var offset = h.offset == null ? ((h.rootPc - (T % 12) + 12) % 12) : h.offset;
+          var got = H.stationPadVoices(h, T, offset, style).map(function (v) {
+            return ((v[0] - T) % 12 + 12) % 12;
+          }).sort(function (a, b) { return a - b; }).join(',');
+          var want = [offset, offset + (h.third == null ? 4 : h.third), offset + (h.fifth || 7)]
+            .map(function (iv) {
+              return ((iv % 12) + 12) % 12;
+            }).sort(function (a, b) { return a - b; }).join(',');
+          if (got !== want) {
+            throw new Error('station ' + idx + ' (' + style.id + ') changed the pad chord: ' +
+              got + ' vs ' + want);
+          }
+          // Бас остаётся в пределах октавы от тоники — низ не «уезжает».
+          var bassOffset = H.stationBassOffset(h, offset, style);
+          if (bassOffset < -12 || bassOffset > 12) {
+            throw new Error('the bass left the octave: ' + bassOffset);
+          }
+        });
+      });
+    });
+    // Мажор и минор одной пары — один характер: меняется лад, а не станция.
+    H.state.mode = 'minor';
+    H.state.comboIdx = 5;
+    var minorStyle = H.stationStyleFor(5);
+    H.state.mode = 'major';
+    if (minorStyle !== H.stationStyleFor(5)) throw new Error('the mode changed the character');
+    // Ручная подача нужна для прослушивания: neutral глушит характеры, id строки
+    // закрепляет одну подачу на всех станциях, неизвестное значение — auto.
+    if (H.setStationStyle('neutral') !== 'neutral') throw new Error('neutral was not accepted');
+    if (H.stationStyleFor(6).id !== 'neutral') throw new Error('the neutral override did not apply');
+    if (H.setStationStyle('felt') !== 'felt') throw new Error('felt was not accepted');
+    if (H.stationStyleFor(6).touch !== 'felt') throw new Error('the felt override did not apply');
+    if (H.setStationStyle('nonsense') !== 'auto') throw new Error('unknown style must fall back');
+    H.state.comboIdx = savedIdx;
+    H.state.mode = savedMode;
+    P.stationStyle = savedStyle;
+    // loadCombo пересобирает шары в октаве станции: регистр слышен и на сцене,
+    // а не только в звуке. Пара 2 (ре мажор / си минор) поднята на октаву.
+    H.state.mode = 'major';
+    H.loadCombo(2, false);
+    if (H.getBalls()[0].midi !== H.rootMidi()) {
+      throw new Error('the balls are not in the station octave');
+    }
+    if (H.getBalls()[0].midi !== 48 + H.COMBOS[H.ORDER.major[2]].root + 12) {
+      throw new Error('pair 2 must sound an octave higher');
+    }
+    H.loadCombo(0, false);
+  });
+
   check('console-errors', window.__smokeErrors.length === 0, window.__smokeErrors.join(' | '));
   var failed = results.filter(function (r) { return !r.ok; });
   document.body.innerHTML = '<pre id="smoke-result">' + JSON.stringify({

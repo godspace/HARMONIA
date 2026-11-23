@@ -76,6 +76,10 @@ ORDER.minor.forEach(() => state.played.minor.push(false));
 ORDER.major.forEach(() => state.entered.major.push(false));
 ORDER.minor.forEach(() => state.entered.minor.push(false));
 const combo = () => COMBOS[ORDER[state.mode][state.comboIdx]];
-const rootMidi = () => 48 + combo().root;
+// Транспорт станции: 48 (до третьей октавы) плюс тоника пары плюс октава
+// характера (js/station.js). Вся станция звучит в своей октаве, а геометрия
+// сцены остаётся относительной — радиусы считаются от верхней ступени комбо.
+const rootMidi = () => 48 + combo().root +
+  (typeof stationRegister === 'function' ? stationRegister(state.comboIdx) : 0);
 // Единый «можно ли играть» — используется вводом, MIDI, аккордами и нотами.
 const playable = () => state.started && state.running && !state.paused;

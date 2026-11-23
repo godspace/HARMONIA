@@ -298,14 +298,24 @@ function bell(midi, vel, pan, when, timbreName, hold) {
   const tail = 1 + Math.max(0, hold || 0);
   const name = timbreName === 'note' ? 'note' : 'chord';
   const timbre = BELL_TIMBRES[name];
+  // Характер станции (js/station.js) — та же нота, другая подача: короче или
+  // длиннее, ярче или темнее, суше или объёмнее. В прослушивании записи характер
+  // не применяется: запись хранит высоты, а не тембр, и нейтральная подача
+  // честнее случайной станции, открытой в этот момент.
+  const shape = (typeof stationShape === 'function' && !state.replay)
+    ? stationShape() : null;
+  const shapeDecay = shape ? shape.decay : 1;
+  const shapeTone = shape ? shape.tone : 1;
+  const shapeWet = shape ? shape.wet : 1;
   const f = midiToFreq(midi);
   const sum = audioCtx.createGain(); sum.gain.value = 1;
   const lp = audioCtx.createBiquadFilter();
   lp.type = 'lowpass'; lp.Q.value = name === 'note' ? 0.35 : 0.5;
   const toneScale = name === 'note' ? (P.tone || 1) : 1;
-  const cutoff = clamp((timbre.tone[0] + timbre.tone[1] * v) * toneScale, 300, 16000);
+  const cutoff = clamp((timbre.tone[0] + timbre.tone[1] * v) * toneScale * shapeTone, 300, 16000);
   // Фильтр закрывается вместе с телом ноты: без резкого «обрыва» на хвосте.
-  const filterTime = (name === 'note' ? 0.58 : 0.8) * (name === 'note' && tail > 1 ? tail : 1);
+  const filterTime = (name === 'note' ? 0.58 : 0.8) * shapeDecay *
+    (name === 'note' && tail > 1 ? tail : 1);
   lp.frequency.setValueAtTime(cutoff, t);
   lp.frequency.exponentialRampToValueAtTime(Math.min(cutoff, timbre.floor), t + filterTime);
   lp.connect(sum);
@@ -313,7 +323,7 @@ function bell(midi, vel, pan, when, timbreName, hold) {
   timbre.partials.forEach(([ratio, g, durF]) => {
     const osc = audioCtx.createOscillator(), env = audioCtx.createGain();
     const level = Math.max(0.0002, timbre.peak * v * g);
-    const body = (timbre.decay * durF + 0.12) * tail;
+    const body = (timbre.decay * shapeDecay * durF + 0.12) * tail;
     const attack = name === 'note' ? 0.006 + 0.007 * (1 - v) : 0.008;
     const stopAt = t + attack + body + 0.12;
     maxDur = Math.max(maxDur, attack + body);
@@ -373,7 +383,7 @@ function bell(midi, vel, pan, when, timbreName, hold) {
     }
     pedalVoices.push({ gain: out, stopAt: fadeEnd + 0.1 });
   }
-  routeVoice(out, pan || 0, timbre.wet,
+  routeVoice(out, pan || 0, timbre.wet * shapeWet,
     name === 'note' ? noteGain : chordGain, voiceVolume(name));
 }
 // Нота с MIDI: та же высота, что нажата (без октавных подмен), панорама — по высоте,

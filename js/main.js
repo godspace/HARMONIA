@@ -25,6 +25,7 @@ window.HARMONIA = {
   Transport, Groove, Composition, setFormEnabled, updateFormHUD,
   groovePattern, grooveSteps, groovePlan,
   harmonicChords, updateHUD, playHarmonic, chordEvent, pressCode, releaseCode, runCommand, loadCombo, setMode, startSession,
+  rootMidi,
   beginFromOverlay, INTRO_KEYS, introPress, introState, introStart,
   drawers, drawerOpen, drawerIntro, setDrawer, toggleDrawer, setDrawerIntro, initDrawers,
   togglePedal, updateSpaceNext, advanceCombo, canAdvanceCombo, comboAdvanceReady,
@@ -43,6 +44,10 @@ window.HARMONIA = {
   shiftNoteOctave, applyNoteLayout,
   noteChord, noteChordPlan, noteChordHarmony, scheduleNoteChord, cancelPendingNoteChord,
   BELL_TIMBRES, DRUM_TIMBRES, voiceVolume, applyVoiceVolumes, drumHit, drumPlan,
+  // Характер станции: расположение голосов, бас, октава и тембр по паре комбо.
+  STATION_STYLES, STATION_NEUTRAL, STATION_TOUCH, stationStyleAt, stationStyleFor,
+  stationStyleById, stationRegister, stationPadVoices, stationBassOffset, stationShape,
+  setStationStyle,
   startRecording, stopRecording, playSelected, stopPlayback, deleteSelectedRecording,
   getRecordings: () => recordings,
   toggleSound, audioRms, spectralCentroid, resetVizLayers, vizDebug, setViz, cycleViz

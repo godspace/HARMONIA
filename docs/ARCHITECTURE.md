@@ -32,6 +32,7 @@
 | `util` | помощники без зависимостей | `$`, `cap`, `clamp`, `midiToFreq`, `notePc` |
 | `config` | параметры и константы | `DEFAULTS`, `P`, `CFG`, `PALETTES`, `NOTE_KEYS`, `NOTE_CAP` |
 | `data` | CSV и разбор | `CSV`, `COMBOS`, `ORDER` |
+| `station` | характер станции: подача гармонии по паре комбо | `STATION_STYLES`, `STATION_NEUTRAL`, `STATION_TOUCH`, `stationStyleAt/For/ById`, `stationRegister`, `stationPadVoices`, `stationBassOffset`, `stationShape`, `setStationStyle` |
 | `harmony` | аккорды комбо и весь лад | `HARMONY`, `PALETTE_SLOTS`, `INPUT`, `harmonicChords()`, `diatonicPalette()`, `handNoteBalls()`, `smartNoteWindow()`, `smartChordDegrees()`, `smartTargetDegree()`, `smartHarmonyForNote()`, `chordOnDegree()`, `classifyTriad()`, `describeTriad()`, `noteRole()` |
 | `state` | изменяемое состояние сессии | `state`, `state.adaptive`, `combo()`, `rootMidi()`, `playable()` |
 | `audio` | синтез и тракт | `initAudio`, `bell`, `noteChordPlan`, `noteChord`, `scheduleNoteChord`, `cancelPendingNoteChord`, `echoNote`, `holdStart/Stop`, `bass`, `drumHit`, `drumPlan`, `DRUM_TIMBRES` |
@@ -88,6 +89,11 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
   окна, звучащего аккорда или цели Q (такт пьесы / следующий шаг тренажёра) кэш
   инвалидируется автоматически (ключ другой) — руками сбрасывать не нужно.
   `handNoteBalls()` кэшируется так же, но для smart-режима — по anchor, окну и цели.
+- Характер станции (`js/station.js`) — только подача: `stationPadVoices()` переставляет
+  голоса {корень, терция, квинта}, `stationBassOffset()` выбирает позицию баса в пределах
+  октавы от тоники, `rootMidi()` добавляет октаву станции, `stationShape()` масштабирует
+  огибающую и срез `BELL_TIMBRES`. Набор pitch class не меняется, поэтому smart-окно и
+  автотрезвучия остаются безопасными; это держит шаг `station-style`.
 - `viz()` — единственная точка правды геометрии: `project()` режима используют шары,
   след и вспышка оборота, поэтому режим не может «разъехаться» сам с собой.
 - Режим меняется только через `setViz()`: он подсвечивает меню, тостит название и при
@@ -417,6 +423,35 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
 Браузеры запускают AudioContext только после жеста, поэтому `initAudio()` вызывается
 из стартовой пробы (`introPreview`), `beginFromOverlay`, кнопок и первого note-on.
 
+## Характер станции
+
+24 комбо — это 12 пар (мажор и минор одного ключевого знака) на кварто-квинтовом
+круге. Материал внутри пары один и тот же, поэтому `js/station.js` даёт каждой паре
+свой характер: без него дальние станции отличались только высотой и слышались как
+«то же самое, транспонированное».
+
+Характер — это четыре оси, и ни одна не добавляет нот:
+
+| Ось | Значения | Где |
+| --- | --- | --- |
+| `voicing` | `closed` / `spread` / `first` / `tenth` | `stationPadVoices(h, T, offset, style)` |
+| `bass` | `nearest` / `root` / `fifth` / `third` | `stationBassOffset(h, offset, style)` |
+| `register` | `0` / `12` | `stationRegister()` → `rootMidi()` |
+| `touch` | `bell` / `glass` / `felt` / `pluck` | `stationShape()` → `bell()` |
+
+`STATION_STYLES` — двенадцать строк в порядке `ORDER.major` (индекс = `state.comboIdx`),
+поэтому мажор и минор пары делят станцию и различаются только ладом. `STATION_NEUTRAL`
+— первая пара и режим прослушивания записи: он повторяет прежний звук один в один,
+так что есть эталон для сравнения. `STATION_TOUCH` хранит множители (единица — прежняя
+подача), и `bell()` применяет их к телу, срезу ФНЧ и реверб-посылу, не меняя сами
+`BELL_TIMBRES`.
+
+Октава станции входит в `rootMidi()`, поэтому шары, пэд, бас и мелодия сдвигаются
+вместе, а геометрия сцены остаётся относительной: радиусы считаются от верхней
+ступени текущего комбо. `setStationStyle(id)` нужен для прослушивания (`'auto'` —
+по паре, `'neutral'` — эталон, иначе id строки): смена октавы снимает удержания и
+пересобирает шары, иначе старая нота осталась бы в прежней октаве.
+
 ## Запись и прослушивание
 
 `recorder.js` пишет события, а не аудио: `recordChord(h, vel)` сохраняет снимок
@@ -557,6 +592,7 @@ Translate через `translate.js` (тот же приём, что в сосе�
 | Задержка/тембр автотрезвучий | `audio.js`: `scheduleNoteChord`, `noteChordPlan`, `noteChord`, `holdStart`; `CFG.noteChord*` |
 | Звук нот MIDI / педаль | `Midi.resolveEcho`, `Heard.setSustain`, `echoNote` |
 | Новый тембр ноты | `BELL_TIMBRES` в `audio.js` |
+| Характер станции (голоса, бас, октава, тембр) | `STATION_STYLES` / `STATION_TOUCH` в `js/station.js`; инварианты держит шаг `station-style` |
 | MIDI CC / aftertouch / пэды | `Midi.handle()` |
 | Новая палитра | `PALETTES` + `<option>` в `index.html` |
 | Новая визуализация | `VIZ` + `VIZ_ORDER` (`project/guides/center/ball/ring`) — меню и цифры `1`–`3` строятся сами |

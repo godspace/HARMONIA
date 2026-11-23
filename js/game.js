@@ -363,19 +363,22 @@ function playChordAudio(h, vel, baseMidi, when) {
   const offset = h.offset == null
     ? ((h.rootPc - (T % 12) + 12) % 12)
     : h.offset;
-  // Бас: ближайшая к тонике позиция корня (в пределах тритона).
-  const bassOffset = offset > 6 ? offset - 12 : offset;
+  // Характер станции решает бас: инвертировать ли аккорд ради плавной линии
+  // ('nearest' — прежнее поведение) или держать корень в басу. Прослушивание
+  // записи идёт с эталонной подачей: запись хранит высоты, а не характер, и
+  // звучать должна так, как звучала в момент записи.
+  const station = state.replay ? STATION_NEUTRAL : stationStyleFor(state.comboIdx);
+  const bassOffset = stationBassOffset(h, offset, station);
   bass(T + 12 * P.bassOct + bassOffset, when);
   if (P.pad) {
-    const chordRoot = T + 12 + offset;
     // Педаль продлевает аккорд, но не настолько, чтобы старые аккорды
     // наслаивались на новые: 0.8 вместо 1.2 и autoFadePedalVoice() дают
     // более короткий, «рояльный» хвост.
     const pedalHold = P.sustain ? 0.8 : 0;
     // Аккорд — подложка: мягче и тише нот, чтобы мелодия орбит читалась.
-    [0, h.third == null ? 4 : h.third, h.fifth || 7].forEach((iv, i) =>
-      bell(chordRoot + iv, (i === 0 ? 1 : 0.82) * v, (i - 1) * 0.32,
-        when == null ? null : when, 'chord', pedalHold));
+    // Расположение голосов — часть характера, но pitch class те же три.
+    stationPadVoices(h, T, offset, station).forEach(([midi, gain, pan]) =>
+      bell(midi, gain * v, pan, when == null ? null : when, 'chord', pedalHold));
   }
 }
 // Единое событие аккорда: шары, напряжение, состояние визуализации.
