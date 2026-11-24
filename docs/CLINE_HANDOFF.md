@@ -241,8 +241,9 @@ tools/combolist.py    генератор js/data.js и проверка --check
 tools/research.py     разбор выгрузки оценок: --md, --csv, --min-n, --self-test
 tools/_smoke_build.ps1 smoke-тест: игра + en/smoke.html + ru/smoke.html
 docs/ARCHITECTURE.md  карта модулей и потоков данных
-docs/screenshot.png   скриншот для README и og:image (русский интерфейс)
-docs/screenshot-en.png скриншот английского интерфейса: `en/index.html`
+docs/screenshot.png   скриншот для README и Open Graph русских страниц
+docs/screenshot-en.png английский скриншот: `en/index.html`, его og:image,
+                       twitter:image и JSON-LD
 sitemap.xml           карта сайта: главная + en/ (xhtml:link) + ru/
 robots.txt            правила для пути HARMONIA
 .nojekyll             отключает Jekyll на GitHub Pages

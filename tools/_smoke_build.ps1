@@ -2160,7 +2160,13 @@ $enPost = @'
     if (meta('meta[property="og:url"]') !== BASE + 'en/') throw new Error('og:url is wrong');
     if (meta('meta[property="og:type"]') !== 'website') throw new Error('og:type is wrong');
     var img = meta('meta[property="og:image"]');
-    if (!img || img.indexOf('/docs/screenshot.png') === -1) throw new Error('og:image is missing');
+    if (!img || img.indexOf('/docs/screenshot-en.png') === -1) {
+      throw new Error('og:image must use the English screenshot');
+    }
+    var twImg = meta('meta[name="twitter:image"]');
+    if (!twImg || twImg.indexOf('/docs/screenshot-en.png') === -1) {
+      throw new Error('twitter:image must use the English screenshot');
+    }
     if (!meta('meta[property="og:image:alt"]')) throw new Error('og:image:alt is missing');
     if ((meta('meta[name="twitter:card"]') || '') !== 'summary_large_image') {
       throw new Error('twitter card is missing');
@@ -2179,6 +2185,9 @@ $enPost = @'
     if (!app || app.name !== 'HARMONIA') throw new Error('WebApplication node is missing');
     if (app.inLanguage !== 'en') throw new Error('WebApplication is not in English');
     if (app.url !== BASE + 'en/') throw new Error('WebApplication url is wrong');
+    if (app.screenshot !== BASE + 'docs/screenshot-en.png') {
+      throw new Error('WebApplication screenshot must be the English one');
+    }
     if (app.offers && app.offers.price !== '0') throw new Error('the offer is not free');
     var faq = findType('FAQPage');
     if (!faq || !faq.mainEntity || faq.mainEntity.length < 5) {
