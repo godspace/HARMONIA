@@ -354,6 +354,15 @@ function ringEvent(b, now) {
   ripples.push({ x: b.x, y: b.y, color: b.color, start: now, big: true });
   updateHUD();
 }
+// Возврат в тонику — визуальное событие сцены, а не начисление очков. Вынесено
+// отдельно, чтобы видео могло повторить ту же золотую вспышку в replay, где
+// chordEvent() намеренно не трогает счёт и игровые подсказки.
+function flashTonicReturn(now) {
+  const at = now == null ? performance.now() : now;
+  flashes.push({ r: CFG.rMax * 1.15, color: '#ffd166', start: at });
+  ripples.push({ x: RING_CX, y: RING_CY, color: '#ffd166', start: at, big: true });
+  rhythmSprite.radius = 56;
+}
 // Единственная точка записи счёта. Space-кнопка обновляется сразу: иначе
 // очки формы, начисленные вне chordEvent, не зажгли бы готовность к переходу.
 function addScore(n) {
@@ -545,9 +554,7 @@ function chordEvent(h, vel, source) {
         // Звуком событие не выпячиваем: тоника уже прозвучала своим аккордом.
         // Кольцо и вспышка остаются на сцене, а числовой «домой +N» теперь
         // живёт в постоянном индикаторе HUD, а не дублируется в центре.
-        flashes.push({ r: CFG.rMax * 1.15, color: '#ffd166', start: now });
-        ripples.push({ x: RING_CX, y: RING_CY, color: '#ffd166', start: now, big: true });
-        rhythmSprite.radius = 56;
+        flashTonicReturn(now);
         flashTonicCard();
         flashTonicPanel();
         toast('Возврат в тонику · +' + bonus +

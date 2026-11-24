@@ -260,4 +260,7 @@
   font-size: 13px; line-height: 1.45; color: #c2cae0;
   font-variant-numeric: tabular-nums;
 }
+.ve-note {
+  font-size: 11px; line-height: 1.4; color: #8b95b3;
+}
 .ve-card .big-btn { padding: 9px 20px; font-size: 13px; }

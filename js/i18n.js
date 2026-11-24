@@ -221,6 +221,8 @@ var I18N = (function () {
     '🎬 Видео': '🎬 Video',
     '🎧 Аудио': '🎧 Audio',
     'Рендер видео…': 'Rendering video…',
+    'Не переключайте вкладку: браузер может замедлить кадры.':
+      'Keep this tab visible: the browser may slow the frames down.',
     'Запись аудио…': 'Recording audio…',
     'Отменить': 'Cancel',
     'Видео сохранено': 'Video saved',

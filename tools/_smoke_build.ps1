@@ -1183,10 +1183,20 @@ $post = @'
       }
       if (!(H.videoDuration(rec) >= 2400)) throw new Error('video duration is too short');
       var spec = H.videoSize();
-      if (!spec || spec.width !== 1080 || spec.height !== 1920) {
-        throw new Error('video frame is not 1080x1920');
+      if (!spec || spec.width !== 720 || spec.height !== 1280) {
+        throw new Error('video frame is not 720x1280');
       }
       if (spec.width * 16 !== spec.height * 9) throw new Error('video frame is not 9:16');
+      // Статичная рамка тоже должна строиться в 720×1280, а не остаться 1080p:
+      // вся разметка внутри уменьшается transform'ом.
+      var baseProbe = videoBuildBase({
+        rec: rec, duration: H.videoDuration(rec),
+        timeline: timeline,
+        firstEventAt: timeline.length ? Math.max(0, Number(timeline[0].t) || 0) : 0
+      });
+      if (!baseProbe || baseProbe.width !== 720 || baseProbe.height !== 1280) {
+        throw new Error('the static video frame is not 720x1280');
+      }
       // Ролик начинается за секунду до первого события и заканчивается через
       // секунду после последнего: заминки записи не растягивают видео.
       var trimmed = H.videoDuration({
@@ -1268,6 +1278,34 @@ $post = @'
       }
       if (videoMediaElapsed({ mediaT0: null, startedAt: 0 }) !== 0) {
         throw new Error('the media clock must start at zero');
+      }
+      // Тонический возврат в ролике повторяет золотую вспышку игры, хотя
+      // chordEvent() в replay не начисляет очки и не включает игровые эффекты.
+      var tonicHits = 0;
+      var savedFlash = flashTonicReturn;
+      var savedPlayVisual = playRecordedVisual;
+      try {
+        playRecordedVisual = function () {};
+        flashTonicReturn = function () { tonicHits += 1; };
+        var harmonic = {
+          timeline: [
+            { type: 'chord', t: 0, h: { kind: 'major', tonic: false } },
+            { type: 'chord', t: 200, h: { kind: 'major', tonic: true } },
+            { type: 'chord', t: 400, h: { kind: 'major', tonic: true } }
+          ],
+          firstEventAt: 0, visualIdx: 0, tonicSteps: 0, rec: {}
+        };
+        videoStepVisual(harmonic, 1000);
+        if (tonicHits !== 0) throw new Error('tonic flashed without a return');
+        videoStepVisual(harmonic, 1200);
+        if (tonicHits !== 1) {
+          throw new Error('the tonic return flash did not follow the media clock');
+        }
+        videoStepVisual(harmonic, 1400);
+        if (tonicHits !== 1) throw new Error('the tonic flash repeated without tension');
+      } finally {
+        flashTonicReturn = savedFlash;
+        playRecordedVisual = savedPlayVisual;
       }
     } finally {
       playRecordedVisual = savedPlay;

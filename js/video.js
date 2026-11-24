@@ -3,13 +3,22 @@
    Звук и картинка идут по одному таймлайну recordingTimeline(): удары, ноты и
    аккорды берут свои записанные миллисекунды, поэтому грув не перезапускается
    с начала такта и не накапливает сдвиг. Внутри рендера оба потока стартуют от
-   одного якоря AudioContext, поэтому задержка MediaRecorder.start() не разъезжает
-   картинку со звуком. Все модули делят глобальную область —
-   имена функций/констант уникальны. */
+   одного якоря AudioContext, а кадры собирает отдельный таймер видео, а не rAF:
+   задержка MediaRecorder.start() не разъезжает картинку со звуком, а остановка
+   или исключение в цикле сцены не оставляют ролик с замершим кадром.
+   Все модули делят глобальную область — имена функций/констант уникальны. */
 
+// Разметка ролика нарисована в координатах 1080×1920: так все отступы и шрифты
+// заданы в одном масштабе. На выходе кадр уменьшается до 720×1280 — это 9:16,
+// но на 44% меньше пикселей, дешевле композитинг и кодирование WebM.
 const VIDEO_W = 1080;
 const VIDEO_H = 1920;
+const VIDEO_OUT_W = 720;
+const VIDEO_OUT_H = 1280;
+const VIDEO_SCALE = VIDEO_OUT_W / VIDEO_W;
 const VIDEO_FPS = 30;
+const VIDEO_FRAME_MS = 1000 / VIDEO_FPS;
+const VIDEO_BITRATE = 3000000;
 // Запись станции начинается с момента входа в комбо, но первые ноты могут
 // прозвучать через несколько секунд. Ролик начинается не с нуля записи, а с
 // первого события и оставляет ровно секунду тишины перед ним — так зритель
@@ -56,7 +65,7 @@ function videoFileName(rec) {
   return recordingFileName(rec, 'webm');
 }
 function videoSize() {
-  return { width: VIDEO_W, height: VIDEO_H, ratio: VIDEO_W / VIDEO_H };
+  return { width: VIDEO_OUT_W, height: VIDEO_OUT_H, ratio: VIDEO_OUT_W / VIDEO_OUT_H };
 }
 // Единые часы ролика. Звук планируется по AudioContext, поэтому и картинка,
 // подписи, прогресс и события визуализации считаются от того же якоря. Иначе
@@ -182,8 +191,9 @@ function updateVideoOverlay(v) {
   text.textContent = '🎬 Видео · ' + recDurationLabel(elapsed) + ' / ' +
     recDurationLabel(v.duration);
 }
-// Захват видит только канвасы. Ролик 1080×1920 собирает их в вертикальную
-// рамку: бренд сверху, сцена в центре, метаданные и CTA снизу.
+// Захват видит только канвасы. Ролик 720×1280 собирает их в вертикальную
+// рамку: бренд сверху, сцена в центре, метаданные и CTA снизу. Разметка внутри
+// нарисована в координатах 1080×1920 и уменьшается общим transform'ом.
 // Подписи на canvas не проходят через DOM. Заголовок — тоническое трезвучие в
 // текущей нотации; служебные части подписи переводит I18N.text(), а в русском
 // пакет выключен, поэтому текст остаётся исходным.
@@ -411,10 +421,12 @@ function videoBuildBase(v) {
   const rec = v.rec;
   const copy = videoCopy();
   const canvas = document.createElement('canvas');
-  canvas.width = VIDEO_W;
-  canvas.height = VIDEO_H;
+  canvas.width = VIDEO_OUT_W;
+  canvas.height = VIDEO_OUT_H;
   const ctx = canvas.getContext('2d');
   if (!ctx) return null;
+  // Все координаты ниже — в логической сетке 1080×1920; холст уже 720×1280.
+  ctx.setTransform(VIDEO_SCALE, 0, 0, VIDEO_SCALE, 0, 0);
   videoBackdrop(ctx);
   // Шапка: логотип-орбита и градиентный словесный знак, как в топбаре.
   videoDrawLogo(ctx, 90, 112, 40);
@@ -530,10 +542,11 @@ function videoBuildEndCard(v) {
   const rec = v.rec || {};
   const copy = v.copy || videoCopy();
   const canvas = document.createElement('canvas');
-  canvas.width = VIDEO_W;
-  canvas.height = VIDEO_H;
+  canvas.width = VIDEO_OUT_W;
+  canvas.height = VIDEO_OUT_H;
   const ctx = canvas.getContext('2d');
   if (!ctx) return null;
+  ctx.setTransform(VIDEO_SCALE, 0, 0, VIDEO_SCALE, 0, 0);
   videoBackdrop(ctx);
   ctx.fillStyle = 'rgba(6,8,14,0.82)';
   ctx.fillRect(0, 0, VIDEO_W, VIDEO_H);
@@ -689,9 +702,10 @@ function videoPaintProgress(ctx, v, elapsed) {
   ctx.fillText(recDurationLabel(Math.min(elapsed, duration)), VIDEO_BAR.x, VIDEO_BAR.y + 40);
   ctx.restore();
 }
-// Визуальные события не ставятся отдельными setTimeout: их включает тот же
-// кадр, который уже рисуется по медиа-часам. Один просроченный кадр может
-// задержать вспышку шара, но не сдвинет весь дальнейший таймлайн.
+// Визуальные события не ставятся отдельными setTimeout: их включает и цикл
+// сцены (до отрисовки шаров), и кадровый таймер видео. visualIdx гарантирует,
+// что событие сработает ровно один раз. Так вспышка попадает в тот же кадр, а
+// не после копирования уже готового sprite-слоя.
 function videoStepVisual(v, elapsed) {
   if (!v || !v.timeline || !v.timeline.length) return;
   // До первого события contentMs отрицательный: сравниваем с абсолютным t
@@ -701,7 +715,64 @@ function videoStepVisual(v, elapsed) {
     const ev = v.timeline[v.visualIdx];
     if ((Number(ev && ev.t) || 0) > at) break;
     v.visualIdx += 1;
+    if (ev.type === 'chord') videoMarkTonic(v, ev);
     if (ev.type === 'chord' || ev.type === 'note') playRecordedVisual(ev, v.rec);
+  }
+}
+// В replay chordEvent() намеренно не начисляет очки и не включает игровые
+// вспышки. Но возврат в тонику — это сцена, а не счёт: повторяем ту же золотую
+// вспышку, что и в игре, чтобы ролик не был бледнее оригинала.
+function videoMarkTonic(v, ev) {
+  const h = ev && ev.h;
+  if (!v || !h) return;
+  if (h.tonic) {
+    if ((v.tonicSteps || 0) > 0) {
+      if (typeof flashTonicReturn === 'function') flashTonicReturn();
+    } else if (typeof rhythmSprite !== 'undefined') {
+      rhythmSprite.radius = Math.max(rhythmSprite.radius, 44);
+    }
+    v.tonicSteps = 0;
+    return;
+  }
+  // Как и в chordEvent(): хроматика не копит напряжение, остальные аккорды — да.
+  if (h.kind !== 'chroma') {
+    v.tonicSteps = Math.min(6, (v.tonicSteps || 0) + 1);
+  }
+}
+function videoVisualError(v, e) {
+  if (!v || v.visualError) return;
+  v.visualError = true;
+  if (typeof console !== 'undefined') console.warn('video: visual event failed', e);
+}
+// Синхронизация эффектов сцены: вызывается из render() до отрисовки шаров,
+// поэтому рябь и вспышка видны уже в текущем кадре. Ошибка одного события не
+// должна останавливать весь цикл сцены и запись.
+function videoSyncVisual() {
+  const v = videoJob;
+  if (!v || v.canceled) return;
+  try { videoStepVisual(v, videoMediaElapsed(v)); }
+  catch (e) { videoVisualError(v, e); }
+}
+// Кадр ролика живёт на своём таймере, а не в requestAnimationFrame. Звук уже
+// идёт по AudioContext, поэтому даже если rAF притормозил или упал, подписи,
+// прогресс и финальная карточка продолжают обновляться. Повторные ошибки
+// композитинга завершают экспорт, а не оставляют битый файл.
+function videoFrameStep(v) {
+  if (!v || videoJob !== v || v.canceled || v.finished) return;
+  try {
+    paintVideoFrame();
+    v.frameErrors = 0;
+    v.frames = (v.frames || 0) + 1;
+  } catch (e) {
+    v.frameErrors = (v.frameErrors || 0) + 1;
+    if (v.frameErrors === 1 && typeof console !== 'undefined') {
+      console.warn('video: frame failed', e);
+    }
+    if (v.frameErrors >= 3) {
+      v.canceled = true;
+      toast('Видео не удалось сохранить');
+      stopVideoRecorder(v, false);
+    }
   }
 }
 function paintVideoFrame() {
@@ -710,8 +781,16 @@ function paintVideoFrame() {
   if (!v.base && !videoBuildBase(v)) return;
   const ctx = v.ctx;
   const elapsed = videoMediaElapsed(v);
-  videoStepVisual(v, elapsed);
+  // Если render() уже включил событие, visualIdx не даст повторить его здесь.
+  try { videoStepVisual(v, elapsed); }
+  catch (e) { videoVisualError(v, e); }
+  // Статичная рамка уже в выходном разрешении 720×1280 — кладём её 1:1.
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = 'source-over';
   ctx.drawImage(v.base, 0, 0);
+  // Динамика рисуется в логических координатах 1080×1920.
+  ctx.setTransform(VIDEO_SCALE, 0, 0, VIDEO_SCALE, 0, 0);
   videoPaintStage(ctx);
   // До первого события подпись остаётся «—»: секунда входа не показывает
   // аккорд раньше, чем он прозвучит.
@@ -723,6 +802,7 @@ function paintVideoFrame() {
     if (alpha > 0) {
       ctx.save();
       ctx.globalAlpha = alpha;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.drawImage(v.endCanvas, 0, 0);
       ctx.restore();
     }
@@ -732,10 +812,9 @@ function clearVideoTimers(v) {
   if (!v) return;
   if (v.scheduler) { clearInterval(v.scheduler); v.scheduler = null; }
   if (v.progress) { clearInterval(v.progress); v.progress = null; }
+  if (v.frameTimer) { clearInterval(v.frameTimer); v.frameTimer = null; }
   if (v.endTimer) { clearTimeout(v.endTimer); v.endTimer = null; }
   if (v.stopFallback) { clearTimeout(v.stopFallback); v.stopFallback = null; }
-  v.timers.forEach(id => clearTimeout(id));
-  v.timers = [];
 }
 function downloadVideoBlob(v) {
   try {
@@ -867,9 +946,10 @@ async function startVideoExport(target) {
       token, rec, timeline, firstEventAt, lastEventAt, contentEndAt,
       endCardAt: VIDEO_LEAD_MS + contentEndAt + VIDEO_TAIL_MS,
       duration: videoDuration(rec),
-      chunks: [], timers: [], audioIdx: 0, visualIdx: 0,
+      chunks: [], audioIdx: 0, visualIdx: 0, tonicSteps: 0,
       labelIdx: 0, labelText: '—', labelColor: '#7e88a6',
       mediaT0: null, startedAt: 0,
+      frameErrors: 0, visualError: false, frames: 0,
       canceled: false, preparing: true, save: false
     };
     if (!v.timeline.length) return '';
@@ -889,8 +969,8 @@ async function startVideoExport(target) {
     v.preparing = false;
 
     const canvas = document.createElement('canvas');
-    canvas.width = VIDEO_W;
-    canvas.height = VIDEO_H;
+    canvas.width = VIDEO_OUT_W;
+    canvas.height = VIDEO_OUT_H;
     v.canvas = canvas;
     v.ctx = canvas.getContext('2d');
     if (!v.ctx) throw new Error('canvas 2d is unavailable');
@@ -907,7 +987,7 @@ async function startVideoExport(target) {
     v.stream = stream;
 
     const mime = videoMimeType();
-    const options = { videoBitsPerSecond: 5000000, audioBitsPerSecond: 128000 };
+    const options = { videoBitsPerSecond: VIDEO_BITRATE, audioBitsPerSecond: 128000 };
     if (mime) options.mimeType = mime;
     const recorder = new MediaRecorder(stream, options);
     v.recorder = recorder;
@@ -923,13 +1003,14 @@ async function startVideoExport(target) {
       stopVideoRecorder(v, false);
     };
     recorder.start(250);
-    // Один якорь для звука и картинки. setTimeout больше не держит события:
-    // визуализацию включает paintVideoFrame() по этому же медиа-времени.
+    // Один якорь для звука и картинки. Кадры собирает отдельный таймер, а не
+    // rAF: подписи и прогресс не зависят от частоты цикла сцены.
     v.startedAt = performance.now();
     v.mediaT0 = audioCtx.currentTime;
     v.audioStart = v.mediaT0 + VIDEO_LEAD_MS / 1000;
     scheduleVideoAudio(v);
     v.scheduler = setInterval(() => scheduleVideoAudio(v), 40);
+    v.frameTimer = setInterval(() => videoFrameStep(v), VIDEO_FRAME_MS);
     v.progress = setInterval(() => {
       if (videoJob !== v) return;
       updateVideoOverlay(v);

@@ -45,7 +45,7 @@
 | `listen` | слух приложения | `Heard` (`notes`, `latched`, `sustain`, `recognize()`) |
 | `ui-hud` | отображение состояния | `updateHUD`, `updateHomeIndicator`, `renderPalette`, `renderHint`, `updateHeardChip`, `paintSoundChip` |
 | `recorder` | запись, автозапись станции, прослушивание, MIDI и общие имена файлов | `recordChord/Note`, `recordDrum/recordDrumAt`, `recordingTimeline`, `startRecording`, `stopRecording`, `autoRecordStart/Finalize/Status`, `setAutoRecord`, `playSelected`, `deleteSelectedRecording`, `recordingById`, `recordingTonic/Title/FileName`, `buildMidiFile`, `midiRecordingEvents`, `exportSelectedMidi` |
-| `video` | рендер записи в WebM | `startVideoExport(rec)`, `cancelVideoExport`, `videoExportStatus`, `videoSupported`, `videoFileName`, `videoDuration`, `videoSize`, `videoCaption`, `copyVideoCaption`, `videoLegacyWarning`, `videoMediaElapsed`, `videoStepVisual`, `paintVideoFrame` |
+| `video` | рендер записи в WebM | `startVideoExport(rec)`, `cancelVideoExport`, `videoExportStatus`, `videoSupported`, `videoFileName`, `videoDuration`, `videoSize`, `videoCaption`, `copyVideoCaption`, `videoLegacyWarning`, `videoMediaElapsed`, `videoStepVisual`, `videoMarkTonic`, `videoSyncVisual`, `videoFrameStep`, `paintVideoFrame` |
 | `audio-export` | сохранение записи в WAV | `startAudioExport(rec, {purpose, onDone})`, `cancelAudioExport`, `audioExportStatus` (`id`, `purpose`), `audioSupported`, `audioFileName`, `audioDuration`, `audioPcmToWav`, `#recAudio`/`#researchAskAudio`/`#audioExport` |
 | `suno` | мостик к Suno без API: английский промпт + WAV | `SUNO_CREATE_URL`, `sunoPrompt`, `sunoStart`, `sunoOpen`, `sunoCopyText`, `sunoPaint`, `sunoState`, кнопки `#recSuno`/`#researchAskSuno` |
 | `research` | оценки комбо и поведение (по умолчанию включены) | `Research` (`enable`, `disable`, `setAsk`, `status`, `exportData`, `download`, `gateKey`, `linkRecording`, `askRecording`, `exportAskVideo`, `exportAskAudio`, `exportAskSuno`, `holdAsk`, `onChord/Note`, `enterCombo/leaveCombo`), `CFG.research` |
@@ -645,8 +645,11 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
   проверяет smoke. Имена `.mid`, `.wav` и `.webm` строятся из одной базы
   `recordingFileName()` (тоническое трезвучие комбо).
 - **Видео.** `startVideoExport(rec)` в `js/video.js` собирает вертикальный
-  `video/webm` 1080×1920 (9:16) из `canvas.captureStream(30)` и
-  `audioCaptureStream()`. Без аргумента берётся выбранная запись панели; карточка
+  `video/webm` 720×1280 (9:16) из потока canvas и `audioCaptureStream()`. Вся
+  разметка нарисована в логической сетке 1080×1920 и уменьшается общим
+  `transform` до 720×1280: это на 44% меньше пикселей для композитинга и
+  кодирования, а шрифты и отступы остаются в одном масштабе. Без аргумента
+  берётся выбранная запись панели; карточка
   оценки передаёт запись по `recordingId` и не зависит от текущего выбора.
   Сцена 800×540 вписывается в брендированную рамку:
   сверху логотип-орбита и словесный знак, в центре карточка сцены, снизу
@@ -657,9 +660,15 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
   `recordingTimeline()`. Оба потока стартуют от одного якоря: `mediaT0`
   записывается сразу после `MediaRecorder.start()`, `videoMediaElapsed()`
   переводит `AudioContext.currentTime` в медиа-миллисекунды, а
-  `videoStepVisual()` включает вспышки нот из `paintVideoFrame()` — без
-  отдельных `setTimeout`. Поэтому задержка запуска рекордера и очередь
-  таймеров не сдвигают кадры относительно звука. Живой `Groove` выключен.
+  `videoStepVisual()` включает подписи и вспышки нот по этому времени. События
+  визуализации вызывает `render()` до отрисовки sprite-слоя, поэтому вспышка
+  попадает в тот же кадр; сам композит ролика собирает `videoFrameStep()` на
+  отдельном таймере 30 fps, а `captureStream(30)` снимает уже готовый 720p-холст.
+  Поэтому задержка запуска рекордера, очередь таймеров и даже остановка
+  `requestAnimationFrame` не оставляют ролик с замершим кадром при живом звуке.
+  Возврат в тонику в replay повторяет ту же золотую вспышку, что и игра:
+  `videoMarkTonic()` зовёт `flashTonicReturn()` из `js/game.js`, хотя
+  `chordEvent()` в режиме replay не начисляет очки. Живой `Groove` выключен.
   Перед захватом рендер ждёт `VIDEO_FLUSH_MS` (220 мс), чтобы уже запланированные
   живым грувом удары успели прозвучать вне ролика. Пустые края записи
   обрезаются по первому и последнему событию: `VIDEO_LEAD_MS` (1 с) оставляет
@@ -929,7 +938,8 @@ Translate через `translate.js` (тот же приём, что в сосе�
   общую базу имён `.mid`/`.wav`/`.webm`, `record-drums-video` — отдельный `drums`,
   `recordingTimeline()`, отсутствие ударных в MIDI, `audioDuration()`,
   `audioPcmToWav()` (RIFF/WAVE, 16-bit, stereo), предупреждение старого формата,
-  кадр 1080×1920 (9:16), обрезку хвостовой тишины, `videoCaption()` и наличие
+  кадр 720×1280 (9:16), тоническую вспышку в replay, обрезку хвостовой тишины,
+  `videoCaption()` и наличие
   `#recAudio` / `#researchAskAudio` / `#audioExport` / `#recVideo` / `#recCaption`
   / `#videoExport`. Шаг `suno-handoff` проверяет `sunoPrompt()` на английский
   текст без `undefined` (тональность, BPM, размер, тембр, барабаны), безопасные

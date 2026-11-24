@@ -43,6 +43,11 @@ function render() {
     if (!want && b.hold) holdStop(b);
   });
 
+  // Видео: события визуализации включаются по медиа-часам до отрисовки слоя,
+  // поэтому вспышка и рябь попадают в тот же кадр. Готовый композит ролика
+  // собирает отдельный таймер в video.js, а не этот цикл.
+  if (state.videoExport && typeof videoSyncVisual === 'function') videoSyncVisual();
+
   if (live && P.fade > 0) {
     penCtx.save();
     penCtx.globalCompositeOperation = 'destination-out';
@@ -139,10 +144,8 @@ function render() {
     m.ring(spriteCtx, f, 1 - age);
   }
 
-  // Видео собирает оба канваса в один кадр: так в ролик попадают и перо, и
-  // sprite-слой. Рисуем после сцены, чтобы кадр был завершённым.
-  if (state.videoExport && typeof paintVideoFrame === 'function') paintVideoFrame();
-
+  // Кадр ролика собирает video.js на своём таймере: если этот цикл остановится
+  // или бросит исключение, звук и медиа-время видео продолжат идти.
   requestAnimationFrame(render);
 }
 
