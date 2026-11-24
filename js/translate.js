@@ -242,7 +242,8 @@ var Translate = (function () {
   // Ячейки полосы комбо — те же ноты, что и на колесе: их подписи тоже ставит игра.
   const SHIELD = [
     '#noteRow', '#chordPad', '#fifthsWheel', '#homeDeg', '#homeNote', '#comboKey',
-    '#comboStrip .cs-cells', '#startOverlay .kb-key', '#spaceNext .sn-key', '.hints kbd'
+    '#stationPlot', '#comboStrip .cs-cells', '#startOverlay .kb-key',
+    '#spaceNext .sn-key', '.hints kbd'
   ];
 
   function shieldSymbols() {

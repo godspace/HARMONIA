@@ -150,18 +150,25 @@ const Midi = {
     if (!playable()) return;
     const v = clamp(vel == null ? 0.8 : vel, 0.05, 1);
     const pc = ((note % 12) + 12) % 12;
+    // Панорама по высоте одна для звука, записи и исследования.
+    const pan = clamp((note - 60) / 48, -0.8, 0.8);
     // Контроллер без динамиков озвучиваем сами; stage piano звучит сам.
     // Автотрезвучие добавляем только к своему звуку: если играет пианино,
     // гармония уже в руках пианиста.
     if (state.echo) {
       initAudio();
       echoNote(note, v, Heard.sustain ? CFG.echoHold : 0);
-      scheduleNoteChord(note, v, clamp((note - 60) / 48, -0.8, 0.8));
+      scheduleNoteChord(note, v, pan);
     }
     Heard.on(note, v);
     // Запись хранит реальную высоту MIDI, а не октаву ближайшего шара.
     if (!state.replay && typeof recordNote === 'function') {
-      recordNote(note, v, clamp((note - 60) / 48, -0.8, 0.8), false);
+      recordNote(note, v, pan, false);
+    }
+    // Исследование видит все MIDI-ноты, включая хроматику вне лада: шара у
+    // такой ноты нет (triggerBall не зовётся), но игрок её слышал.
+    if (!state.replay && typeof Research !== 'undefined') {
+      Research.onNote(note, v, pan, false);
     }
     // Все MIDI-ноты, включая хроматику вне лада, попадают в мелодическую
     // статистику пьесы. Шар при withAudio=false повторно её не считает.

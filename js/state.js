@@ -51,6 +51,13 @@ const state = {
     anchor: 0, window: [], pendingAnchor: null, switchTimer: null,
     chordAnchorAt: 0, lastNoteAt: 0, pendingRefresh: false
   },
+  // stationPlot — реактивный сюжет пары: фаза выбирается сыгранными аккордами,
+  // а не часами. phase — текущая, lastPhase — с которой пришли (для HUD и
+  // исследования), history — последние фазы. Сброс — stationPlotReset().
+  stationPlot: {
+    archetype: 'flat', phase: 'home', lastPhase: 'home',
+    chords: 0, homeStreak: 0, returns: 0, history: []
+  },
   // transport — часы необязательной формы. В свободном джеме running = false,
   // поэтому render.js даже не двигает музыкальное время.
   transport: {

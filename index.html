@@ -159,6 +159,9 @@
                стоит прямо под числом. Нотация (до-ре-ми / C-D-E) следует за
                языком интерфейса, поэтому строка не переводится. -->
           <div class="score-key notranslate" id="comboKey" translate="no">До мажор</div>
+          <!-- Сюжет пары: какая фаза сейчас звучит и какой мотив её ведёт.
+               Строку ставит updateHUD(), при P.stationPlot = 'off' она скрыта. -->
+          <div class="score-plot notranslate" id="stationPlot" translate="no">ровно · дом</div>
         </div>
 
         <!-- Пьеса — необязательный слой. В свободном джеме блок скрыт целиком. -->
@@ -245,6 +248,31 @@
         </div>
       </div>
 
+      <!-- Карточка оценки комбо. Открывается только Space-переходом и только
+           когда исследование включено. J I O P [ — оценки 5–1, Space/Esc —
+           пропуск, поле комментария забирает те же клавиши как буквы. -->
+      <div id="researchAsk" role="dialog" aria-modal="true" aria-labelledby="researchAskTitle" aria-hidden="true">
+        <div class="fr-card ra-card" id="researchAskCard" tabindex="-1">
+          <div class="fr-kicker" id="researchAskKicker">Комбо · оценка</div>
+          <h2 id="researchAskTitle">Как звучало комбо?</h2>
+          <div class="ra-meta" id="researchAskMeta"></div>
+          <div class="ra-rate" role="group" aria-label="Оценка комбо от 1 до 5">
+            <button type="button" class="ra-btn" data-score="5" aria-label="Оценка 5 из 5"><b>5</b><span class="ra-key">J</span></button>
+            <button type="button" class="ra-btn" data-score="4" aria-label="Оценка 4 из 5"><b>4</b><span class="ra-key">I</span></button>
+            <button type="button" class="ra-btn" data-score="3" aria-label="Оценка 3 из 5"><b>3</b><span class="ra-key">O</span></button>
+            <button type="button" class="ra-btn" data-score="2" aria-label="Оценка 2 из 5"><b>2</b><span class="ra-key">P</span></button>
+            <button type="button" class="ra-btn" data-score="1" aria-label="Оценка 1 из 5"><b>1</b><span class="ra-key">[</span></button>
+          </div>
+          <label class="ra-comment-label" for="researchAskComment">Комментарий (необязательно)</label>
+          <input id="researchAskComment" class="ra-comment" type="text" maxlength="160" autocomplete="off"
+                 placeholder="Что понравилось или что не так?" aria-label="Комментарий к комбо">
+          <div class="ra-hint">J I O P [ — оценка · Space / Esc — пропустить</div>
+          <div class="fr-actions">
+            <button class="big-btn alt" id="researchAskSkip" type="button">Пропустить</button>
+          </div>
+        </div>
+      </div>
+
       <div id="modal" class="scrim">
         <h1 id="modalTitle">Пауза</h1>
         <p id="modalText"></p>
@@ -318,13 +346,35 @@
         </select>
       </div>
       <button class="tg" id="recLoop" aria-pressed="false" title="Повторять выбранную запись по кругу">Повтор: выкл</button>
+      <button class="tg" id="recAuto" aria-pressed="true" title="Автоматически записывать каждую станцию для прослушивания и MIDI">Автозапись станции: вкл</button>
       <div class="prow rec-pick">
         <label for="recList">Запись</label>
         <select id="recList" aria-label="Сохранённые записи"><option value="">— нет записей —</option></select>
       </div>
-      <div class="pbtns"><button class="pbtn" id="recDel" title="Удалить выбранную запись" disabled>🗑 Удалить</button></div>
+      <div class="pbtns">
+        <button class="pbtn" id="recDel" title="Удалить выбранную запись" disabled>🗑 Удалить</button>
+        <button class="pbtn" id="recMidi" title="Скачать выбранную запись как MIDI-файл" disabled>⬇ MIDI</button>
+      </div>
       <div class="rec-status" id="recStatus" aria-live="polite">Нажмите «Запись», чтобы сохранить мелодию.</div>
     </div>
+
+    <!-- Исследование — не игровой слой, а необязательный сбор оценок комбо.
+         Выключено по умолчанию; включает ?research=1, консоль или эта кнопка.
+         Тело секции скрыто, пока сбор не включён: обычный игрок видит только
+         одну строку «Исследование: выкл» и не читает служебные счётчики. -->
+    <details class="pg" id="researchPg">
+      <summary>Исследование · оценки комбо</summary>
+      <button class="tg" id="researchToggle" aria-pressed="false" title="Собирать оценки комбо в этом браузере. Включается также адресом ?research=1">Исследование: выкл</button>
+      <div id="researchBody" hidden>
+        <button class="tg" id="researchAskToggle" aria-pressed="true" title="Спрашивать оценку после Space-перехода в новое комбо">Спрашивать оценку: вкл</button>
+        <div class="rec-status" id="researchStatus" aria-live="polite">Посещений: 0 · оценок: 0 · событий: 0</div>
+        <div class="pbtns">
+          <button class="pbtn" id="researchExport" title="Скачать оценки и историю игры в JSON" disabled>Скачать JSON</button>
+          <button class="pbtn" id="researchClear" title="Удалить все сохранённые оценки" disabled>Очистить</button>
+        </div>
+        <div class="wheel-hint" id="researchHint">Данные остаются в этом браузере — уходят только файлом.</div>
+      </div>
+    </details>
 
     <div class="pg">
       <h3>Визуализация</h3>
@@ -532,6 +582,7 @@
   <script src="js/listen.js"></script>
   <script src="js/ui-hud.js"></script>
   <script src="js/recorder.js"></script>
+  <script src="js/research.js"></script>
   <script src="js/ui-panel.js"></script>
   <script src="js/ui-drawers.js"></script>
   <script src="js/ui-compose.js"></script>

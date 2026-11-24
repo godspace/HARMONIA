@@ -80,6 +80,35 @@ var I18N = (function () {
     'Счёт комбо': 'Combo score',
     'Ход пьесы': 'Piece progress',
     'Возврат в тонику': 'Return to the tonic',
+    // Сюжет пары (js/station.js): короткие подписи HUD. Мотив — числа ступеней,
+    // он не переводится; разделитель « · » пакет режет сам.
+    'ровно': 'flat',
+    'арка': 'arch',
+    'дрейф': 'drift',
+    'педаль': 'pedal',
+    'спуск': 'descent',
+    'зов': 'call',
+    'вдох': 'breath',
+    // Характеры станций: те же двенадцать строк, что и STATION_STYLES. Они
+    // попадают в имена авто-записей («Станция 3 · войлок»), поэтому переводятся
+    // по частям, а не отдельным шаблоном на каждую комбинацию.
+    'эталон': 'reference',
+    'широко': 'wide',
+    'мерцание': 'shimmer',
+    'войлок': 'felt',
+    'дерево': 'wood',
+    'глубина': 'depth',
+    'лёд': 'ice',
+    'пульс': 'pulse',
+    'бронза': 'bronze',
+    'воздух': 'air',
+    'бархат': 'velvet',
+    'хрусталь': 'crystal',
+    'дом': 'home',
+    'уход': 'departure',
+    'поворот': 'turn',
+    'тень': 'shadow',
+    'возврат': 'return',
     'Сколько раз возвращались в тонику': 'How many times you returned to the tonic',
     'Индикатор возврата в тонику': 'Return-to-the-tonic indicator',
     'Тоника': 'Tonic',
@@ -159,6 +188,14 @@ var I18N = (function () {
     'Повтор: вкл': 'Loop: on',
     'Повтор: выкл': 'Loop: off',
     'Повторять выбранную запись по кругу': 'Play the selected recording in a loop',
+    'Автозапись станции: вкл': 'Station auto-record: on',
+    'Автозапись станции: выкл': 'Station auto-record: off',
+    'Автоматически записывать каждую станцию для прослушивания и MIDI':
+      'Automatically record each station for playback and MIDI',
+    'Скачать выбранную запись как MIDI-файл':
+      'Download the selected recording as a MIDI file',
+    'MIDI сохранён': 'MIDI saved',
+    'MIDI не удалось сохранить': 'Could not save MIDI',
     'Запись': 'Recording',
     'Сохранённые записи': 'Saved recordings',
     '— нет записей —': '— no recordings —',
@@ -190,6 +227,42 @@ var I18N = (function () {
     'нот': 'notes',
     'диапазон': 'range',
     'разных звуков': 'distinct pitches',
+
+    // ===== Исследование · оценки комбо =====
+    // Секция панели и карточка оценки. Тексты видны и в английском интерфейсе:
+    // шаг en-labels читает разметку даже у скрытых элементов, поэтому забытая
+    // строка здесь сразу падает.
+    'Исследование · оценки комбо': 'Research · combo ratings',
+    'Исследование: выкл': 'Research: off',
+    'Исследование: вкл': 'Research: on',
+    'Собирать оценки комбо в этом браузере. Включается также адресом ?research=1':
+      'Collect combo ratings in this browser. It also turns on with ?research=1',
+    'Спрашивать оценку: вкл': 'Ask for a rating: on',
+    'Спрашивать оценку: выкл': 'Ask for a rating: off',
+    'Спрашивать оценку после Space-перехода в новое комбо':
+      'Ask for a rating after a Space transition to a new combo',
+    'Скачать JSON': 'Download JSON',
+    'Скачать оценки и историю игры в JSON': 'Download ratings and play history as JSON',
+    'Очистить': 'Clear',
+    'Ещё раз — очистить': 'Click again to clear',
+    'Удалить все сохранённые оценки': 'Delete all saved ratings',
+    'Данные остаются в этом браузере — уходят только файлом.':
+      'The data stays in this browser — it leaves only as a file.',
+    'Комбо · оценка': 'Combo · rating',
+    'Как звучало комбо?': 'How did the combo sound?',
+    'Оценка комбо от 1 до 5': 'Combo rating from 1 to 5',
+    'Комментарий (необязательно)': 'Comment (optional)',
+    'Что понравилось или что не так?': 'What felt right or what felt wrong?',
+    'Комментарий к комбо': 'Comment on the combo',
+    'J I O P [ — оценка · Space / Esc — пропустить': 'J I O P [ — rate · Space / Esc — skip',
+    'Пропустить': 'Skip',
+    'Оценка сохранена': 'Rating saved',
+    'Оценка пропущена': 'Rating skipped',
+    'Данные исследования очищены': 'Research data cleared',
+    'Файл исследования сохранён': 'Research file saved',
+    'Хранилище исследования заполнено — старые данные удалены':
+      'Research storage is full — the oldest data was removed',
+
     // ===== Визуализация =====
     'Визуализация': 'Visualisation',
     'Выбор визуализации сцены': 'Pick a scene visualisation',
@@ -462,6 +535,17 @@ var I18N = (function () {
     [/^возвратов: (\d+)$/, 'returns: $1'],
     [/^последний переход дал \+(\d+)$/, 'the last move gave +$1'],
 
+    // ===== Исследование: счётчики, метрики и карточка =====
+    [/^Посещений: ([0-9]+)$/, 'Visits: $1'],
+    [/^оценок: ([0-9]+)$/, 'ratings: $1'],
+    [/^событий: ([0-9]+)$/, 'events: $1'],
+    [/^пропусков: ([0-9]+)$/, 'skips: $1'],
+    [/^Оценка сохранена: ([0-9])[/]5$/, 'Rating saved: $1/5'],
+    [/^([0-9]+) с в комбо$/, '$1 s in the combo'],
+    [/^([0-9]+) нот$/, '$1 notes'],
+    [/^([0-9]+) очков$/, '$1 points'],
+    [/^Оценка ([0-9]) из 5$/, 'Rating $1 out of 5'],
+
     // ===== Комбо и круг тональностей =====
     [/^HARMONIA · КОМБО (\d+) · (.+)$/, 'HARMONIA · combo $1 · $2'],
     [/^КОМБО (\d+) · (.+)$/, 'Combo $1 · $2'],
@@ -505,6 +589,9 @@ var I18N = (function () {
     // этого слова: иначе шаблон съедал бы «Запись сохранена» целиком.
     [/^Запись (\d{2}\.\d{2}, \d{2}:\d{2})$/, 'Recording $1'],
     [/^▶ Запись (\d{2}\.\d{2}, \d{2}:\d{2})$/, '▶ Recording $1'],
+    // Авто-запись: «Станция 3 · войлок». Части переводятся отдельно, поэтому
+    // шаблон нужен только для номера; характер — в MAP.
+    [/^Станция (\d+)$/, 'Station $1'],
     [/^([\d.,]+) с$/, '$1 s'],
 
     // ===== Подписи правой руки и подсказки =====

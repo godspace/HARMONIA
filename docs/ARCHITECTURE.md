@@ -22,7 +22,7 @@
                                                 │
                  transport ── composition ── ui-compose
                      └── groove (необязательный слой: барабаны; composition о нём не знает)
-                        game ── listen ── ui-hud ── recorder ── ui-panel ── ui-drawers ── input
+                        game ── listen ── ui-hud ── recorder ── research ── ui-panel ── ui-drawers ── input
                           │        │          │
                         midi ──────┴── render ─┴── main
 ```
@@ -32,7 +32,7 @@
 | `util` | помощники без зависимостей | `$`, `cap`, `clamp`, `midiToFreq`, `notePc` |
 | `config` | параметры и константы | `DEFAULTS`, `P`, `CFG`, `PALETTES`, `NOTE_KEYS`, `NOTE_CAP` |
 | `data` | CSV и разбор | `CSV`, `COMBOS`, `ORDER` |
-| `station` | характер станции: подача гармонии по паре комбо | `STATION_STYLES`, `STATION_NEUTRAL`, `STATION_TOUCH`, `stationStyleAt/For/ById`, `stationRegister`, `stationPadVoices`, `stationBassOffset`, `stationShape`, `setStationStyle` |
+| `station` | характер станции: подача гармонии по паре комбо + реактивный сюжет + жест | `STATION_STYLES`, `STATION_NEUTRAL`, `STATION_TOUCH`, `STATION_GESTURES`, `STATION_PLOT_GESTURES`, `STATION_PLOT_PHASES`, `STATION_PLOT_ARCHETYPES`, `STATION_PLOT_BY_STYLE`, `stationStyleAt/For/ById`, `stationRegister`, `stationPadVoices`, `stationBassOffset`, `stationShape`, `stationGesture`, `stationGestureDelays`, `stationVoiceDelays`, `stationPlotPhase/ForChord/Archetype/Style/StyleForChord/WindowBias/Text/Advance/Reset`, `setStationStyle`, `setStationPlot`, `setStationGesture` |
 | `harmony` | аккорды комбо и весь лад | `HARMONY`, `PALETTE_SLOTS`, `INPUT`, `harmonicChords()`, `diatonicPalette()`, `handNoteBalls()`, `smartNoteWindow()`, `smartChordDegrees()`, `smartTargetDegree()`, `smartHarmonyForNote()`, `chordOnDegree()`, `classifyTriad()`, `describeTriad()`, `noteRole()` |
 | `state` | изменяемое состояние сессии | `state`, `state.adaptive`, `combo()`, `rootMidi()`, `playable()` |
 | `audio` | синтез и тракт | `initAudio`, `bell`, `noteChordPlan`, `noteChord`, `scheduleNoteChord`, `cancelPendingNoteChord`, `echoNote`, `holdStart/Stop`, `bass`, `drumHit`, `drumPlan`, `DRUM_TIMBRES` |
@@ -44,7 +44,8 @@
 | `game` | правила и счёт | `chordEvent`, `playChordAudio`, `playHarmonic`, `triggerBall`, `pressCode`, `setMode`, `advanceCombo`, `requestAdaptiveAnchor`, `setAdaptiveAnchor`, `resetAdaptive` |
 | `listen` | слух приложения | `Heard` (`notes`, `latched`, `sustain`, `recognize()`) |
 | `ui-hud` | отображение состояния | `updateHUD`, `updateHomeIndicator`, `renderPalette`, `renderHint`, `updateHeardChip`, `paintSoundChip` |
-| `recorder` | запись и прослушивание | `recordChord/Note`, `startRecording`, `stopRecording`, `playSelected`, `deleteSelectedRecording` |
+| `recorder` | запись, автозапись станции, прослушивание и MIDI | `recordChord/Note`, `startRecording`, `stopRecording`, `autoRecordStart/Finalize/Status`, `setAutoRecord`, `playSelected`, `deleteSelectedRecording`, `buildMidiFile`, `midiRecordingEvents`, `exportSelectedMidi` |
+| `research` | необязательные оценки комбо и поведение | `Research` (`enable`, `disable`, `setAsk`, `status`, `exportData`, `download`, `gateKey`, `onChord/Note`, `enterCombo/leaveCombo`), `CFG.research` |
 | `ui-panel` | настройки | `bindRange`, `bindSelect`, `bindToggle`, `syncAll`, `togglePedal` |
 | `ui-drawers` | выдвижные панели | `drawers`, `drawerOpen`, `drawerIntro`, `setDrawer`, `toggleDrawer`, `setDrawerIntro`, `initDrawers` |
 | `ui-compose` | HUD/панель формы и результат | `buildFormHud`, `updateFormHUD`, `resetFormHud`, `setFormEnabled`, `showFormResult`, `initCompose` |
@@ -69,7 +70,8 @@ MIDI ──► Midi.noteOn/noteOff ──► echoNote (если звучит н�
 INPUT.chord(code) ──► pressCode ──► chordDown ──► playHarmonic ──► audio + scene + HUD
 INPUT.noteIndex(code) ──► pressCode ──► handNoteBalls() ──► triggerBall ──► bell('note') + scheduleNoteChord + энергия
         │
-        ├── recordChord / recordNote (если идёт запись; replay не пишется)
+        ├── recordChord / recordNote → recordEvent (ручная дорожка + авто-дорожка станции; replay не пишется)
+        ├── Research.onChord / onNote (только при включённом сборе; replay не пишется)
         ├── Composition.onChord / onNote (только form.enabled + form.running + phase 'playing')
         ▼
 state (visited, chordIndex, harmony, heard, explored, adaptive, score, energy, replay, form)
@@ -169,6 +171,8 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
   (и на +150/+300 сверх него) дважды подсвечивает `#comboStrip` и коротко
   подпрыгивает кнопкой (`#spaceNext.attn`). Это единственное напоминание: тост
   занят названием аккорда, поэтому модальных окон и повторов в тосте нет.
+  Необязательная карточка исследования (`#researchAsk`) — отдельный слой: она
+  появляется после перехода и только при включённом сборе оценок.
 - `#comboKey` под счётом — музыкальное имя комбо (`keyNameOf(combo())`, то есть
   `До мажор` / `C major`): счёт принадлежит тональности, а после старта топбар с
   `#comboSel` скрыт. Строка помечена `notranslate` и входит в `SHIELD`, иначе
@@ -375,6 +379,57 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
   выключен и показывает «ведёт пьеса». Подсказка кнопки напоминает про `Enter` —
   так клавиша находится и без чтения легенды.
 
+## Исследование оценок: необязательный слой
+
+`js/research.js` — наблюдатель, а не игровой слой. По умолчанию он выключен
+(`harmonia.research.settings`), поэтому обычный игрок не видит ни карточки, ни
+секции панели; включает его `?research=1`, `HARMONIA.research.enable()` или
+кнопка **Исследование** в панели. Модуль не меняет pitch class, очки, раскладку
+и звук: он только записывает то, что уже произошло, и возвращает оценку.
+
+- **Посещение комбо.** `loadCombo()` закрывает прошлый сегмент и открывает новый;
+  первый `onChord()`/`onNote()` материализует его (`playFrom`), пустые визиты
+  выбрасываются. На выходе считаются `dwellMs` (весь визит), `playMs` (от первой
+  ноты/аккорда), `counts`, `score` и `exit.via`. Сессия получает `sessionId`, а
+  посещение — номер `visit`, поэтому визиты можно группировать. Пауза закрывает
+  сегмент с `exit.via = 'pause'`, продолжение открывает новый в том же комбо.
+- **Причина выхода.** `Research.exitHint()` ставится до перехода: `space` —
+  только `advanceCombo()`, `next`/`prev` — стрелки/Backspace, `select` — список
+  комбо и круг, `mode` — смена лада, `session` — «Сессия заново», `pause` —
+  пауза, `off` — выключение сбора, `unload` — `pagehide` (закрытие вкладки или
+  уход со страницы; возврат из bfcache открывает новый сегмент). Подсказка не
+  перезаписывается: `advanceCombo`
+  успевает поставить `space` раньше, чем `nextCombo()` поставит `next`.
+- **События.** `chordEvent()` зовёт `Research.onChord()` в ветке `!replay`
+  (включая распознанный с MIDI аккорд), `triggerBall()` — `onNote()` только при
+  `withAudio !== false`, `Midi.noteOn()` — для всех MIDI-нот, включая хроматику
+  вне лада. Прослушивание записи (`state.replay`) не пишется, как и у recorder.
+- **Карточка.** Открывается **только** в `advanceCombo()` после нового рендера
+  комбо и только при `enabled && ask`. Ручные переходы закрывают сегмент молча.
+  `gateKey()` в `input.js` перехватывает `J I O P [` (5…1), `Space`/`Esc`
+  (пропуск); в поле комментария те же клавиши остаются буквами, `Enter`
+  заканчивает ввод. Автопропуск `CFG.research.askMs` (12 с) стоит, пока поле в
+  фокусе или непустое, и на `window.blur`. Оценка и комментарий дописываются в
+  уже сохранённый сегмент (`rating.score/comment/skipped/answerMs`).
+- **Данные.** `harmonia.research.v1` — массив сегментов, `harmonia.research.settings`
+  — `{enabled, ask}`. Лимиты — `CFG.research`: 400 посещений, 4000 событий на
+  визит, ~3.5 МБ JSON; при переполнении уходят самые старые, запись обёрнута в
+  `try/catch`. Комментарий — свободный текст (не переводится), ≤160 символов.
+- **Выгрузка.** `exportData()` кладёт в файл не только сегменты, но и снимок
+  `STATION_STYLES`, `STATION_TOUCH`, `STATION_PLOT_ARCHETYPES`, привязку
+  `STATION_PLOT_BY_STYLE` и библиотеку комбо (`COMBOS`/`ORDER`), поэтому старые
+  ответы разбираются даже после смены характеров и сюжетов станций.
+- **Разбор.** `tools/research.py` (stdlib) склеивает выгрузки, убирает дубли по
+  `id`, считает отклик/среднюю/распределение, станции и комбо с `n ≥ --min-n`,
+  время в комбо у высоких/низких оценок, причины выхода, темы комментариев и
+  раздел «Сюжет станции» (доля «дома», фазы, переходы).
+  `--md` печатает отчёт, `--csv` пишет строки по посещениям (UTF-8 с BOM),
+  `--self-test` проверяет расчёт на синтетических 12 визитах.
+- **Инварианты.** Без `enabled` все хуки выходят сразу; `Research` никогда не
+  зовёт `addScore`, не меняет `state.harmony` и не вмешивается в `playable()`.
+  Поэтому исследование можно включать и выключать посреди игры: звук и счёт от
+  этого не зависят, меняется только наличие карточки.
+
 ## Звук
 
 `initAudio()` строит `master → компрессор → destination` и параллельный посыл в
@@ -430,7 +485,7 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
 свой характер: без него дальние станции отличались только высотой и слышались как
 «то же самое, транспонированное».
 
-Характер — это четыре оси, и ни одна не добавляет нот:
+Характер — это пять осей, и ни одна не добавляет нот:
 
 | Ось | Значения | Где |
 | --- | --- | --- |
@@ -438,6 +493,7 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
 | `bass` | `nearest` / `root` / `fifth` / `third` | `stationBassOffset(h, offset, style)` |
 | `register` | `0` / `12` | `stationRegister()` → `rootMidi()` |
 | `touch` | `bell` / `glass` / `felt` / `pluck` | `stationShape()` → `bell()` |
+| `gesture` | `block` / `up` / `down` / `harp` / `sparkle` … | `stationGesture()` → `stationVoiceDelays()` → `playChordAudio()` |
 
 `STATION_STYLES` — двенадцать строк в порядке `ORDER.major` (индекс = `state.comboIdx`),
 поэтому мажор и минор пары делят станцию и различаются только ладом. `STATION_NEUTRAL`
@@ -452,26 +508,89 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
 по паре, `'neutral'` — эталон, иначе id строки): смена октавы снимает удержания и
 пересобирает шары, иначе старая нота осталась бы в прежней октаве.
 
+### Жест атаки
+
+`STATION_GESTURES` добавляет шестую ось — не ноты, а момент удара: три голоса
+пэда получают задержки `[низкий, средний, высокий]` (0…180 мс). `stationVoiceDelays()`
+сортирует голоса `stationPadVoices()` по midi, поэтому рисунок одинаков для
+закрытой, широкой и инвертированной позиции. `playChordAudio()` прибавляет
+задержку к `AudioContext.currentTime`; бас не задерживается. Первая пара остаётся
+`block` (0/0/0) — эталон прежнего звука. `STATION_PLOT_GESTURES` переопределяет
+рисунок по фазе сюжета (`уход` — вверх, `поворот` — вниз, `тень` — кластер),
+поэтому `stationPlotStyle()` передаёт вместе с voicing/bass ещё и phase. A/B:
+`P.stationGesture = 'off'` или `HARMONIA.setStationGesture('off')`; smoke-шаг
+`station-gesture` держит двенадцать разных рисунков, блочную первую пару и
+раздачу задержек по высоте.
+
+### Сюжет пары
+
+Сюжет — надстройка над характером, а не второй набор аккордов. `stationPlotForChord(h, prev)`
+переводит сыгранную функцию в фазу: тоника — `home` (или `return`, если пришли
+с доминанты), субдоминанта/супертоника — `departure`, доминанта, краска и
+вторичная доминанта — `turn`, медианта/субмедианта — `shadow`. Таймера здесь
+нет: фаза меняется только от гармонии.
+
+`STATION_PLOT_ARCHETYPES` задаёт для каждой фазы `voicing`, `bass` и `spread`
+(0…1.5). `STATION_PLOT_BY_STYLE` привязывает архетип к двенадцати характерам:
+`flat` у эталонной пары, дальше `drift`, `pedal`, `arch`, `breath`, `descent`,
+`call`. `spread` — не смена нот, а мягкий перевес `smartWindowScore` в сторону
+более широкого окна правой руки; безопасные ступени и их количество прежние.
+
+- `playHarmonic()` зовёт `stationPlotStyleForChord()` до `chordEvent()`, поэтому
+  первый аккорд новой фазы уже звучит её голосом.
+- `chordEvent()` зовёт `stationPlotAdvance()` до `Research.onChord()`, а
+  `resetHarmony()` — `stationPlotReset()`. В replay сюжет не двигается.
+- `#stationPlot` под `#comboKey` показывает `архетип · фаза · мотив`. При
+  `P.stationPlot = 'off'` строка скрыта, `stationPlotStyle()` возвращает базовый
+  характер, а `stationPlotWindowBias()` — 0. Ручное A/B: `HARMONIA.setStationPlot('off')`.
+- `bass: 'fifth'` на тонике возвращает корень: возврат домой не должен звучать
+  «пустым» аккордом без тоники.
+- Исследование пишет `seg.plot` (архетип, фазы, переходы, время в «доме») и
+  поля `phase`/`fromPhase`/`motif`/`window` у аккордов. `tools/research.py`
+  добавляет раздел «Сюжет станции»; старые выгрузки без `plot` читаются как
+  раньше. Smoke-шаг `station-plot` держит фазы, `off`, HUD и неизменный pitch
+  class/октаву у всех фаз всех станций.
+
 ## Запись и прослушивание
 
 `recorder.js` пишет события, а не аудио: `recordChord(h, vel)` сохраняет снимок
-аккорда с исходной `rootMidi()`, `recordNote(midi, vel, pan, withChord)` — реальную
-высоту и признак «гармонизировать ли ноту». `chordEvent()` и `triggerBall()` вызывают
-эти функции только между стартом и стопом записи; MIDI-ноты пишет `Midi.noteOn`
-(без подложки), а распознанный с MIDI аккорд не дублируется (`source: 'midi'`). Записи лежат в `localStorage` (`rithm.recordings.v1`), список
-ограничен 30 записями, 6000 событий и 3 минутами.
+аккорда с исходной `rootMidi()` и басом, `recordNote(midi, vel, pan, withChord)` —
+реальную высоту и признак «гармонизировать ли ноту». `recordEvent()` раскладывает
+одно событие в две независимые дорожки: ручную (`recEvents`, когда `state.recording`)
+и авто-дорожку текущей станции (`autoRec.active`). MIDI-ноты пишет `Midi.noteOn`
+(без подложки), а распознанный с MIDI аккорд не дублируется (`source: 'midi'`).
+Записи лежат в `localStorage` (`rithm.recordings.v1`), список ограничен 30 записями,
+6000 событий и 3 минутами на дорожку.
 
 `playSelected()` ставит `state.replay = true` и запускает события по таймерам через
 `playChordAudio()` / `bell()` + `noteChord()`. В этом режиме `addScore()`,
 `cashEnergy()`, шаги и переход по Space не срабатывают: прослушивание не
 зарабатывает очки. `stopPlayback()` отменяет таймеры и гасит педальные хвосты.
 
+- **Автозапись станции.** `autoRecordStart()` вызывается в конце `loadCombo()`;
+  `autoRecordFinalize()` — в начале следующего `loadCombo()`, на паузе и на
+  `beforeunload`. Пустая дорожка не сохраняется, поэтому в списке нет каждого
+  пройденного комбо. Запись получает `auto: true`, `combo`, `station`, `plot`,
+  `gesture` и `duration`; имя — «Станция 3 · войлок». Ручная запись идёт
+  параллельно и по-прежнему сохраняется только по «Стоп». `P.autoRecord` (по
+  умолчанию `true`) и кнопка **Автозапись станции** включают/выключают слой;
+  `setAutoRecord(true)` начинает текущее посещение сразу. При прослушивании
+  авто-запись передаёт `rec.station` в `playChordAudio()` и `STATION_TOUCH[...]` в
+  `bell()` как `shapeOverride`, поэтому голос станции не зависит от открытой
+  сейчас тональности; ручная запись без `station` остаётся эталонной.
+- **MIDI.** `buildMidiFile(rec)` собирает SMF format 0 (PPQ 480) без библиотек:
+  темп из `rec.form.bpm`, аккорд — корень/терция/квинта в октаве пэда плюс
+  записанный бас, мелодия — реальные midi-ноты. `midiRecordingEvents()` отдаёт
+  note-on/note-off для теста; note-off на том же тике ставится раньше note-on.
+  `exportSelectedMidi()` скачивает выбранную запись как `.mid`. Аудиофайл
+  (WAV/MP3/WebM) не экспортируется: запись остаётся событиями.
 - **Отсчёт.** `startRecording()` читает `P.recCountIn` (0/1/2 такта). При ненулевом
-  значении `state.recording` остаётся `false`, поэтому `recordNote/recordChord` не
-  пишут случайные ноты; `state.recordingCountIn` и `recCountInBeat` показывают тик,
-  а `metronomeClick()` идёт через мастер-шину. `beginRecordingNow()` стартует запись
-  на следующей сильной доле и обнуляет `recEvents`. `stopRecording()` во время
-  отсчёта отменяет таймеры, не создавая пустую запись.
+  значении `state.recording` остаётся `false`, поэтому ручная дорожка молчит;
+  авто-дорожка станции при этом может писать фон. `state.recordingCountIn` и
+  `recCountInBeat` показывают тик, а `metronomeClick()` идёт через мастер-шину.
+  `beginRecordingNow()` стартует запись на следующей сильной доле и обнуляет
+  `recEvents`. `stopRecording()` во время отсчёта отменяет таймеры, не создавая
+  пустую запись.
 - **Повтор.** `startPlaybackCycle(rec, token)` планирует один проход; в конце цикла
   при `P.recLoop` он вызывает себя снова, а иначе `finishPlayback()`. `playbackToken`
   и `state.playingRecording` остаются едиными для всех кругов, поэтому «Стоп»,
@@ -593,6 +712,7 @@ Translate через `translate.js` (тот же приём, что в сосе�
 | Звук нот MIDI / педаль | `Midi.resolveEcho`, `Heard.setSustain`, `echoNote` |
 | Новый тембр ноты | `BELL_TIMBRES` в `audio.js` |
 | Характер станции (голоса, бас, октава, тембр) | `STATION_STYLES` / `STATION_TOUCH` в `js/station.js`; инварианты держит шаг `station-style` |
+| Сюжет пары (фазы, архетипы, окно) | `STATION_PLOT_*` и `stationPlot*` в `js/station.js`; `P.stationPlot`; шаг `station-plot` |
 | MIDI CC / aftertouch / пэды | `Midi.handle()` |
 | Новая палитра | `PALETTES` + `<option>` в `index.html` |
 | Новая визуализация | `VIZ` + `VIZ_ORDER` (`project/guides/center/ball/ring`) — меню и цифры `1`–`3` строятся сами |
@@ -616,6 +736,10 @@ Translate через `translate.js` (тот же приём, что в сосе�
 | Другой алгоритм очков формы | `Composition.onChord/finishBar/finishSection` |
 | Экран результата | `showFormResult()` / `hideFormResult()` в `ui-compose.js` |
 | Формат записи / лимиты | `recorder.js`: `REC_*`, `recordEvent`, `playRecordedEvent` |
+| Вопрос/шкала исследования | `RATE_KEYS` и разметка `#researchAsk` (`research.js`, `index.html`), `rate()`/`skip()` |
+| Лимиты/формат исследования | `CFG.research` + `research.js` (`saveSegments`, `exportData`, `leaveCombo`) |
+| Новая метрика посещения | `Research.enterCombo/leaveCombo` + строка в `ROW_FIELDS` (`tools/research.py`) |
+| Темы комментариев | `BUCKETS` в `tools/research.py` (подстроки ru/en) |
 | Другой источник данных | `data/COMBOLIST.csv` → `tools/combolist.py` |
 | Список языков интерфейса | `LANGS` в `translate.js` + `<option>` в `#langSel` (`index.html`) |
 | Что нельзя переводить | `SHIELD` в `translate.js` (селекторы → `translate="no"`), `data-i18n-skip` в пакете |
@@ -637,7 +761,8 @@ Translate через `translate.js` (тот же приём, что в сосе�
   число `.chord-card`, отсутствие ошибок в консоли;
   затем `Midi.noteOn(60/64/67)` → `state.heard.triad.degree === 'I'`.
 - `tools/_smoke_build.ps1` собирает три страницы: `smoke.html` (игра, шаги
-  boot/intro-drill/free-jam/форма/грув/запись/smart-раскладка/английский пакет),
+  boot/intro-drill/free-jam/форма/грув/запись/smart-раскладка/английский пакет/
+  исследование),
   `en/smoke.html` (статика английского лендинга) и `ru/smoke.html` (статика
   русского обзора). Headless Chrome с `--dump-dom` оставляет в
   `<pre id="smoke-result">` строку `ok:true`. Шаг `intro-tips` проверяет подсказки: они есть у двенадцати
@@ -678,6 +803,16 @@ Translate через `translate.js` (тот же приём, что в сосе�
   (смена источника часов и подписи) и `groove-hits` (планировщик: удары растут,
   быстрый темп даёт больше шагов, выключенный грув молчит) держат это в
   headless-прогоне.
+- Исследование: `HARMONIA.research.enable()` → `loadCombo()` → аккорд/нота →
+  `HARMONIA.advanceCombo()` → `#researchAsk.show`, затем `J`/`I`/`O`/`P`/`[`
+  или клик по `[data-score]` → `status().rated`; `Esc` пишет `skipped`;
+  `HARMONIA.research.exportData()` отдаёт сегменты с `STATION_STYLES` и
+  библиотекой комбо; `nextCombo()` карточку не открывает, replay не пишется.
+  Шаг `research-rating` держит всё это (включая счёт при «Сессии заново» и
+  `pagehide`) и очищает `localStorage` в конце.
+- `python tools/research.py --self-test` — проверка расчёта на 12 синтетических
+  визитах (средняя 3.90, станции 4.75/4.33/2.33, `--min-n=4` оставляет одну).
+  `python tools/research.py FILE.json --md -` печатает отчёт, `--csv` — строки.
 - `tools/_smoke_build.ps1` хранится в UTF-8 **с BOM**. Без BOM PowerShell 5.1
   читает скрипт как cp1251, и кириллица внутри шагов попадает в `smoke.html`
   кракозябрами: ASCII-проверки это не ловят, а точное сравнение русской строки

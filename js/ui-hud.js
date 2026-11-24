@@ -139,6 +139,7 @@ function buildWheel() {
     t.textContent = label;
     g.appendChild(c); g.appendChild(t);
     g.addEventListener('click', () => {
+      if (typeof Research !== 'undefined') Research.exitHint('select');
       loadCombo(i, true);
       toast('КОМБО ' + combo().id + ' · ' + keyNameOf(combo()));
     });
@@ -298,6 +299,14 @@ function updateHUD() {
   // тональность («До мажор»). Так игрок видит, где он на круге, не открывая меню.
   const keyEl = $('comboKey');
   if (keyEl) keyEl.textContent = keyNameOf(combo());
+  // Сюжет пары: фаза и мотив под тональностью. При выключенном P.stationPlot
+  // строки нет совсем — HUD не обещает то, чего не слышно.
+  const plotEl = $('stationPlot');
+  if (plotEl) {
+    const plotText = typeof stationPlotText === 'function' ? stationPlotText() : '';
+    plotEl.hidden = !plotText;
+    if (plotText && plotEl.textContent !== plotText) plotEl.textContent = plotText;
+  }
   const cycleDone = state.played[state.mode][state.comboIdx];
   updateHomeIndicator();
   renderPalette();

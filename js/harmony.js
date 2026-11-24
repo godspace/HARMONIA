@@ -138,6 +138,14 @@ function smartWindowScore(set, opts) {
   if (chordPcs.length) score += chordHits * 4 / chordPcs.length;
   if (chord && chord.rootPc != null && pcs.indexOf(chord.rootPc) !== -1) score += 4;
   if (set.indexOf(opts.anchor) !== -1) score += 3;
+  // Сюжет станции (js/station.js) просит окно шире или уже. Это мягкий перевес
+  // в несколько баллов, а не отмена безопасности: тоны аккорда по-прежнему
+  // весят намного больше, а набор из пяти безопасных ступеней не меняется.
+  const spread = Number(opts.spread) || 0;
+  if (spread) {
+    const width = set.length ? set[set.length - 1] - set[0] : 0;
+    score += spread * width * 1.2;
+  }
   if (opts.target && opts.target.pcs) {
     score += pcs.filter(pc => opts.target.pcs.indexOf(pc) !== -1).length * 3;
     if (pcs.indexOf(opts.target.rootPc) !== -1) score += 2;
@@ -179,9 +187,10 @@ function smartNoteWindow(anchorIdx, opts) {
     : null;
   const candidates = smartCombinations(n, SMART_HAND_SIZE);
   let best = null, bestScore = -Infinity;
+  const spread = Number(options.spread) || 0;
   candidates.forEach(set => {
     const score = smartWindowScore(set, {
-      chord, target, anchor: a, prevPcs,
+      chord, target, anchor: a, prevPcs, spread,
       soundingPcs: options.soundingPcs || (chord && chord.pcs) || []
     });
     if (score > bestScore) { best = set; bestScore = score; }
@@ -397,14 +406,17 @@ function handNoteBalls() {
   const key = state.mode + '#' + state.comboIdx + '#' +
     (mode === 'smart'
       ? mode + ':' + smartSongAnchor() + ':' + (saved ? saved.join(',') : '') +
-        ':' + smartTargetDegree()
+        ':' + smartTargetDegree() + ':' +
+        (typeof stationPlotWindowBias === 'function' ? stationPlotWindowBias() : 0)
       : mode);
   if (key === handKey) return handBalls;
   const palette = diatonicPalette();
   if (mode === 'smart') {
     // Окно уже упорядочено снизу вверх. Пока первая смена аккорда не пришла,
     // строим его на месте от текущего anchor — без записи в state.
-    handBalls = saved && saved.length ? saved.slice() : smartNoteWindow();
+    handBalls = saved && saved.length ? saved.slice() : smartNoteWindow(undefined, {
+      spread: typeof stationPlotWindowBias === 'function' ? stationPlotWindowBias() : 0
+    });
   } else {
     handBalls = harmonicChords()
       .map(h => palette.findIndex(slot => slot.rootPc === h.rootPc))

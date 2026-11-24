@@ -76,7 +76,8 @@ function computeAdaptiveWindow(idx) {
   return smartNoteWindow(idx, {
     chord: current,
     target: smartTargetHarmony(),
-    prev: state.adaptive.window
+    prev: state.adaptive.window,
+    spread: typeof stationPlotWindowBias === 'function' ? stationPlotWindowBias() : 0
   });
 }
 function applyPendingAdaptiveAnchor() {
@@ -138,6 +139,10 @@ function setAdaptiveAnchor(idx) {
 // Сброс накопленного гармонического напряжения: смена комбо, старт сессии, настройки.
 function resetHarmony() {
   resetAdaptive();
+  // Сюжет пары начинается с «дома» на каждом входе: фазы — часть материала
+  // комбо, а не общая история сессии. При P.stationPlot = 'off' сброс всё равно
+  // нужен, чтобы исследование видело корректную phase.
+  if (typeof stationPlotReset === 'function') stationPlotReset();
   state.harmony.last = null;
   state.harmony.lastTriad = null;
   state.harmony.lastPcs = [];
@@ -153,7 +158,13 @@ function resetHarmony() {
 // Энергия копится по шарам (по ступеням), поэтому её длина — длина balls.
 function resetEnergy() { state.energy = balls.map(() => 0); }
 function loadCombo(idx, keepPen) {
-  if (typeof stopPlayback === 'function') stopPlayback();
+  // Автозапись закрывает прошлую станцию до смены comboIdx: в записи остаётся
+  // её собственный характер, а не следующий. Пустые визиты не сохраняются.
+  if (typeof autoRecordFinalize === 'function') autoRecordFinalize();
+  // Исследование закрывает прошлое посещение до сброса счёта: Space-переход
+  // помечает причину 'space', ручные пути — 'next'/'prev'/'select'/'mode'.
+  if (typeof Research !== 'undefined') Research.leaveCombo();
+  if (typeof stopPlayback === 'function') stopPlayback(false);
   if ((state.recording || state.recordingCountIn) &&
       typeof stopRecording === 'function') stopRecording(true);
   releaseAllHolds();
@@ -173,6 +184,12 @@ function loadCombo(idx, keepPen) {
   buildChordPad();
   if (!keepPen) clearPen();
   updateHUD();
+  // Новое комбо — новое посещение. Сегмент появится в данных только после
+  // первого аккорда или ноты: пустые визиты не нужны ни игре, ни анализу.
+  if (typeof Research !== 'undefined') Research.enterCombo();
+  // Автозапись станции стартует здесь же: одна дорожка на визит, без таймера и
+  // без ожидания первой ноты (пустая дорожка просто не сохранится).
+  if (typeof autoRecordStart === 'function') autoRecordStart();
 }
 // Смена лада сохраняет номер комбо: мажор и минор одной пары — соседние
 // строки COMBOLIST, поэтому ручной выбор лада не прыгает в начало.
@@ -187,6 +204,7 @@ function applyComboRoute(mode, idx, keepPen) {
 function setMode(mode) {
   mode = mode === 'minor' ? 'minor' : 'major';
   if (state.mode === mode) return;
+  if (typeof Research !== 'undefined') Research.exitHint('mode');
   applyComboRoute(mode, state.comboIdx, false);
   toast('Лад: ' + (mode === 'major' ? 'мажор' : 'минор'), 'good');
 }
@@ -220,22 +238,37 @@ function canAdvanceCombo() {
 }
 function advanceCombo() {
   if (!canAdvanceCombo()) return false;
+  // Единственный путь, после которого исследование спрашивает оценку: ручные
+  // переходы остаются свободной навигацией и карточку не открывают.
+  if (typeof Research !== 'undefined') Research.exitHint('space');
   nextCombo();
+  if (typeof Research !== 'undefined') Research.offerLast();
   return true;
 }
 function nextCombo() {
+  if (typeof Research !== 'undefined') Research.exitHint('next');
   const target = nextComboTarget();
   applyComboRoute(target.mode, target.idx, true);
   toast('КОМБО ' + combo().id + ' · ' + keyNameOf(combo()), 'good');
 }
 function prevCombo() {
+  if (typeof Research !== 'undefined') Research.exitHint('prev');
   const target = prevComboTarget();
   applyComboRoute(target.mode, target.idx, true);
   toast('КОМБО ' + combo().id + ' · ' + keyNameOf(combo()));
 }
 function startSession() {
+  // Новая сессия группирует посещения своим id; прошлый визит закрывается с
+  // причиной 'session', а карточка оценки не открывается — это не Space.
+  if (typeof Research !== 'undefined') {
+    Research.onSessionStart();
+    Research.exitHint('session');
+    // Закрываем прошлый визит до state.score = 0: иначе в данных остался бы
+    // счёт 0 вместо реального счёта комбо на момент перезапуска.
+    Research.leaveCombo();
+  }
   if (typeof discardRecording === 'function') discardRecording();
-  if (typeof stopPlayback === 'function') stopPlayback();
+  if (typeof stopPlayback === 'function') stopPlayback(false);
   releaseAllHolds();
   state.score = 0; state.rings = 0;
   resetEnergy();
@@ -265,9 +298,19 @@ function setPaused(p) {
   // доступны, а возврат в джем/повтор убирают его явно.
   const formResult = document.getElementById('formResult');
   if (p && formResult && formResult.classList.contains('show')) return;
+  // Пауза закрывает авто-посещение той же дорожкой, что и смена станции:
+  // продолжение начнёт новый отрезок, а не допишет тишину в старый.
+  if (p && typeof autoRecordFinalize === 'function') autoRecordFinalize();
   if (p && typeof stopRecording === 'function' &&
       (state.recording || state.recordingCountIn)) stopRecording(true);
-  if (p && typeof stopPlayback === 'function') stopPlayback();
+  if (p && typeof stopPlayback === 'function') stopPlayback(false);
+  // Пауза заканчивает визит, но не закрывает уже открытую карточку оценки:
+  // игрок мог отойти от окна, и его ответ не должен пропасть. Таймер карточки
+  // останавливается на blur и снова включается на focus (js/research.js).
+  if (p && typeof Research !== 'undefined') {
+    Research.exitHint('pause');
+    Research.leaveCombo(undefined, true);
+  }
   state.paused = p;
   stopChordHold();
   state.keysDown = {};
@@ -287,7 +330,13 @@ function setPaused(p) {
     $('modal').style.display = 'flex';
   } else {
     $('modal').style.display = 'none';
+    // Продолжение — новый визит в том же комбо: пауза разделила время, но не
+    // сбросила счёт, поэтому это честный отдельный отрезок игры.
+    if (typeof Research !== 'undefined') Research.enterCombo();
   }
+  // При продолжении autoRecordStart() начнёт новую дорожку; при паузе он
+  // молчит, потому что state.paused уже true.
+  if (typeof autoRecordStart === 'function') autoRecordStart();
   updateHUD();
 }
 // Полный оборот — только визуальное событие. Очки за пассивное вращение не
@@ -355,7 +404,8 @@ function cashEnergy() {
 }
 // Звук аккорда: бас и мягкая подложка. Отдельно от счётно-визуальной части:
 // аккорд, распознанный с пианино, уже звучит сам, и дублировать его нельзя.
-function playChordAudio(h, vel, baseMidi, when) {
+// style — характер станции; shapeOverride — тембр для прослушивания авто-записи.
+function playChordAudio(h, vel, baseMidi, when, style, shapeOverride) {
   // baseMidi запоминается вместе с записью: прослушивание сохраняет исходную
   // высоту, даже если сейчас открыто другое комбо.
   const T = baseMidi == null ? rootMidi() : baseMidi;
@@ -364,10 +414,10 @@ function playChordAudio(h, vel, baseMidi, when) {
     ? ((h.rootPc - (T % 12) + 12) % 12)
     : h.offset;
   // Характер станции решает бас: инвертировать ли аккорд ради плавной линии
-  // ('nearest' — прежнее поведение) или держать корень в басу. Прослушивание
-  // записи идёт с эталонной подачей: запись хранит высоты, а не характер, и
-  // звучать должна так, как звучала в момент записи.
-  const station = state.replay ? STATION_NEUTRAL : stationStyleFor(state.comboIdx);
+  // ('nearest' — прежнее поведение) или держать корень в басу. style передаёт
+  // playHarmonic() (фаза сюжета уже известна), а авто-запись — свой сохранённый
+  // характер станции. Ручная запись без style звучит эталонно, как раньше.
+  const station = style || (state.replay ? STATION_NEUTRAL : stationStyleFor(state.comboIdx));
   const bassOffset = stationBassOffset(h, offset, station);
   bass(T + 12 * P.bassOct + bassOffset, when);
   if (P.pad) {
@@ -377,8 +427,18 @@ function playChordAudio(h, vel, baseMidi, when) {
     const pedalHold = P.sustain ? 0.8 : 0;
     // Аккорд — подложка: мягче и тише нот, чтобы мелодия орбит читалась.
     // Расположение голосов — часть характера, но pitch class те же три.
-    stationPadVoices(h, T, offset, station).forEach(([midi, gain, pan]) =>
-      bell(midi, gain * v, pan, when == null ? null : when, 'chord', pedalHold));
+    // Жест станции добавляет только задержку: все три голоса стартуют из одной
+    // точки времени, поэтому аккорд не «плывёт» относительно баса и записи.
+    const voices = stationPadVoices(h, T, offset, station);
+    const delays = typeof stationVoiceDelays === 'function'
+      ? stationVoiceDelays(voices, station) : [];
+    const start = when == null
+      ? (typeof audioCtx !== 'undefined' && audioCtx ? audioCtx.currentTime : null)
+      : when;
+    voices.forEach(([midi, gain, pan], i) => {
+      const at = start == null ? null : start + (delays[i] || 0) / 1000;
+      bell(midi, gain * v, pan, at, 'chord', pedalHold, shapeOverride);
+    });
   }
 }
 // Единое событие аккорда: шары, напряжение, состояние визуализации.
@@ -390,12 +450,19 @@ function chordEvent(h, vel, source) {
   const replay = !!state.replay || source === 'replay';
   const prevTriad = state.harmony.lastTriad;
   if (!replay) {
+    // Сначала сюжет: Research.onChord ниже должен записать уже новую phase,
+    // а playHarmonic() успевает озвучить аккорд в подаче этой же фазы.
+    if (typeof stationPlotAdvance === 'function') stationPlotAdvance(h, prevTriad);
     cashEnergy();
     // Сначала оцениваем сам ход: он не зависит от того, вернётся ли игрок
     // в тонику. Зачин ii/IV тоже получает небольшой бонус.
     if (prevTriad) scoreHarmonyStep(prevTriad, h);
     else scoreHarmonyOpening(h);
     if (source !== 'midi' && typeof recordChord === 'function') recordChord(h, vel);
+    // Исследование пишет и аккорд, распознанный с MIDI: игрок его слышит,
+    // значит он часть визита. Запись при этом по-прежнему не дублирует
+    // распознанный с пианино аккорд.
+    if (typeof Research !== 'undefined') Research.onChord(h, vel);
     if (typeof Composition !== 'undefined') Composition.onChord(h);
   }
   const c = combo(), now = performance.now();
@@ -506,7 +573,12 @@ function playHarmonic(idx, vel) {
   initAudio();
   const h = harmonicChords()[idx];
   if (!h) return;
-  playChordAudio(h, vel);
+  // Подача считается для новой фазы до chordEvent: иначе первый аккорд ухода
+  // прозвучал бы ещё «домашним» голосом, а сюжет догнал бы его только в HUD.
+  const style = !state.replay && typeof stationPlotStyleForChord === 'function'
+    ? stationPlotStyleForChord(h, state.harmony.lastTriad)
+    : null;
+  playChordAudio(h, vel, null, null, style);
   chordEvent(h, vel, 'keys');
 }
 // Нажата ли клавиша этой ступени правой рукой. Раскладка зависит от режима
@@ -544,6 +616,11 @@ function triggerBall(b, vel, withAudio) {
     scheduleNoteChord(midi, noteVel, pan);
     // MIDI пишет ноту сам (реальная высота), а клавиатура — здесь.
     if (!state.replay && typeof recordNote === 'function') recordNote(midi, noteVel, pan, true);
+    // Исследование: мелодия орбит/пэда. MIDI-ноты приходят в onNote() из
+    // Midi.noteOn, поэтому здесь только withAudio !== false — двойного счёта нет.
+    if (!state.replay && typeof Research !== 'undefined') {
+      Research.onNote(midi, noteVel, pan, true);
+    }
     // Мелодическая статистика пьесы: путь клавиатуры/шара. MIDI-ноты, у которых
     // нет шара, учитывает Midi.noteOn(), поэтому двойного счёта нет.
     if (!state.replay && typeof Composition !== 'undefined') Composition.onNote(midi, noteVel);

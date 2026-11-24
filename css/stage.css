@@ -40,6 +40,14 @@ canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
   margin-top: 1px; font-size: 10.5px; font-weight: 800; letter-spacing: 0.2px;
   color: #d0d7ee; white-space: nowrap;
 }
+/* Сюжет пары — третья строка счёта. Она тише тональности: это подсказка о
+   характере, а не адрес на круге. Длинный мотив не расширяет HUD бесконечно. */
+.score-plot {
+  margin-top: 1px; max-width: 176px; overflow: hidden; text-overflow: ellipsis;
+  font-size: 9.5px; font-weight: 700; letter-spacing: 0.15px;
+  color: #8b95b3; white-space: nowrap;
+}
+.score-plot[hidden] { display: none; }
 /* Подсказка о пробеле живёт в полосе комбо, под ячейками: до рубежа — сколько
    очков осталось, после — что сделает пробел. Отдельного бокса у счёта больше
    нет: счёт и маршрут читаются по разным местам. */
@@ -311,7 +319,8 @@ canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
 #toast.show { opacity: 1; transform: translateY(-50%); }
 /* Переход в новое комбо: компактный Space под аккордами. До 300 он
    показывает прогресс и выключен; после рубежа включается и пульсирует,
-   поэтому игра продолжается без модального окна и без мыши. */
+   поэтому игра продолжается без модального окна и без мыши. Необязательная
+   карточка исследования (`#researchAsk`) появляется уже после перехода. */
 #spaceNext {
   display: inline-flex; align-items: center; gap: 7px;
   min-height: 23px; padding: 1px 8px 1px 3px;
@@ -410,4 +419,46 @@ canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
 .fr-row b { color: #74cc3d; font-size: 11px; }
 .fr-actions { display: flex; gap: 8px; margin-top: 13px; }
 .fr-actions .big-btn { flex: 1 1 0; padding: 9px 10px; font-size: 12.5px; border-radius: 8px; }
+
+/* Оценка комбо — исследовательский слой (js/research.js). Карточка живёт
+   внутри сцены, поэтому масштабируется вместе с ней; затемнение закрывает
+   сцену, но не панели: исследование не должно запирать настройки. */
+#researchAsk {
+  position: absolute; inset: 0; z-index: 15; display: none;
+  align-items: center; justify-content: center; padding: 18px;
+  background: rgba(8, 10, 16, 0.78); backdrop-filter: blur(9px);
+}
+#researchAsk.show { display: flex; animation: formResultIn 0.2s ease-out; }
+.ra-card { width: min(420px, 100%); outline: none; }
+.ra-card:focus-visible { box-shadow: 0 0 0 2px rgba(107, 223, 255, 0.45), 0 20px 55px rgba(0, 0, 0, 0.68); }
+.ra-meta { margin: 4px 0 0; font-size: 11px; line-height: 1.35; color: #9aa4c2; }
+.ra-rate { display: flex; gap: 6px; margin: 11px 0 9px; }
+.ra-btn {
+  flex: 1 1 0; display: flex; flex-direction: column; align-items: center; gap: 3px;
+  padding: 9px 3px 7px; font-family: inherit; color: #e8eeff;
+  background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 9px; cursor: pointer; transition: background 0.12s, border-color 0.12s, transform 0.12s;
+}
+.ra-btn b { font-size: 19px; line-height: 1; }
+.ra-key { font-size: 9px; font-weight: 800; color: #8b95b3; }
+.ra-btn:hover, .ra-btn:focus-visible {
+  transform: translateY(-1px); border-color: #ffd166; background: rgba(255, 209, 102, 0.16);
+}
+.ra-comment-label {
+  display: block; margin: 2px 0 4px; text-align: left;
+  font-size: 9px; font-weight: 800; letter-spacing: 0.6px; text-transform: uppercase; color: #8b95b3;
+}
+.ra-comment {
+  width: 100%; box-sizing: border-box; padding: 8px 9px;
+  font-family: inherit; font-size: 12px; color: #e8eeff;
+  background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px; outline: none;
+}
+.ra-comment:focus { border-color: rgba(107, 223, 255, 0.65); box-shadow: 0 0 0 2px rgba(107, 223, 255, 0.18); }
+.ra-hint { margin: 8px 0 0; font-size: 9.5px; line-height: 1.4; color: #7e88a6; }
+#researchBody[hidden] { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  #researchAsk.show { animation: none; }
+  .ra-btn { transition: none; }
+}
 

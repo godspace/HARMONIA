@@ -1,6 +1,6 @@
 # HARMONIA — handoff для нового таска Cline
 
-**Обновлено:** 2026-11-23  
+**Обновлено:** 2026-11-24
 **Рабочая папка:** `C:\Users\godspace\Desktop\PROJECTS\HARMONIA`  
 **Репозиторий:** <https://github.com/godspace/HARMONIA>  
 **Ветка:** `main`  
@@ -61,7 +61,8 @@
   ячеек в порядке круга, ячейка светлеет при входе в комбо (`seen`), зеленеет
   после сыгранного цикла (`done`), текущая мигает золотом (`current`). На рубеже
   300 и на +150/+300 сверх него полоса дважды подсвечивается (`nudgeSpace`),
-  кнопка Space подпрыгивает; модальных окон и тостов нет. Круг тональностей
+  кнопка Space подпрыгивает; модальных окон и тостов нет (карточка исследования —
+  отдельный необязательный слой после перехода). Круг тональностей
   повторяет имя комбо в центре (`№1 · До мажор · 0/12`).
 - Нотация подписей — `P.notation` (`sol` | `letters`), переключатель
   **Звук → Нотация**. Язык выбирает её сам: латиница — `C-D-E` / `C major`,
@@ -103,6 +104,45 @@
   `HARMONIA.setStationStyle('glass')`. Smoke-шаг `station-style` держит таблицу,
   различие соседей по кругу, неизменный pitch class у всех аккордов всех станций и
   шары в октаве станции.
+- **Сюжет пары** (`js/station.js`) — следующий слой после характера: аккорды
+  переводят станцию через `home → departure → turn → shadow → return`, а
+  `STATION_PLOT_ARCHETYPES` меняет `voicing`, `bass` и `spread` окна правой руки.
+  Это не таймер и не фиксированная мелодия: фаза — функция от сыгранной
+  гармонии. `P.stationPlot` (`'auto'`/`'off'`) и `HARMONIA.setStationPlot('off')`
+  дают A/B; при `off` звучит только базовый характер. HUD показывает
+  `#stationPlot` («арка · уход · 1–5–6–5»), исследование пишет `seg.plot` и
+  `phase`/`fromPhase`/`motif`/`window` аккордов. Smoke-шаг `station-plot` держит
+  фазы, `off`, HUD, неизменный pitch class и октаву у всех фаз всех станций.
+- **Жест атаки станции** — шестая ось характера в `js/station.js`:
+  `STATION_GESTURES` задаёт задержки трёх голосов пэда (`block` / `up` / `down` /
+  `harp` / `sparkle`…), `stationVoiceDelays()` раздаёт их по высоте, а
+  `playChordAudio()` прибавляет к `AudioContext.currentTime`. Ноты не меняются;
+  первая пара остаётся блоком. `STATION_PLOT_GESTURES` меняет рисунок по фазе
+  сюжета. A/B — `P.stationGesture` / `HARMONIA.setStationGesture('off')`.
+  Smoke-шаг `station-gesture`.
+- **Автозапись станции и MIDI** — `js/recorder.js`. Фоновая дорожка пишется
+  параллельно ручной: `autoRecordStart()` в конце `loadCombo()`,
+  `autoRecordFinalize()` при смене станции, паузе и `beforeunload`; пустые визиты
+  не сохраняются. Запись хранит `auto`, `combo`, `station`, `plot`, `gesture` и
+  называется «Станция 3 · войлок»; при прослушивании возвращает сохранённый
+  характер станции (`rec.station` + `STATION_TOUCH`), ручная запись остаётся
+  эталонной. Кнопка **Автозапись станции** и `P.autoRecord` управляют слоем.
+  **⬇ MIDI** собирает SMF format 0 (PPQ 480) из
+  выбранной записи (`buildMidiFile`, `exportSelectedMidi`), без зависимостей.
+  Аудиофайл пока не экспортируется. Smoke-шаг `station-auto-record-midi`.
+- **Исследование оценок комбо** — `js/research.js`, по умолчанию выключено.
+  Включается `?research=1`, `HARMONIA.research.enable()` или секцией
+  **Исследование · оценки комбо** в панели. После Space-перехода (advanceCombo)
+  открывается карточка `#researchAsk`: оценка `1–5` (J I O P [ = 5 4 3 2 1),
+  необязательный комментарий (≤160) и пропуск Space/Esc; ручные переходы
+  карточку не открывают.
+  В `localStorage` (`harmonia.research.v1`, настройка
+  `harmonia.research.settings`) лежат посещения: `dwellMs`, `playMs`, ноты и
+  аккорды, счёт, `exit.via`, характер станции, нотация, октавы, форма, грув и
+  оценка. Экспорт — `harmonia-research-*.json` с `STATION_STYLES`,
+  `STATION_TOUCH` и библиотекой комбо; разбор — `tools/research.py`
+  (`--md`, `--csv`, `--min-n`, `--self-test`). Smoke-шаг `research-rating`
+  проверяет запись, клавиши, комментарий, Esc и очистку.
 
 ## 2. Что осталось сделать вручную
 
@@ -156,9 +196,10 @@ index.html            разметка, SEO/Open Graph/JSON-LD, Google-мета�
 en/index.html         англоязычная страница: статичный текст, без скриптов
 ru/index.html         русский обзор проекта (/ru/): статичный текст, без скриптов
 css/                  base, stage, overlays, panel, landing (en/ и ru/)
-js/                   приложение: harmony, audio, groove, scene, viz, game, midi, render, i18n, translate, main
+js/                   приложение: harmony, audio, groove, scene, viz, game, midi, render, i18n, translate, research, main
 data/COMBOLIST.csv    единственный источник правды для 24 комбо
 tools/combolist.py    генератор js/data.js и проверка --check
+tools/research.py     разбор выгрузки оценок: --md, --csv, --min-n, --self-test
 tools/_smoke_build.ps1 smoke-тест: игра + en/smoke.html + ru/smoke.html
 docs/ARCHITECTURE.md  карта модулей и потоков данных
 docs/screenshot.png   скриншот для README и og:image (русский интерфейс)
@@ -177,6 +218,10 @@ python -m http.server 8080
 
 # проверка данных COMBOLIST
 python tools/combolist.py --check
+
+# проверка расчёта исследования и разбор выгрузки
+python tools/research.py --self-test
+python tools/research.py --md report.md --csv rows.csv   # найдёт выгрузки сам
 
 # smoke-тест: создаёт smoke.html, en/smoke.html и ru/smoke.html
 powershell -ExecutionPolicy Bypass -File tools/_smoke_build.ps1
@@ -241,7 +286,8 @@ git push origin main
   `origin/main`.
 - `python tools/combolist.py --check` завершается с кодом 0.
 - Smoke-тест выдаёт `ok: true` и находит точный Google-метатег: основная страница
-  — 43 шага, `en/smoke.html` — 8, `ru/smoke.html` — 7.
+  — 50 шагов, `en/smoke.html` — 8, `ru/smoke.html` — 7.
+- `python tools/research.py --self-test` завершается с кодом 0.
 - `https://godspace.github.io/HARMONIA/sitemap.xml` отвечает HTTP 200.
 - Папка RITHM отсутствует и не используется.
 

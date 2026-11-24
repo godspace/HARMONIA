@@ -13,6 +13,10 @@ window.addEventListener('unhandledrejection', function (e) {
 // виджет) иначе включится до проверок и сдвинет нотацию, как у живого игрока.
 try {
   localStorage.removeItem('harmonia.lang');
+  // Исследование должно начинаться выключенным: иначе настройка прошлого
+  // прогона включит карточки оценок посреди других шагов.
+  localStorage.removeItem('harmonia.research.settings');
+  localStorage.removeItem('harmonia.research.v1');
   document.cookie = 'googtrans=;path=/;max-age=0';
 } catch (e) { /* приватный режим */ }
 </script>
@@ -1000,6 +1004,81 @@ $post = @'
     if (st.form.enabled) throw new Error('form did not stop after recording test');
   });
 
+  step('station-auto-record-midi', function () {
+    // Автозапись — отдельная дорожка посещения: она пишется параллельно ручной,
+    // хранит combo/station/plot и не создаёт запись для пустого визита.
+    // MIDI собирается из тех же событий; проверяем заголовок SMF и парность
+    // note-on/note-off, а не только наличие байтов.
+    var H = HARMONIA, P = H.P, st = H.state;
+    var savedAuto = P.autoRecord, savedMode = st.mode, savedIdx = st.comboIdx;
+    if (st.recording || st.recordingCountIn) H.stopRecording(true);
+    H.stopPlayback();
+    if (!st.running) H.beginFromOverlay();
+    if (st.paused) $('mResume').click();
+    try {
+      // Выключенный слой не пишет даже при смене станции и сыгранном аккорде.
+      H.setAutoRecord(false);
+      H.loadCombo(0, false);
+      var offCount = H.getRecordings().length;
+      H.chordEvent(H.harmonicChords()[0], 0.8, 'keys');
+      if (H.autoRecordStatus() !== null || H.autoRecordFinalize() !== null ||
+          H.getRecordings().length !== offCount) {
+        throw new Error('P.autoRecord=false still records the station');
+      }
+      P.autoRecord = true;
+      H.loadCombo(0, false);
+      H.chordEvent(H.harmonicChords()[0], 0.8, 'keys');
+      var auto = H.autoRecordFinalize();
+      if (!auto || !auto.auto) throw new Error('the station visit was not auto-recorded');
+      if (!auto.station || !auto.station.id || !auto.combo || !auto.combo.id) {
+        throw new Error('the auto recording lost its station metadata');
+      }
+      if (!auto.events.length || auto.events[0].t < 0) {
+        throw new Error('the auto recording has no timed events');
+      }
+      if (auto.name.indexOf('Станция ') !== 0) {
+        throw new Error('the auto recording is not labelled by station: ' + auto.name);
+      }
+      // Пустой визит не должен попадать в список.
+      var count = H.getRecordings().length;
+      H.loadCombo(1, false);
+      if (H.autoRecordFinalize() !== null || H.getRecordings().length !== count) {
+        throw new Error('an empty station visit was saved');
+      }
+      // SMF: MThd, длина 6, format 0, один трек, PPQ 480, длина MTrk совпадает.
+      var bytes = H.buildMidiFile(auto);
+      if (!(bytes instanceof Uint8Array) || bytes.length < 22) {
+        throw new Error('MIDI file is too short');
+      }
+      function ascii(from, to) {
+        var s = '';
+        for (var i = from; i < to; i++) s += String.fromCharCode(bytes[i]);
+        return s;
+      }
+      if (ascii(0, 4) !== 'MThd') throw new Error('MIDI header is missing');
+      if ((bytes[4] << 24 | bytes[5] << 16 | bytes[6] << 8 | bytes[7]) !== 6) {
+        throw new Error('MIDI header length is wrong');
+      }
+      if (bytes[8] !== 0 || bytes[9] !== 0 || bytes[10] !== 0 || bytes[11] !== 1) {
+        throw new Error('MIDI must be format 0 with one track');
+      }
+      if (((bytes[12] << 8) | bytes[13]) !== 480) throw new Error('MIDI PPQ is not 480');
+      if (ascii(14, 18) !== 'MTrk') throw new Error('MIDI track chunk is missing');
+      var trackLen = (bytes[18] << 24 | bytes[19] << 16 | bytes[20] << 8 | bytes[21]);
+      if (trackLen !== bytes.length - 22) throw new Error('MIDI track length is wrong');
+      var midi = H.midiRecordingEvents(auto).events;
+      var ons = midi.filter(function (e) { return e.on; }).length;
+      var offs = midi.filter(function (e) { return !e.on; }).length;
+      if (!ons || ons !== offs) throw new Error('MIDI note-on/note-off are unbalanced');
+      if (H.midiFileName(auto).slice(-4) !== '.mid') throw new Error('MIDI file name is wrong');
+    } finally {
+      P.autoRecord = savedAuto;
+      st.mode = savedMode;
+      st.comboIdx = savedIdx;
+      H.loadCombo(0, false);
+    }
+  });
+
   step('groove-patterns', function () {
     // Паттерны — это строки шагов: длина строки и есть размер такта. Опечатку
     // в строке звук не заметит (шаги добиваются точками), поэтому её ловим тут.
@@ -1348,6 +1427,11 @@ $post = @'
           if (bassOffset < -12 || bassOffset > 12) {
             throw new Error('the bass left the octave: ' + bassOffset);
           }
+          // На тонике fifth не должен звучать квинтой: возврат домой обязан
+          // слышаться как возврат, а не как «пустой» аккорд.
+          if (style.bass === 'fifth' && h.tonic && bassOffset !== offset) {
+            throw new Error('fifth bass missed the tonic root: ' + bassOffset + ' vs ' + offset);
+          }
         });
       });
     });
@@ -1378,6 +1462,342 @@ $post = @'
       throw new Error('pair 2 must sound an octave higher');
     }
     H.loadCombo(0, false);
+  });
+
+  step('station-plot', function () {
+    // Сюжет — надстройка над характером: фазы выбираются аккордами, подача
+    // меняется, но набор pitch class и октава станции остаются прежними.
+    var H = HARMONIA, P = H.P;
+    if (!H.STATION_PLOT_ARCHETYPES || !H.STATION_PLOT_PHASES) {
+      throw new Error('the station plot tables are missing');
+    }
+    if (P.stationPlot !== 'auto') throw new Error('the plot must be on by default');
+    var savedPlot = P.stationPlot, savedStyle = P.stationStyle;
+    var savedMode = H.state.mode, savedIdx = H.state.comboIdx;
+    try {
+      var home = { tonic: true, hint: 'тоника' };
+      var dep = { hint: 'субдоминанта' };
+      var turn = { hint: 'доминанта' };
+      var shadow = { hint: 'медианта' };
+      if (H.stationPlotForChord(dep, home) !== 'departure') throw new Error('subdominant must depart');
+      if (H.stationPlotForChord(turn, dep) !== 'turn') throw new Error('dominant must turn');
+      if (H.stationPlotForChord(shadow, turn) !== 'shadow') throw new Error('mediant must shadow');
+      if (H.stationPlotForChord(home, turn) !== 'return') throw new Error('V-I must return');
+      if (H.stationPlotForChord(home, dep) !== 'home') throw new Error('IV-I must come home');
+      // Первая пара — эталон: сюжет её не меняет.
+      P.stationPlot = 'auto';
+      P.stationStyle = 'auto';
+      H.state.mode = 'major';
+      H.state.comboIdx = 0;
+      H.stationPlotReset();
+      if (H.stationPlotArchetype(0).id !== 'flat') throw new Error('pair 0 must stay flat');
+      if (H.stationPlotWindowBias(0, 'departure') !== 0) throw new Error('flat must not bias the window');
+      // Вторая пара — дрейф: поворот меняет и голоса, и бас, и просит окно шире.
+      H.state.comboIdx = 1;
+      H.stationPlotReset();
+      var base = H.stationStyleFor(1);
+      var turned = H.stationPlotStyle(1, 'turn');
+      if (turned.voicing !== 'first' || turned.bass !== 'fifth') {
+        throw new Error('the plot did not override the pair: ' + JSON.stringify(turned));
+      }
+      if (!(H.stationPlotWindowBias(1, 'departure') > 0)) {
+        throw new Error('the departure phase did not widen the window');
+      }
+      // 'off' возвращает ровно базовую подачу и молчит в HUD.
+      P.stationPlot = 'off';
+      var off = H.stationPlotStyle(1, 'turn');
+      if (off.voicing !== base.voicing || off.bass !== base.bass) {
+        throw new Error('P.stationPlot=off changed the station');
+      }
+      if (H.stationPlotWindowBias(1, 'turn') !== 0) throw new Error('off still biases the window');
+      if (H.stationPlotText() !== '') throw new Error('off still writes the HUD line');
+      P.stationPlot = 'auto';
+      // Любая фаза любого архетипа сохраняет pitch class и октаву станции.
+      var phases = Object.keys(H.STATION_PLOT_PHASES);
+      H.ORDER.major.forEach(function (id, idx) {
+        H.state.comboIdx = idx;
+        var baseStyle = H.stationStyleFor(idx);
+        var T = 48 + H.COMBOS[id].root + baseStyle.register;
+        H.harmonicChords().forEach(function (h) {
+          var offset = h.offset == null ? ((h.rootPc - (T % 12) + 12) % 12) : h.offset;
+          var want = [offset, offset + (h.third == null ? 4 : h.third), offset + (h.fifth || 7)]
+            .map(function (iv) { return ((iv % 12) + 12) % 12; })
+            .sort(function (a, b) { return a - b; }).join(',');
+          phases.forEach(function (phase) {
+            var style = H.stationPlotStyle(idx, phase);
+            if (style.register !== baseStyle.register) {
+              throw new Error('the plot changed the station octave');
+            }
+            var got = H.stationPadVoices(h, T, offset, style).map(function (v) {
+              return ((v[0] - T) % 12 + 12) % 12;
+            }).sort(function (a, b) { return a - b; }).join(',');
+            if (got !== want) {
+              throw new Error('plot ' + idx + ' ' + phase + ' changed the pad chord: ' + got + ' vs ' + want);
+            }
+            var bassOffset = H.stationBassOffset(h, offset, style);
+            if (bassOffset < -12 || bassOffset > 12) {
+              throw new Error('the plot bass left the octave: ' + bassOffset);
+            }
+            if (style.bass === 'fifth' && h.tonic && bassOffset !== offset) {
+              throw new Error('the plot fifth missed the tonic root');
+            }
+          });
+        });
+      });
+      // HUD показывает сюжет пары и скрывает его при off.
+      H.state.comboIdx = 1;
+      H.stationPlotReset();
+      H.updateHUD();
+      var el = $('stationPlot');
+      if (!el || el.hidden) throw new Error('the plot HUD line is hidden');
+      if (el.textContent.indexOf('дрейф') === -1) {
+        throw new Error('the plot HUD line is wrong: ' + el.textContent);
+      }
+      P.stationPlot = 'off';
+      H.updateHUD();
+      if (!el.hidden) throw new Error('the plot HUD line stayed visible when off');
+    } finally {
+      P.stationPlot = savedPlot;
+      P.stationStyle = savedStyle;
+      H.state.mode = savedMode;
+      H.state.comboIdx = savedIdx;
+      H.stationPlotReset();
+      H.loadCombo(0, false);
+    }
+  });
+
+  step('station-gesture', function () {
+    // Жест — только задержки атаки: ноты, октава и набор pitch class прежние.
+    // Держим три инварианта: эталонный блок у пары 0, разные рисунки соседей,
+    // A/B через P.stationGesture и раздачу задержек по высоте голосов.
+    var H = HARMONIA, P = H.P;
+    var G = H.STATION_GESTURES;
+    if (!G || Object.keys(G).length !== 12) throw new Error('expected twelve station gestures');
+    if (!G.neutral || G.neutral.delays.join(',') !== '0,0,0') {
+      throw new Error('the first pair must keep the block attack');
+    }
+    if (P.stationGesture !== 'auto') throw new Error('the gesture layer must be on by default');
+    var savedGesture = P.stationGesture;
+    var savedMode = H.state.mode, savedIdx = H.state.comboIdx;
+    try {
+      H.state.mode = 'major';
+      H.state.comboIdx = 0;
+      var neutral = H.stationGesture(H.stationStyleFor(0));
+      if (neutral.id !== 'block' || neutral.delays.join(',') !== '0,0,0') {
+        throw new Error('pair 0 must stay a block chord');
+      }
+      // Соседние станции не должны совпадать по рисунку: иначе шаг по кругу
+      // снова слышится как транспозиция.
+      var seen = {};
+      H.STATION_STYLES.forEach(function (s) {
+        var g = H.stationGesture(s);
+        if (seen[g.id]) throw new Error('two stations share the gesture ' + g.id);
+        seen[g.id] = true;
+      });
+      // stationPadVoices отдаёт голоса не по высоте (first начинается с терции),
+      // поэтому задержка раздаётся по отсортированным midi, а не по индексу.
+      var voices = [[72, 1, 0], [60, 1, 0], [66, 1, 0]];
+      var delays = H.stationVoiceDelays(voices, { id: 'wide' });
+      if (delays.join(',') !== '90,0,45') {
+        throw new Error('gesture delays are not sorted by pitch: ' + delays.join(','));
+      }
+      // Фаза сюжета меняет рисунок поверх характера.
+      H.state.comboIdx = 1;
+      H.stationPlotReset();
+      var turned = H.stationPlotStyle(1, 'turn');
+      var plotGesture = H.stationGesture(turned);
+      if (plotGesture.id !== 'plot-turn' || plotGesture.delays.join(',') !== '85,40,0') {
+        throw new Error('the plot phase did not change the gesture: ' + JSON.stringify(plotGesture));
+      }
+      // 'off' — прежний блок; 'auto' возвращает рисунок.
+      if (H.setStationGesture('off') !== 'off') throw new Error('gesture off was not accepted');
+      if (H.stationGestureDelays({ id: 'wide' }).join(',') !== '0,0,0') {
+        throw new Error('P.stationGesture=off still delays voices');
+      }
+      H.setStationGesture('auto');
+      if (H.stationGestureDelays({ id: 'wide' }).join(',') !== '0,45,90') {
+        throw new Error('gesture auto did not come back');
+      }
+    } finally {
+      P.stationGesture = savedGesture;
+      H.state.mode = savedMode;
+      H.state.comboIdx = savedIdx;
+      H.stationPlotReset();
+      H.loadCombo(0, false);
+    }
+  });
+
+  step('research-rating', function () {
+    // Исследование выключено по умолчанию: включаем его только здесь, чтобы
+    // проверить запись посещений, карточку оценки и отсутствие попапа на
+    // ручных переходах. В конце — выключаем и очищаем localStorage.
+    var H = HARMONIA, R = H.research;
+    if (!R) throw new Error('research API is missing');
+    R.disable();
+    R.clear();
+    if (R.status().enabled || R.status().visits) throw new Error('research must start empty');
+    if (H.state.form.enabled) H.setFormEnabled(false);
+    if (!H.state.running) H.beginFromOverlay();
+    // setPaused() не входит в публичный API — кнопка паузы делает то же самое.
+    if (H.state.paused) $('mResume').click();
+    H.setMode('major');
+    H.loadCombo(0, false);
+
+    R.enable();
+    if (!R.status().enabled) throw new Error('research did not turn on');
+    if ($('researchBody').hidden) throw new Error('the research panel body stays hidden');
+    if ($('researchToggle').getAttribute('aria-pressed') !== 'true') {
+      throw new Error('the research toggle did not follow the state');
+    }
+    // Вход в комбо случился до включения — заходим снова, чтобы сегмент открылся.
+    H.loadCombo(0, false);
+
+    var chord = H.harmonicChords()[0];
+    H.chordEvent(chord, 0.8, 'keys');
+    H.pressCode('KeyJ', 0.8);
+    H.releaseCode('KeyJ');
+    H.state.score = H.CFG.comboAdvanceAt;
+    H.updateHUD();
+    if (H.advanceCombo() !== true) throw new Error('Space advance did not happen');
+
+    var ask = $('researchAsk');
+    if (!ask.classList.contains('show')) throw new Error('the rating card did not open on Space');
+    if (ask.getAttribute('aria-hidden') !== 'false') {
+      throw new Error('the rating card is hidden from screen readers');
+    }
+    // J = 5: пока карточка открыта, клавиша оценивает, а не играет ноту.
+    window.dispatchEvent(new KeyboardEvent('keydown', {
+      code: 'KeyJ', key: 'j', bubbles: true, cancelable: true
+    }));
+    if (ask.classList.contains('show')) throw new Error('J did not submit the rating');
+    var data = R.exportData();
+    var seg = data.segments[data.segments.length - 1];
+    if (!seg) throw new Error('the visit was not saved');
+    if (!seg.rating || seg.rating.score !== 5) {
+      throw new Error('the rating was not stored: ' + JSON.stringify(seg.rating));
+    }
+    if (seg.exit.via !== 'space') throw new Error('exit.via is not space: ' + seg.exit.via);
+    if (seg.score !== H.CFG.comboAdvanceAt) {
+      throw new Error('the score at exit was not captured: ' + seg.score);
+    }
+    if (!(seg.dwellMs >= 0) || !(seg.playMs >= 0)) {
+      throw new Error('dwell/play timing is missing');
+    }
+    var types = seg.events.map(function (e) { return e.type; });
+    if (types.indexOf('chord') === -1 || types.indexOf('note') === -1) {
+      throw new Error('the visit lost its chords/notes: ' + types.join(','));
+    }
+    // Журнал сюжета пишется вместе с посещением: архетип, фазы и переходы.
+    if (!seg.plot || seg.plot.archetype !== 'flat') {
+      throw new Error('the visit plot log is missing: ' + JSON.stringify(seg.plot));
+    }
+    if (!seg.plot.phaseSeq || !seg.plot.phaseSeq.length ||
+        !seg.plot.phases || !Object.keys(seg.plot.phases).length) {
+      throw new Error('the visit plot has no phase data');
+    }
+    var chordEvents = seg.events.filter(function (e) { return e.type === 'chord'; });
+    if (!chordEvents.length || !chordEvents[0].phase ||
+        !Array.isArray(chordEvents[0].window)) {
+      throw new Error('the chord event lost its plot snapshot');
+    }
+    if (!seg.combo || !seg.station || !seg.context) {
+      throw new Error('the visit lost its context');
+    }
+    if (!data.stationStyles || data.stationStyles.length !== 12) {
+      throw new Error('the export must embed the station table');
+    }
+    if (!data.combos || !data.combos.major || !data.combos.minor) {
+      throw new Error('the export must embed the combo library');
+    }
+    if (!data.stationTouch || !data.stationTouch.bell) {
+      throw new Error('the export must embed the station touch table');
+    }
+    // Ручной переход закрывает посещение, но карточку не открывает.
+    H.chordEvent(chord, 0.8, 'keys');
+    H.state.score = H.CFG.comboAdvanceAt;
+    H.nextCombo();
+    if (ask.classList.contains('show')) throw new Error('a manual transition opened the rating card');
+    var visits = R.status().visits;
+    if (visits < 2) throw new Error('the manual transition did not save the visit');
+
+    // Replay не пишется: сегмент без событий отбрасывается.
+    H.state.replay = true;
+    H.chordEvent(chord, 0.8, 'replay');
+    H.state.replay = false;
+    H.nextCombo();
+    if (R.status().visits !== visits) throw new Error('replay created a visit');
+
+    // Комментарий: поле забирает буквы, а рейтинг сохраняет текст.
+    H.chordEvent(chord, 0.8, 'keys');
+    H.state.score = H.CFG.comboAdvanceAt;
+    H.advanceCombo();
+    if (!ask.classList.contains('show')) throw new Error('the rating card did not reopen');
+    var field = $('researchAskComment');
+    field.focus();
+    field.value = 'мягко и тепло';
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+    // Пока поле в фокусе, O — это буква, а не оценка 3.
+    field.dispatchEvent(new KeyboardEvent('keydown', {
+      code: 'KeyO', key: 'o', bubbles: true, cancelable: true
+    }));
+    if (!ask.classList.contains('show')) {
+      throw new Error('typing in the comment field submitted the card');
+    }
+    // Уходим из поля и ставим оценку мышью: комментарий сохраняется с ней.
+    field.blur();
+    ask.querySelector('[data-score="3"]').click();
+    data = R.exportData();
+    seg = data.segments[data.segments.length - 1];
+    if (!seg.rating || seg.rating.score !== 3) throw new Error('the mouse rating was not stored');
+    if (seg.rating.comment !== 'мягко и тепло') {
+      throw new Error('the comment was not stored: ' + seg.rating.comment);
+    }
+
+    // Esc пропускает: посещение остаётся, но без оценки.
+    H.chordEvent(chord, 0.8, 'keys');
+    H.state.score = H.CFG.comboAdvanceAt;
+    H.advanceCombo();
+    window.dispatchEvent(new KeyboardEvent('keydown', {
+      code: 'Escape', key: 'Escape', bubbles: true, cancelable: true
+    }));
+    data = R.exportData();
+    seg = data.segments[data.segments.length - 1];
+    if (!seg.rating || !seg.rating.skipped || seg.rating.score !== null) {
+      throw new Error('Esc did not skip the rating');
+    }
+
+    // «Сессия заново» закрывает визит с реальным счётом, а не с нулём:
+    // startSession сбрасывает state.score уже после закрытия сегмента.
+    H.chordEvent(chord, 0.8, 'keys');
+    H.state.score = H.CFG.comboAdvanceAt;
+    H.startSession();
+    data = R.exportData();
+    seg = data.segments[data.segments.length - 1];
+    if (seg.exit.via !== 'session') throw new Error('restart exit.via is not session: ' + seg.exit.via);
+    if (seg.score !== H.CFG.comboAdvanceAt) {
+      throw new Error('restart lost the score at exit: ' + seg.score);
+    }
+
+    // Закрытие вкладки (pagehide) сохраняет уже сыгранный визит.
+    H.chordEvent(chord, 0.8, 'keys');
+    H.state.score = H.CFG.comboAdvanceAt;
+    window.dispatchEvent(new Event('pagehide'));
+    data = R.exportData();
+    seg = data.segments[data.segments.length - 1];
+    if (seg.exit.via !== 'unload') throw new Error('pagehide exit.via is not unload: ' + seg.exit.via);
+    if (seg.score !== H.CFG.comboAdvanceAt) {
+      throw new Error('pagehide lost the score at exit: ' + seg.score);
+    }
+
+    // Панель: выключение прячет тело и оставляет данные.
+    var saved = R.status().visits;
+    R.disable();
+    if (R.status().enabled) throw new Error('research did not turn off');
+    if (!$('researchBody').hidden) throw new Error('the research panel body stayed visible');
+    if (R.status().visits !== saved) throw new Error('disabling dropped the data');
+    R.clear();
+    if (R.status().visits !== 0) throw new Error('clear did not remove the visits');
+    if ($('researchAsk').classList.contains('show')) throw new Error('the rating card stayed open');
   });
 
   check('console-errors', window.__smokeErrors.length === 0, window.__smokeErrors.join(' | '));

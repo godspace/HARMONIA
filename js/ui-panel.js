@@ -159,6 +159,10 @@ bindSelect('recCountIn', 'recCountIn', v => parseInt(v, 10));
 bindToggle('recLoop', 'recLoop', 'Повтор: вкл', 'Повтор: выкл', () => {
   if (typeof paintRecorder === 'function') paintRecorder();
 });
+// Автозапись — не bindToggle: включение должно начать дорожку, а выключение —
+// сохранить уже сыгранное. Кнопку ведёт recorder.js; здесь только перерисовка
+// после «Сброса параметров», который возвращает P.autoRecord в true.
+syncers.push(() => { if (typeof paintRecorder === 'function') paintRecorder(); });
 // Правая рука: две взаимоисключающие раскладки. Smart — пять безопасных нот
 // вокруг текущего аккорда (по умолчанию), иначе — привычные J I O P [.
 const handBtn = $('pSmartHand');

@@ -33,6 +33,9 @@ function runCommand(id) {
 window.addEventListener('keydown', (e) => {
   // Ctrl/⌘/Alt + клавиша — команда браузера, а не игра (Ctrl+R, Ctrl+M, ⌘Q…).
   if (e.ctrlKey || e.metaKey || e.altKey) return;
+  // Карточка оценки комбо (js/research.js) забирает J I O P [ / Space / Esc,
+  // пока открыта; в поле комментария те же клавиши остаются обычными буквами.
+  if (typeof Research !== 'undefined' && Research.gateKey(e)) return;
   // Стартовый экран: пока сессия не начата, десять игровых клавиш — это проба
   // пальцев, а пробел — подтверждение старта после неё. Тот же жест в игре
   // открывает новое комбо, поэтому реакция закрепляется ещё до первой ноты.
@@ -124,6 +127,7 @@ $('restartBtn').addEventListener('click', () => {
 });
 $('modeSel').addEventListener('change', (e) => setMode(e.target.value));
 $('comboSel').addEventListener('change', (e) => {
+  if (typeof Research !== 'undefined') Research.exitHint('select');
   loadCombo(parseInt(e.target.value, 10), true);
   toast('КОМБО ' + combo().id + ' · ' + keyNameOf(combo()));
 });

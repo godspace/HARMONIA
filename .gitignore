@@ -10,6 +10,9 @@ desktop.ini
 *.tmp
 .tmp*
 tmp_*
+# Python-кэш инструментов (tools/research.py можно импортировать в проверках)
+__pycache__/
+*.pyc
 /visual.png
 
 # headless-проверки формы: генерируются tools/_smoke_build.ps1 и _visual_build.ps1
@@ -25,3 +28,7 @@ _*.txt
 _*.html
 _*.js
 _*.png
+
+# выгрузки исследования оценок: личные ответы игроков не коммитим
+harmonia-research-*.json
+data/research/

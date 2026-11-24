@@ -23,6 +23,8 @@ fitStage();
 window.HARMONIA = {
   state, P, DEFAULTS, CFG, COMBOS, ORDER, INPUT, Midi, Translate, I18N, VIZ, viz, Heard,
   Transport, Groove, Composition, setFormEnabled, updateFormHUD,
+  // Необязательное исследование оценок: включается ?research=1 или панелью.
+  research: Research,
   groovePattern, grooveSteps, groovePlan,
   harmonicChords, updateHUD, playHarmonic, chordEvent, pressCode, releaseCode, runCommand, loadCombo, setMode, startSession,
   rootMidi,
@@ -45,10 +47,20 @@ window.HARMONIA = {
   noteChord, noteChordPlan, noteChordHarmony, scheduleNoteChord, cancelPendingNoteChord,
   BELL_TIMBRES, DRUM_TIMBRES, voiceVolume, applyVoiceVolumes, drumHit, drumPlan,
   // Характер станции: расположение голосов, бас, октава и тембр по паре комбо.
-  STATION_STYLES, STATION_NEUTRAL, STATION_TOUCH, stationStyleAt, stationStyleFor,
-  stationStyleById, stationRegister, stationPadVoices, stationBassOffset, stationShape,
-  setStationStyle,
+  STATION_STYLES, STATION_NEUTRAL, STATION_TOUCH, STATION_GESTURES, STATION_PLOT_GESTURES,
+  stationStyleAt, stationStyleFor, stationStyleById, stationRegister, stationPadVoices,
+  stationBassOffset, stationShape, stationGesture, stationGestureDelays, stationVoiceDelays,
+  setStationStyle, setStationGesture,
+  // Сюжет пары: фазы от сыгранных аккордов, подача и предпочтение окна.
+  STATION_PLOT_PHASES, STATION_PLOT_ARCHETYPES, STATION_PLOT_BY_STYLE,
+  stationPlotEnabled, stationPlotPhase, stationPlotForChord, stationPlotArchetype,
+  stationPlotStyle, stationPlotStyleForChord, stationPlotWindowBias, stationPlotText,
+  stationPlotAdvance, stationPlotReset, setStationPlot,
   startRecording, stopRecording, playSelected, stopPlayback, deleteSelectedRecording,
+  // Автозапись станции и MIDI-экспорт: запись — тот же формат событий, что и
+  // ручная, плюс combo/station/plot. buildMidiFile() возвращает Uint8Array.
+  setAutoRecord, autoRecordStart, autoRecordFinalize, autoRecordStatus,
+  buildMidiFile, midiRecordingEvents, midiFileName, exportSelectedMidi,
   getRecordings: () => recordings,
   toggleSound, audioRms, spectralCentroid, resetVizLayers, vizDebug, setViz, cycleViz
 };

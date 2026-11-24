@@ -19,6 +19,114 @@ let playbackTimers = [];
 let playbackEndTimer = null;
 let playbackToken = 0;
 let selectedRecId = null;
+// Автозапись станции живёт рядом с ручной, а не вместо неё: гость может нажать
+// «● Запись» в любой момент, а фоновая запись всё равно соберёт посещение.
+// autoRec.active снимается при смене комбо/паузе, чтобы пустые визиты не
+// попадали в список.
+let autoRec = null;
+
+// Снимок станции попадает в запись: через месяц по имени «Станция 3 · войлок»
+// видно, где она сделана, даже если STATION_STYLES успели поменять.
+function autoRecordSnapshot() {
+  const c = combo();
+  const st = stationStyleFor(state.comboIdx);
+  const plot = typeof stationPlotArchetype === 'function' ? stationPlotArchetype() : null;
+  const gesture = typeof stationGesture === 'function' ? stationGesture(st) : null;
+  return {
+    combo: {
+      id: c.id, mode: c.mode, keyName: c.keyName,
+      keyNameLatin: c.keyNameLatin, root: c.root
+    },
+    station: {
+      id: st.id, label: st.label, voicing: st.voicing,
+      bass: st.bass, register: st.register, touch: st.touch
+    },
+    plot: plot ? { id: plot.id, label: plot.label } : null,
+    gesture: gesture ? { id: gesture.id, label: gesture.label, delays: gesture.delays.slice() } : null
+  };
+}
+function autoRecordingName(a) {
+  // Только номер и характер: название тональности меняется вместе с нотацией,
+  // а имя записи должно читаться в обоих языках. Номер комбо различает мажор
+  // и минор одной пары (1…12 и 13…24).
+  return 'Станция ' + a.combo.id + ' · ' + a.station.label;
+}
+function autoRecordStart() {
+  if (!P.autoRecord || state.replay || !state.started || !state.running || state.paused) return null;
+  if (autoRec && autoRec.active) return autoRec;
+  const meta = autoRecordSnapshot();
+  autoRec = {
+    active: true,
+    events: [],
+    startedAt: performance.now(),
+    created: Date.now(),
+    combo: meta.combo,
+    station: meta.station,
+    plot: meta.plot,
+    gesture: meta.gesture,
+    form: state.form && state.form.enabled ? {
+      bpm: state.transport.bpm || P.formBpm,
+      beatsPerBar: Number(state.transport.beatsPerBar) === 3 ? 3 : 4,
+      bars: typeof Composition !== 'undefined' ? Composition.totalBars() : CFG.composition.bars
+    } : null
+  };
+  paintRecorder();
+  return autoRec;
+}
+// save=false — отмена (например, «Сессия заново»): недописанное посещение не
+// нужно. Пустое посещение не сохраняется: в списке остаются только реальные
+// фразы, а не каждая пройденная станция.
+function autoRecordFinalize(save) {
+  const a = autoRec;
+  autoRec = null;
+  if (!a || !a.active) { paintRecorder(); return null; }
+  a.active = false;
+  const events = a.events;
+  if (save === false || !events.length) { paintRecorder(); return null; }
+  const created = a.created;
+  const duration = Math.max(0, performance.now() - a.startedAt);
+  const rec = {
+    id: 'auto-' + created + '-' + Math.random().toString(36).slice(2, 6),
+    name: autoRecordingName(a),
+    created,
+    duration,
+    events,
+    auto: true,
+    combo: a.combo,
+    station: a.station,
+    plot: a.plot,
+    gesture: a.gesture
+  };
+  if (a.form) rec.form = a.form;
+  recordings.unshift(rec);
+  recordings = recordings.slice(0, REC_MAX_ITEMS);
+  // Не отбираем выбор у ручной записи: автосохранение — фон, а не действие
+  // игрока. Если же ничего не выбрано, показываем новую станцию.
+  if (!recordings.some(r => r.id === selectedRecId)) selectedRecId = rec.id;
+  saveRecordings();
+  paintRecorder();
+  return rec;
+}
+// Ручное A/B и панель: включение начинает запись сразу, выключение сохраняет
+// уже сыгранное и больше не пишет.
+function setAutoRecord(on) {
+  P.autoRecord = !!on;
+  if (P.autoRecord) autoRecordStart();
+  else autoRecordFinalize();
+  paintRecorder();
+  toast(P.autoRecord ? 'Автозапись станции: вкл' : 'Автозапись станции: выкл');
+  return P.autoRecord;
+}
+function autoRecordStatus() {
+  if (!autoRec || !autoRec.active) return null;
+  return {
+    active: true,
+    combo: autoRec.combo,
+    station: autoRec.station,
+    plot: autoRec.plot,
+    events: autoRec.events.length
+  };
+}
 
 function recDurationLabel(ms) {
   const total = Math.max(0, Math.round((ms || 0) / 1000));
@@ -64,6 +172,7 @@ function recordOptionText(rec) {
 function paintRecorder() {
   const btn = $('recBtn'), play = $('playBtn'), del = $('recDel');
   const list = $('recList'), status = $('recStatus');
+  const midi = $('recMidi'), autoBtn = $('recAuto');
   if (!btn || !play || !del || !list || !status) return;
   if (!recordings.some(r => r.id === selectedRecId)) {
     selectedRecId = recordings.length ? recordings[0].id : null;
@@ -93,6 +202,11 @@ function paintRecorder() {
   play.disabled = busy || (!hasSelected && !state.playingRecording);
   del.disabled = busy || state.playingRecording || !hasSelected;
   list.disabled = busy || state.playingRecording;
+  if (midi) midi.disabled = busy || state.playingRecording || !hasSelected;
+  if (autoBtn) {
+    autoBtn.setAttribute('aria-pressed', String(!!P.autoRecord));
+    autoBtn.textContent = P.autoRecord ? 'Автозапись станции: вкл' : 'Автозапись станции: выкл';
+  }
   status.className = 'rec-status' +
     (countIn ? ' countin' : state.recording ? ' live' : state.playingRecording ? ' playing' : '');
   if (countIn) {
@@ -235,27 +349,48 @@ function discardRecording() {
   }
   if (state.recording) stopRecording(false);
 }
-function recordEvent(ev) {
-  if (!state.recording || state.replay) return;
-  const t = Math.max(0, performance.now() - recStartedAt);
-  if (t >= REC_MAX_MS || recEvents.length >= REC_MAX_EVENTS) {
-    stopRecording(true);
-    return;
+// Один и тот же снимок события пишется в две независимые дорожки: ручную
+// (recEvents) и авто-дорожку текущей станции. Время считается от старта каждой,
+// поэтому позже начатая ручная запись не сдвигает авто-посещение.
+function pushRecordEvent(target, ev, now, startedAt, onLimit) {
+  const t = Math.max(0, now - startedAt);
+  if (t >= REC_MAX_MS || target.length >= REC_MAX_EVENTS) {
+    if (typeof onLimit === 'function') onLimit();
+    return false;
   }
-  ev.t = t;
+  const item = Object.assign({}, ev, { t });
   if (state.form && state.form.running && state.form.bar >= 1) {
-    ev.form = {
+    item.form = {
       bar: state.form.bar,
       beat: state.form.beat,
       section: state.form.sectionId || ''
     };
   }
-  recEvents.push(ev);
-  if (recEvents.length % 8 === 0) paintRecorder();
+  target.push(item);
+  return true;
+}
+function recordEvent(ev) {
+  if (state.replay || !ev) return;
+  const now = performance.now();
+  if (state.recording) {
+    pushRecordEvent(recEvents, ev, now, recStartedAt, () => stopRecording(true));
+    if (recEvents.length % 8 === 0) paintRecorder();
+  }
+  if (autoRec && autoRec.active) {
+    pushRecordEvent(autoRec.events, ev, now, autoRec.startedAt, () => autoRecordFinalize());
+    if (autoRec && autoRec.events.length % 8 === 0) paintRecorder();
+  }
 }
 function recordChord(h, vel) {
-  if (!state.recording || state.replay || !h) return;
+  if (state.replay || !h) return;
   // h — снимок без функций: JSON.stringify сохранит только музыкальные поля.
+  const T = rootMidi();
+  const offset = h.offset == null ? ((h.rootPc - (T % 12) + 12) % 12) : h.offset;
+  // Бас пишется отдельным полем: MIDI-экспорт не должен восстанавливать его
+  // по текущим настройкам, если запись сделана на другой станции.
+  const station = stationStyleFor(state.comboIdx);
+  const bassMidi = T + 12 * (Number(P.bassOct) || 0) +
+    (typeof stationBassOffset === 'function' ? stationBassOffset(h, offset, station) : 0);
   recordEvent({
     type: 'chord',
     h: {
@@ -263,12 +398,13 @@ function recordChord(h, vel) {
       tonic: !!h.tonic, rootPc: h.rootPc, pcs: (h.pcs || []).slice(),
       third: h.third, fifth: h.fifth, offset: h.offset, quality: h.quality
     },
-    base: rootMidi(),
+    base: T,
+    bass: bassMidi,
     vel: vel == null ? 1 : clamp(vel, 0.05, 1)
   });
 }
 function recordNote(midi, vel, pan, withChord) {
-  if (!state.recording || state.replay) return;
+  if (state.replay) return;
   recordEvent({
     type: 'note', midi,
     vel: vel == null ? 0.8 : clamp(vel, 0.05, 1),
@@ -287,18 +423,24 @@ function ballForMidi(midi) {
   });
   return best;
 }
-function playRecordedEvent(ev) {
+function playRecordedEvent(ev, rec) {
   if (!ev) return;
+  // Авто-запись хранит характер станции: прослушивание возвращает её голос,
+  // а не подачу той станции, которая открыта сейчас. Ручная запись остаётся
+  // нейтральной, как раньше.
+  const station = rec && rec.auto && rec.station ? rec.station : null;
+  const shape = station && typeof STATION_TOUCH !== 'undefined'
+    ? (STATION_TOUCH[station.touch] || null) : null;
   if (ev.type === 'chord' && ev.h) {
     // base из записи сохраняет исходную тональность прослушивания.
-    playChordAudio(ev.h, ev.vel, ev.base);
+    playChordAudio(ev.h, ev.vel, ev.base, null, station, shape);
     chordEvent(ev.h, ev.vel, 'replay');
     return;
   }
   if (ev.type !== 'note' || ev.midi == null) return;
   const midi = ev.midi, vel = ev.vel == null ? 0.8 : ev.vel;
   const pan = ev.pan == null ? clamp((midi - 60) / 48, -0.8, 0.8) : ev.pan;
-  bell(midi, vel, pan, null, 'note', 0);
+  bell(midi, vel, pan, null, 'note', 0, shape);
   if (ev.withChord !== false) noteChord(midi, vel, pan);
   const ball = ballForMidi(midi);
   // withAudio=false: звук уже создан выше, шар только показывает ноту.
@@ -313,8 +455,10 @@ function finishPlayback(token) {
   if (playbackEndTimer) { clearTimeout(playbackEndTimer); playbackEndTimer = null; }
   balls.forEach(b => { b.sustainLatch = false; b.sustainAt = 0; });
   paintRecorder();
+  // После прослушивания авто-запись возвращается к текущей станции.
+  if (typeof autoRecordStart === 'function') autoRecordStart();
 }
-function stopPlayback() {
+function stopPlayback(resumeAuto) {
   playbackToken += 1;
   playbackTimers.forEach(id => clearTimeout(id));
   playbackTimers = [];
@@ -325,6 +469,10 @@ function stopPlayback() {
     state.playingRecording = false;
     if (typeof dampPedalVoices === 'function') dampPedalVoices();
     paintRecorder();
+    // «Стоп» прослушивания не должен выключать фоновую автозапись. При смене
+    // станции/паузе вызывающий передаёт false: там новую дорожку откроет
+    // loadCombo() или setPaused(false), уже с новым comboIdx.
+    if (resumeAuto !== false && typeof autoRecordStart === 'function') autoRecordStart();
   }
 }
 // Один проход записи. При включённом P.recLoop финальный таймер запускает
@@ -339,7 +487,7 @@ function startPlaybackCycle(rec, token) {
   events.forEach(ev => {
     playbackTimers.push(setTimeout(() => {
       if (token !== playbackToken || !state.playingRecording) return;
-      playRecordedEvent(ev);
+      playRecordedEvent(ev, rec);
     }, Math.max(0, ev.t)));
   });
   // Конец прослушивания — по последнему событию, а не по «хвосту» тишины,
@@ -366,6 +514,129 @@ function playSelected() {
   paintRecorder();
   toast('▶ ' + rec.name + (P.recLoop ? ' · повтор' : ''));
 }
+// ===== MIDI-экспорт =====
+// Запись хранит готовые высоты, поэтому SMF собирается без зависимостей и без
+// обращения к текущей станции. Формат 0 (один трек), PPQ 480: этого достаточно
+// для любого редактора, а аккорд, бас и мелодия остаются раздельными нотами.
+function midiVarLen(value) {
+  let v = Math.max(0, Math.round(Number(value) || 0));
+  const bytes = [v & 0x7F];
+  v = Math.floor(v / 128);
+  while (v > 0) {
+    bytes.unshift((v & 0x7F) | 0x80);
+    v = Math.floor(v / 128);
+  }
+  return bytes;
+}
+function midiU32(value) {
+  const v = Math.max(0, Math.round(Number(value) || 0));
+  return [(v >>> 24) & 255, (v >>> 16) & 255, (v >>> 8) & 255, v & 255];
+}
+function midiAscii(text) {
+  return String(text || '').replace(/[^\x20-\x7E]/g, '?').split('')
+    .map(ch => ch.charCodeAt(0) & 0x7F);
+}
+// События для теста и для сборки файла: note-on/note-off с тиками, BPM и PPQ.
+// Длительность аккорда берётся до следующего события (120…1500 мс), ноты —
+// короче (120…900 мс), чтобы мелодия не «заливала» следующие доли.
+function midiRecordingEvents(rec) {
+  const list = (rec && rec.events ? rec.events : []).slice()
+    .sort((a, b) => (Number(a.t) || 0) - (Number(b.t) || 0));
+  const bpm = clamp(Number(rec && rec.form && rec.form.bpm) || Number(P.formBpm) || 84, 40, 200);
+  const ppq = 480;
+  const toTick = ms => Math.max(0, Math.round((Number(ms) || 0) * bpm / 60000 * ppq));
+  const out = [];
+  list.forEach((ev, i) => {
+    if (!ev) return;
+    const t = Math.max(0, Number(ev.t) || 0);
+    const nextT = i + 1 < list.length ? Math.max(t, Number(list[i + 1].t) || 0) : t + 800;
+    const gap = nextT - t;
+    const dur = Math.max(120, Math.min(1500, gap || 700));
+    const vel = Math.max(1, Math.min(127, Math.round((ev.vel == null ? 0.8 : ev.vel) * 127)));
+    if (ev.type === 'chord' && ev.h) {
+      const h = ev.h;
+      const base = ev.base == null ? 60 : Number(ev.base);
+      const offset = h.offset == null ? 0 : Number(h.offset);
+      const root = (Number.isFinite(base) ? base : 60) + 12 +
+        (Number.isFinite(offset) ? offset : 0);
+      const third = h.third == null ? 4 : Number(h.third);
+      const fifth = h.fifth == null ? 7 : Number(h.fifth);
+      const notes = [root, root + third, root + fifth];
+      if (ev.bass != null && Number.isFinite(Number(ev.bass))) notes.push(Number(ev.bass));
+      const uniq = Array.from(new Set(notes.map(n =>
+        Math.max(0, Math.min(127, Math.round(n))))));
+      uniq.forEach(midi => {
+        out.push({ tick: toTick(t), on: true, midi, vel });
+        out.push({ tick: toTick(t + dur), on: false, midi, vel: 0 });
+      });
+    } else if (ev.type === 'note' && Number.isFinite(Number(ev.midi))) {
+      const midi = Math.max(0, Math.min(127, Math.round(Number(ev.midi))));
+      out.push({ tick: toTick(t), on: true, midi, vel });
+      out.push({ tick: toTick(t + Math.max(120, Math.min(900, dur))), on: false, midi, vel: 0 });
+    }
+  });
+  // Note-off раньше note-on на том же тике: иначе соседние одинаковые ноты
+  // могли бы «погасить» только что начатую.
+  out.sort((a, b) => a.tick - b.tick ||
+    (a.on === b.on ? a.midi - b.midi : (a.on ? 1 : -1)));
+  return { events: out, bpm, ppq };
+}
+function buildMidiFile(rec) {
+  const data = midiRecordingEvents(rec);
+  const beats = rec && rec.form && Number(rec.form.beatsPerBar) === 3 ? 3 : 4;
+  const track = [];
+  const push = bytes => { bytes.forEach(b => track.push(b & 255)); };
+  const event = (delta, bytes) => {
+    push(midiVarLen(delta));
+    push(bytes);
+  };
+  const name = midiAscii('HARMONIA');
+  event(0, [0xFF, 0x03].concat(midiVarLen(name.length), name));
+  const mpqn = Math.round(60000000 / data.bpm);
+  event(0, [0xFF, 0x51, 0x03, (mpqn >> 16) & 255, (mpqn >> 8) & 255, mpqn & 255]);
+  event(0, [0xFF, 0x58, 0x04, beats, 2, 24, 8]);
+  // Акустическое пианино: нейтральная программа, которую понимает любой плеер.
+  event(0, [0xC0, 0x00]);
+  let lastTick = 0;
+  data.events.forEach(e => {
+    event(Math.max(0, e.tick - lastTick), [e.on ? 0x90 : 0x80, e.midi, e.on ? e.vel : 0]);
+    lastTick = e.tick;
+  });
+  event(0, [0xFF, 0x2F, 0x00]);
+  const header = [0x4D, 0x54, 0x68, 0x64, 0, 0, 0, 6, 0, 0, 0, 1,
+    (data.ppq >> 8) & 255, data.ppq & 255];
+  return new Uint8Array(header.concat([0x4D, 0x54, 0x72, 0x6B],
+    midiU32(track.length), track));
+}
+function midiFileName(rec) {
+  const base = String(rec && rec.name || 'harmonia')
+    .replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, ' ').trim().slice(0, 80) || 'harmonia';
+  return base + '.mid';
+}
+function exportSelectedMidi() {
+  const rec = selectedRecording();
+  if (!rec || !rec.events || !rec.events.length) return '';
+  const bytes = buildMidiFile(rec);
+  const name = midiFileName(rec);
+  try {
+    const blob = new Blob([bytes], { type: 'audio/midi' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
+    toast('MIDI сохранён', 'good');
+    return name;
+  } catch (e) {
+    if (typeof console !== 'undefined') console.warn('midi: download failed', e);
+    toast('MIDI не удалось сохранить');
+    return '';
+  }
+}
 function deleteSelectedRecording() {
   const rec = selectedRecording();
   if (!rec || state.recording || state.recordingCountIn || state.playingRecording) return;
@@ -379,6 +650,7 @@ function initRecorder() {
   loadRecordings();
   selectedRecId = recordings.length ? recordings[0].id : null;
   const btn = $('recBtn'), play = $('playBtn'), del = $('recDel'), list = $('recList');
+  const midi = $('recMidi'), autoBtn = $('recAuto');
   if (!btn || !play || !del || !list) return;
   btn.addEventListener('click', () => {
     // Во время отсчёта кнопка работает как отмена, а не как повторный старт.
@@ -391,10 +663,15 @@ function initRecorder() {
     else playSelected();
   });
   del.addEventListener('click', deleteSelectedRecording);
+  if (midi) midi.addEventListener('click', exportSelectedMidi);
+  if (autoBtn) autoBtn.addEventListener('click', () => setAutoRecord(!P.autoRecord));
   list.addEventListener('change', (e) => {
     selectedRecId = e.target.value || null;
     paintRecorder();
   });
+  // Закрытие вкладки не должно терять уже сыгранное посещение: сохраняем только
+  // непустую авто-дорожку, ручная запись по-прежнему требует «Стоп».
+  window.addEventListener('beforeunload', () => autoRecordFinalize());
   paintRecorder();
 }
 initRecorder();

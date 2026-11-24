@@ -291,7 +291,9 @@ function routeVoice(sum, pan, wet, bus, wetVol) {
 }
 // Колокол: vel (0..1) задаёт и громкость, и яркость. timbre — 'note' | 'chord'.
 // hold (0..1.x) — множитель длины: сустейн-педаль держит уже сыгранную ноту.
-function bell(midi, vel, pan, when, timbreName, hold) {
+// shapeOverride — характер станции для прослушивания авто-записи: запись
+// хранит touch, и он должен звучать так же, как в момент игры.
+function bell(midi, vel, pan, when, timbreName, hold, shapeOverride) {
   if (!audioCtx) return;
   const t = when == null ? audioCtx.currentTime : when;
   const v = clamp(vel == null ? 1 : vel, 0.05, 1);
@@ -299,11 +301,11 @@ function bell(midi, vel, pan, when, timbreName, hold) {
   const name = timbreName === 'note' ? 'note' : 'chord';
   const timbre = BELL_TIMBRES[name];
   // Характер станции (js/station.js) — та же нота, другая подача: короче или
-  // длиннее, ярче или темнее, суше или объёмнее. В прослушивании записи характер
-  // не применяется: запись хранит высоты, а не тембр, и нейтральная подача
-  // честнее случайной станции, открытой в этот момент.
-  const shape = (typeof stationShape === 'function' && !state.replay)
-    ? stationShape() : null;
+  // длиннее, ярче или темнее, суше или объёмнее. Ручная запись и обычное
+  // прослушивание остаются нейтральными; авто-запись передаёт shapeOverride,
+  // чтобы голос станции не зависел от того, какая станция открыта сейчас.
+  const shape = shapeOverride ||
+    ((typeof stationShape === 'function' && !state.replay) ? stationShape() : null);
   const shapeDecay = shape ? shape.decay : 1;
   const shapeTone = shape ? shape.tone : 1;
   const shapeWet = shape ? shape.wet : 1;
