@@ -190,10 +190,12 @@ var I18N = (function () {
     'Повторять выбранную запись по кругу': 'Play the selected recording in a loop',
     'Автозапись станции: вкл': 'Station auto-record: on',
     'Автозапись станции: выкл': 'Station auto-record: off',
-    'Автоматически записывать каждую станцию для прослушивания, MIDI и видео':
-      'Automatically record each station for playback, MIDI and video',
+    'Автоматически записывать каждую станцию для прослушивания, MIDI, аудио и видео':
+      'Automatically record each station for playback, MIDI, audio and video',
     'Скачать выбранную запись как MIDI-файл':
       'Download the selected recording as a MIDI file',
+    'Скачать выбранную запись как WAV-файл':
+      'Download the selected recording as a WAV file',
     'Скачать выбранную запись как видео (WebM)':
       'Download the selected recording as a video (WebM)',
     'Скачать выбранную запись как вертикальное видео 9:16 (WebM)':
@@ -204,24 +206,36 @@ var I18N = (function () {
     'Описание скопировано': 'Caption copied',
     'Не удалось скопировать описание': 'Could not copy the caption',
     '⬇ Видео': '⬇ Video',
+    '⬇ Аудио': '⬇ Audio',
     'Сохранить это комбо как вертикальное видео 9:16 (WebM)':
       'Save this combo as a vertical 9:16 video (WebM)',
+    'Сохранить это комбо как WAV-файл': 'Save this combo as a WAV file',
     'Запись этого комбо не сохранилась — включите автозапись станции.':
       'This combo’s recording was not saved — turn on station auto-record.',
     'Запись этого комбо не сохранилась': 'This combo’s recording was not saved',
     'Браузер не поддерживает запись видео.': 'This browser cannot record video.',
+    'Браузер не поддерживает запись аудио.': 'This browser cannot record audio.',
     'Дождитесь окончания записи или рендера.': 'Wait for the recording or render to finish.',
+    'Дождитесь окончания записи или экспорта.':
+      'Wait for the recording or export to finish.',
     '🎬 Видео': '🎬 Video',
+    '🎧 Аудио': '🎧 Audio',
     'Рендер видео…': 'Rendering video…',
+    'Запись аудио…': 'Recording audio…',
     'Отменить': 'Cancel',
     'Видео сохранено': 'Video saved',
     'Видео не удалось сохранить': 'Could not save the video',
     'Видео не поддерживается браузером': 'This browser cannot export video',
     'Экспорт видео отменён': 'Video export cancelled',
+    'Аудио сохранено': 'Audio saved',
+    'Аудио не удалось сохранить': 'Could not save the audio',
+    'Аудио не поддерживается браузером': 'This browser cannot export audio',
+    'Экспорт аудио отменён': 'Audio export cancelled',
     'В записи нет нот': 'The recording has no notes',
     'Старая запись: партия барабанов не сохранилась — видео будет без ударных.':
       'This is an old recording: its drum track was not saved, so the video will have no drums.',
     'рендер…': 'rendering…',
+    'запись…': 'recording…',
     'уд.': 'hits',
     'MIDI сохранён': 'MIDI saved',
     'MIDI не удалось сохранить': 'Could not save MIDI',
@@ -264,8 +278,8 @@ var I18N = (function () {
     'Исследование · оценки комбо': 'Research · combo ratings',
     'Исследование: выкл': 'Research: off',
     'Исследование: вкл': 'Research: on',
-    'Собирать оценки комбо в этом браузере. Включается также адресом ?research=1':
-      'Collect combo ratings in this browser. It also turns on with ?research=1',
+    'Собирать оценки комбо в этом браузере. Выключается адресом ?research=0':
+      'Collect combo ratings in this browser. It turns off with ?research=0',
     'Спрашивать оценку: вкл': 'Ask for a rating: on',
     'Спрашивать оценку: выкл': 'Ask for a rating: off',
     'Спрашивать оценку после Space-перехода в новое комбо':
@@ -284,8 +298,8 @@ var I18N = (function () {
     'Что понравилось или что не так?': 'What felt right or what felt wrong?',
     'Комментарий к комбо': 'Comment on the combo',
     'J I O P [ — оценка · Space / Esc — пропустить': 'J I O P [ — rate · Space / Esc — skip',
-    'Можно сохранить видео или нажать «Готово»':
-      'Save the video or press “Done”',
+    'Можно сохранить видео, аудио или нажать «Готово»':
+      'Save the video or audio, or press “Done”',
     'Пропустить': 'Skip',
     'Готово': 'Done',
     'Оценка сохранена': 'Rating saved',

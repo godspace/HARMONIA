@@ -10,8 +10,9 @@
    сколько игрок держал комбо, что сыграл, каким был счёт и как он вышел.
 
    Границы, которые важны:
-     · исследование ВЫКЛЮЧЕНО по умолчанию (включает ?research=1, консоль или
-       панель), поэтому обычный игрок его не видит;
+     · исследование ВКЛЮЧЕНО по умолчанию, поэтому обычный игрок видит карточку
+       после Space-перехода; выключают его ?research=0, консоль или панель.
+       Старые настройки без version один раз мигрируют на enabled: true;
      · карточка появляется только на Space-переходе (advanceCombo); ручные
        переходы (стрелки, выбор комбо, круг, лад) закрывают посещение молча;
      · модуль — наблюдатель: он не меняет ни pitch class, ни очки, ни раскладку;
@@ -30,6 +31,7 @@ var Research = (function () {
   const CFG_R = (typeof CFG !== 'undefined' && CFG.research) || {};
   const RES_KEY = 'harmonia.research.v1';
   const SETTINGS_KEY = 'harmonia.research.settings';
+  const SETTINGS_VERSION = 2;
   const SCHEMA = 'harmonia.research.v1';
   const ASK_MS = CFG_R.askMs || 12000;
   const COMMENT_MAX = CFG_R.commentMax || 160;
@@ -40,7 +42,7 @@ var Research = (function () {
   // поэтому карточка перехватывает их только пока открыта.
   const RATE_KEYS = { KeyJ: 5, KeyI: 4, KeyO: 3, KeyP: 2, BracketLeft: 1 };
 
-  let settings = { enabled: false, ask: true };
+  let settings = { enabled: true, ask: true, version: SETTINGS_VERSION };
   let segments = [];
   let seg = null;            // открытое посещение
   let enterPerf = 0;         // performance.now() входа: для dwell/play
@@ -76,13 +78,27 @@ var Research = (function () {
   }
   function loadSettings() {
     const raw = readJson(SETTINGS_KEY);
-    if (raw && typeof raw === 'object') {
-      settings.enabled = !!raw.enabled;
-      settings.ask = raw.ask !== false;
+    if (!raw || typeof raw !== 'object') {
+      settings = { enabled: true, ask: true, version: SETTINGS_VERSION };
+      saveSettings();
+      return;
     }
+    // version 2 — явный выбор игрока (в том числе enabled:false). Настройки
+    // старого формата не знали версии: один раз включаем сбор, чтобы после
+    // обновления карточка появилась у всех, кто ещё не делал выбора в новой
+    // схеме. ?research=0 и панель сразу запишут version 2 и больше не тронутся.
+    const version = Number(raw.version) || 0;
+    settings.enabled = version >= SETTINGS_VERSION ? !!raw.enabled : true;
+    settings.ask = raw.ask !== false;
+    settings.version = SETTINGS_VERSION;
+    saveSettings();
   }
   function saveSettings() {
-    writeJson(SETTINGS_KEY, { enabled: !!settings.enabled, ask: !!settings.ask });
+    writeJson(SETTINGS_KEY, {
+      version: SETTINGS_VERSION,
+      enabled: !!settings.enabled,
+      ask: !!settings.ask
+    });
   }
   function loadSegments() {
     const raw = readJson(RES_KEY);
@@ -141,6 +157,7 @@ var Research = (function () {
     return {
       enabled: !!settings.enabled,
       ask: !!settings.ask,
+      version: SETTINGS_VERSION,
       visits: t.visits,
       rated: t.rated,
       skipped: t.skipped,
@@ -473,7 +490,7 @@ var Research = (function () {
   // карточка не закрывается: игрок успевает скачать видео этого комбо и
   // закрыть её кнопкой «Готово»/Space/Esc.
   const ASK_HINT = 'J I O P [ — оценка · Space / Esc — пропустить';
-  const ASK_HINT_RATED = 'Можно сохранить видео или нажать «Готово»';
+  const ASK_HINT_RATED = 'Можно сохранить видео, аудио или нажать «Готово»';
   function askMeta(s) {
     const sec = Math.max(1, Math.round((s.playMs || 0) / 1000));
     const key = P.notation === 'letters' ? s.combo.keyNameLatin : s.combo.keyName;
@@ -501,7 +518,7 @@ var Research = (function () {
       btn.setAttribute('aria-pressed', active ? 'true' : 'false');
       btn.classList.toggle('selected', active);
     });
-    paintAskVideo();
+    paintAskButtons();
   }
   function commentEl() { return $('researchAskComment'); }
   function readComment() {
@@ -520,15 +537,20 @@ var Research = (function () {
     return typeof recordingById === 'function'
       ? recordingById(askSeg.recordingId) : null;
   }
-  // Кнопка видео живёт рядом с оценкой, но не мешает ей: пока рендер идёт,
-  // карточка остаётся открытой, а её таймер стоит (holdAsk).
+  // Кнопки видео и аудио живут рядом с оценкой, но не мешают ей: пока экспорт
+  // идёт, карточка остаётся открытой, а её таймер стоит (holdAsk).
+  function paintAskButtons() {
+    paintAskVideo();
+    paintAskAudio();
+  }
   function paintAskVideo() {
     const btn = $('researchAskVideo');
     if (!btn) return;
     const rec = askRecording();
     const available = !!rec && Array.isArray(rec.events) && rec.events.length > 0;
     const supported = typeof videoSupported === 'function' ? videoSupported() : false;
-    const busy = !!state.videoExport || !!state.recording || !!state.recordingCountIn;
+    const busy = exportBusy() || !!state.recording || !!state.recordingCountIn ||
+      !!state.playingRecording;
     btn.disabled = !available || !supported || busy;
     btn.textContent = '⬇ Видео';
     if (!available) {
@@ -536,16 +558,36 @@ var Research = (function () {
     } else if (!supported) {
       btn.title = 'Браузер не поддерживает запись видео.';
     } else if (busy) {
-      btn.title = 'Дождитесь окончания записи или рендера.';
+      btn.title = 'Дождитесь окончания записи или экспорта.';
     } else {
       btn.title = 'Сохранить это комбо как вертикальное видео 9:16 (WebM)';
+    }
+  }
+  function paintAskAudio() {
+    const btn = $('researchAskAudio');
+    if (!btn) return;
+    const rec = askRecording();
+    const available = !!rec && Array.isArray(rec.events) && rec.events.length > 0;
+    const supported = typeof audioSupported === 'function' ? audioSupported() : false;
+    const busy = exportBusy() || !!state.recording || !!state.recordingCountIn ||
+      !!state.playingRecording;
+    btn.disabled = !available || !supported || busy;
+    btn.textContent = '⬇ Аудио';
+    if (!available) {
+      btn.title = 'Запись этого комбо не сохранилась — включите автозапись станции.';
+    } else if (!supported) {
+      btn.title = 'Браузер не поддерживает запись аудио.';
+    } else if (busy) {
+      btn.title = 'Дождитесь окончания записи или экспорта.';
+    } else {
+      btn.title = 'Сохранить это комбо как WAV-файл';
     }
   }
   function exportAskVideo() {
     const rec = askRecording();
     if (!rec) {
       toast('Запись этого комбо не сохранилась');
-      paintAskVideo();
+      paintAskButtons();
       return '';
     }
     if (typeof startVideoExport !== 'function') {
@@ -553,16 +595,31 @@ var Research = (function () {
       return '';
     }
     const job = startVideoExport(rec);
-    paintAskVideo();
+    paintAskButtons();
     return job;
   }
-  // Рендер занимает реальное время, а автопропуск карточки — 12 секунд.
-  // Пока видео собирается, таймер стоит; после — снова идёт с полным окном.
+  function exportAskAudio() {
+    const rec = askRecording();
+    if (!rec) {
+      toast('Запись этого комбо не сохранилась');
+      paintAskButtons();
+      return '';
+    }
+    if (typeof startAudioExport !== 'function') {
+      toast('Аудио не поддерживается браузером');
+      return '';
+    }
+    const job = startAudioExport(rec);
+    paintAskButtons();
+    return job;
+  }
+  // Экспорт занимает реальное время, а автопропуск карточки — 12 секунд.
+  // Пока файл собирается, таймер стоит; после — снова идёт с полным окном.
   function holdAsk(on) {
     askHeld = !!on;
     if (askHeld) stopTimer();
     else {
-      paintAskVideo();
+      paintAskButtons();
       armTimer();
     }
     return askHeld;
@@ -632,7 +689,7 @@ var Research = (function () {
       el.setAttribute('aria-hidden', 'true');
     }
     if (field) field.value = '';
-    paintAskVideo();
+    paintAskButtons();
     paint();
     return !!s;
   }
@@ -751,7 +808,7 @@ var Research = (function () {
       schema: SCHEMA,
       app: 'HARMONIA',
       exportedAt: new Date().toISOString(),
-      settings: { enabled: !!settings.enabled, ask: !!settings.ask },
+      settings: { enabled: !!settings.enabled, ask: !!settings.ask, version: SETTINGS_VERSION },
       stationStyles: styles.map(s => ({ ...s })),
       stationTouch: JSON.parse(JSON.stringify(touch)),
       stationGestures: JSON.parse(JSON.stringify(gestures)),
@@ -832,6 +889,8 @@ var Research = (function () {
       if (skipBtn) skipBtn.addEventListener('click', () => skip());
       const videoBtn = $('researchAskVideo');
       if (videoBtn) videoBtn.addEventListener('click', exportAskVideo);
+      const audioBtn = $('researchAskAudio');
+      if (audioBtn) audioBtn.addEventListener('click', exportAskAudio);
     }
     const toggle = $('researchToggle');
     if (toggle) {
@@ -859,8 +918,8 @@ var Research = (function () {
       if (e.persisted && settings.enabled && state.started && state.running &&
           !state.paused && !seg) enterCombo();
     });
-    // ?research=1 включает сбор (и показывает секцию панели), ?research=0 —
-    // выключает, не трогая уже собранные данные.
+    // ?research=1 включает сбор, ?research=0 — выключает, не трогая уже
+    // собранные данные. Без параметра действует сохранённый выбор (по умолчанию вкл).
     const m = /[?&]research=(1|0|on|off|true|false)/i.exec(location.search);
     if (m && /^(1|on|true)$/i.test(m[1])) enable({ ask: true, open: true });
     else if (m) disable();
@@ -874,8 +933,8 @@ var Research = (function () {
     // Жизненный цикл посещения и события — их зовут game.js/midi.js
     onSessionStart, exitHint, enterCombo, leaveCombo, linkRecording, onChord, onNote,
     // Карточка
-    offerLast, gateKey, rate, skip, askRecording, exportAskVideo,
-    holdAsk, refreshAsk: paintAskVideo,
+    offerLast, gateKey, rate, skip, askRecording, exportAskVideo, exportAskAudio,
+    holdAsk, refreshAsk: paintAskButtons,
     // Данные
     status, totals, exportData, download, paint,
     // Лимиты пригодятся инструменту анализа и тестам

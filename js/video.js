@@ -50,9 +50,8 @@ function videoMimeType() {
   return '';
 }
 function videoFileName(rec) {
-  const base = String(videoTitle(rec) || 'harmonia')
-    .replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, ' ').trim().slice(0, 80) || 'harmonia';
-  return base + '.webm';
+  // Общая база с MIDI и WAV: одно и то же имя, разные расширения.
+  return recordingFileName(rec, 'webm');
 }
 function videoSize() {
   return { width: VIDEO_W, height: VIDEO_H, ratio: VIDEO_W / VIDEO_H };
@@ -60,23 +59,12 @@ function videoSize() {
 // Заголовок ролика и подписи — тоническое трезвучие комбо («Ля-До-Ми» /
 // «A-C-E»), а не служебное имя авто-записи «Станция 13 · эталон». У старых
 // записей без снимка аккордов трезвучие берётся из COMBOS по id комбо.
+// Источник — recorder.js: тем же именем подписаны MIDI и WAV.
 function videoTonic(rec) {
-  const c = rec && rec.combo;
-  if (!c) return '';
-  let names = null;
-  if (Array.isArray(c.chords) && Array.isArray(c.chords[0])) names = c.chords[0];
-  else if (Array.isArray(c.tonicChord)) names = c.tonicChord;
-  else if (c.id != null && typeof COMBOS !== 'undefined' && COMBOS[c.id] &&
-           Array.isArray(COMBOS[c.id].chords)) names = COMBOS[c.id].chords[0];
-  if (names && names.length) {
-    return typeof chordLabel === 'function' ? chordLabel(names) : names.join('-');
-  }
-  const key = (typeof usingLetterNames === 'function' && usingLetterNames())
-    ? (c.keyNameLatin || c.keyName) : c.keyName;
-  return videoText(key || '');
+  return typeof recordingTonic === 'function' ? recordingTonic(rec) : '';
 }
 function videoTitle(rec) {
-  return videoTonic(rec) || videoText(rec && rec.name || 'HARMONIA');
+  return recordingTitle(rec) || videoText('HARMONIA');
 }
 function videoDuration(rec) {
   const timeline = recordingTimeline(rec);
@@ -822,7 +810,7 @@ async function startVideoExport(target) {
   // Без аргумента — выбранная запись панели; с аргументом — конкретная запись,
   // например та, к которой относится открытая карточка оценки.
   const rec = target || selectedRecording();
-  if (state.videoExport || !rec || !rec.events || !rec.events.length) {
+  if (exportBusy() || !rec || !rec.events || !rec.events.length) {
     if (rec && (!rec.events || !rec.events.length)) toast('В записи нет нот');
     return '';
   }

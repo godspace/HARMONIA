@@ -23,7 +23,7 @@ fitStage();
 window.HARMONIA = {
   state, P, DEFAULTS, CFG, COMBOS, ORDER, INPUT, Midi, Translate, I18N, VIZ, viz, Heard,
   Transport, Groove, Composition, setFormEnabled, updateFormHUD,
-  // Необязательное исследование оценок: включается ?research=1 или панелью.
+  // Исследование оценок: включено по умолчанию; ?research=0 или панель выключают.
   research: Research,
   groovePattern, grooveSteps, groovePlan,
   harmonicChords, updateHUD, playHarmonic, chordEvent, pressCode, releaseCode, runCommand, loadCombo, setMode, startSession,
@@ -57,15 +57,18 @@ window.HARMONIA = {
   stationPlotStyle, stationPlotStyleForChord, stationPlotWindowBias, stationPlotText,
   stationPlotAdvance, stationPlotReset, setStationPlot,
   startRecording, stopRecording, playSelected, stopPlayback, deleteSelectedRecording,
-  // Автозапись станции, MIDI и видео: запись — тот же формат событий, что и
-  // ручная, плюс combo/station/plot. Ударные живут в отдельной дорожке drums.
+  // Автозапись станции, MIDI, WAV и видео: запись — тот же формат событий, что
+  // и ручная, плюс combo/station/plot. Ударные живут в отдельной дорожке drums.
   setAutoRecord, autoRecordStart, autoRecordFinalize, autoRecordStatus,
   buildMidiFile, midiRecordingEvents, midiFileName, exportSelectedMidi,
+  recordingTonic, recordingTitle, recordingFileName,
   recordDrumAt, recordDrum, recordingTimeline, recordDrumCount,
   recordNote, recordChord, recordEvent,
   startVideoExport, cancelVideoExport, videoExportStatus, videoSupported,
   videoFileName, videoDuration, videoLegacyWarning, videoSize,
   videoCaption, copyVideoCaption,
+  startAudioExport, cancelAudioExport, audioExportStatus, audioSupported,
+  audioFileName, audioDuration, audioPcmToWav,
   getRecordings: () => recordings, selectedRecording, recordingById,
   toggleSound, audioRms, spectralCentroid, resetVizLayers, vizDebug, setViz, cycleViz
 };

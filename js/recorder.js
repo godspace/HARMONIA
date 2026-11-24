@@ -61,6 +61,40 @@ function autoRecordingName(a) {
   // и минор одной пары (1…12 и 13…24).
   return 'Станция ' + a.combo.id + ' · ' + a.station.label;
 }
+// ===== Общие подписи и имена файлов =====
+// MIDI, видео и WAV — три формата одной записи. Имя у них одно: тоническое
+// трезвучие комбо («Ля-До-Ми.mid» / «A-C-E.wav»), а не служебное имя авто-
+// записи «Станция 13 · эталон». Старые записи без снимка аккордов получают
+// прежнее имя (rec.name), поэтому экспорт не ломается.
+function recordingTonic(rec) {
+  const c = rec && rec.combo;
+  if (!c) return '';
+  let names = null;
+  if (Array.isArray(c.chords) && Array.isArray(c.chords[0])) names = c.chords[0];
+  else if (Array.isArray(c.tonicChord)) names = c.tonicChord;
+  else if (c.id != null && typeof COMBOS !== 'undefined' && COMBOS[c.id] &&
+           Array.isArray(COMBOS[c.id].chords)) names = COMBOS[c.id].chords[0];
+  if (names && names.length) {
+    return typeof chordLabel === 'function' ? chordLabel(names) : names.join('-');
+  }
+  const key = (typeof usingLetterNames === 'function' && usingLetterNames())
+    ? (c.keyNameLatin || c.keyName) : c.keyName;
+  return recordingText(String(key || ''));
+}
+function recordingText(value) {
+  const s = String(value == null ? '' : value);
+  return (typeof I18N !== 'undefined' && typeof I18N.enabled === 'function' &&
+    I18N.enabled() && typeof I18N.text === 'function') ? I18N.text(s) : s;
+}
+function recordingTitle(rec) {
+  return recordingTonic(rec) || recordingText(rec && rec.name || 'HARMONIA');
+}
+function recordingFileName(rec, ext) {
+  const base = String(recordingTitle(rec) || 'harmonia')
+    .replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, ' ').trim().slice(0, 80) || 'harmonia';
+  const suffix = String(ext || 'bin').replace(/^\.+/, '').replace(/[^a-z0-9]+/gi, '') || 'bin';
+  return base + '.' + suffix.toLowerCase();
+}
 function autoRecordStart() {
   if (!P.autoRecord || state.replay || !state.started || !state.running || state.paused) return null;
   if (autoRec && autoRec.active) {
@@ -220,7 +254,8 @@ function recordOptionText(rec) {
 function paintRecorder() {
   const btn = $('recBtn'), play = $('playBtn'), del = $('recDel');
   const list = $('recList'), status = $('recStatus');
-  const midi = $('recMidi'), video = $('recVideo'), caption = $('recCaption'), autoBtn = $('recAuto');
+  const midi = $('recMidi'), video = $('recVideo'), audio = $('recAudio');
+  const caption = $('recCaption'), autoBtn = $('recAuto');
   if (!btn || !play || !del || !list || !status) return;
   if (!recordings.some(r => r.id === selectedRecId)) {
     selectedRecId = recordings.length ? recordings[0].id : null;
@@ -242,7 +277,8 @@ function paintRecorder() {
   }
   const countIn = !!state.recordingCountIn;
   const videoBusy = !!state.videoExport;
-  const busy = !!state.recording || countIn || videoBusy;
+  const audioBusy = !!state.audioExport;
+  const busy = !!state.recording || countIn || videoBusy || audioBusy;
   btn.textContent = countIn ? '✕ Отмена' : state.recording ? '■ Стоп' : '● Запись';
   btn.setAttribute('aria-pressed', String(busy));
   btn.classList.toggle('live', busy);
@@ -253,9 +289,10 @@ function paintRecorder() {
   list.disabled = busy || state.playingRecording;
   if (midi) midi.disabled = busy || state.playingRecording || !hasSelected;
   if (video) video.disabled = busy || state.playingRecording || !hasSelected;
+  if (audio) audio.disabled = busy || state.playingRecording || !hasSelected;
   if (caption) caption.disabled = busy || state.playingRecording || !hasSelected;
   if (autoBtn) {
-    autoBtn.disabled = videoBusy || !!state.recording || countIn;
+    autoBtn.disabled = videoBusy || audioBusy || !!state.recording || countIn;
     autoBtn.setAttribute('aria-pressed', String(!!P.autoRecord));
     autoBtn.textContent = P.autoRecord ? 'Автозапись станции: вкл' : 'Автозапись станции: выкл';
   }
@@ -267,6 +304,11 @@ function paintRecorder() {
   } else if (state.recording) {
     status.textContent = '● Запись · ' + recDurationLabel(performance.now() - recStartedAt) +
       ' · ' + recEvents.length + ' соб.' + (recDrums.length ? ' · ' + recDrums.length + ' уд.' : '');
+  } else if (state.audioExport) {
+    const a = typeof audioExportStatus === 'function' ? audioExportStatus() : null;
+    status.textContent = a
+      ? '🎧 Аудио · ' + recDurationLabel(a.elapsed) + ' / ' + recDurationLabel(a.duration)
+      : '🎧 Аудио · запись…';
   } else if (state.videoExport) {
     const v = typeof videoExportStatus === 'function' ? videoExportStatus() : null;
     status.textContent = v
@@ -347,7 +389,7 @@ function startRecordCountIn(bars) {
   toast('⏱ Отсчёт · ' + bars + (bars === 1 ? ' такт' : ' такта') + ' до записи');
 }
 function startRecording() {
-  if (state.recording || state.recordingCountIn || state.videoExport) return;
+  if (state.recording || state.recordingCountIn || exportBusy()) return;
   if (!state.started) { initAudio(); beginFromOverlay(); }
   if (state.paused) setPaused(false);
   stopPlayback();
@@ -503,7 +545,7 @@ function recordNote(midi, vel, pan, withChord) {
 // записи должно совпадать со слухом. Поэтому будущий удар ждёт короткий
 // setTimeout — к моменту срабатывания запись уже открыта, если её начали.
 function recordDrum(kind, vel, atMs) {
-  if (state.replay || state.videoExport) return false;
+  if (state.replay || exportBusy()) return false;
   const now = performance.now();
   const at = Number.isFinite(Number(atMs)) ? Number(atMs) : now;
   const plan = typeof drumPlan === 'function' ? drumPlan(kind, vel) : null;
@@ -526,7 +568,7 @@ function recordDrum(kind, vel, atMs) {
   return wrote;
 }
 function recordDrumAt(kind, vel, atMs) {
-  if (state.replay || state.videoExport) return null;
+  if (state.replay || exportBusy()) return null;
   const now = performance.now();
   const at = Number.isFinite(Number(atMs)) ? Math.max(now, Number(atMs)) : now;
   const delay = at - now;
@@ -662,7 +704,7 @@ function startPlaybackCycle(rec, token) {
 }
 function playSelected() {
   const rec = selectedRecording();
-  if (!rec || !rec.events.length || state.recording || state.recordingCountIn || state.videoExport) return;
+  if (!rec || !rec.events.length || state.recording || state.recordingCountIn || exportBusy()) return;
   if (!state.started) { initAudio(); beginFromOverlay(); }
   if (state.paused) setPaused(false);
   stopPlayback();
@@ -770,13 +812,12 @@ function buildMidiFile(rec) {
     midiU32(track.length), track));
 }
 function midiFileName(rec) {
-  const base = String(rec && rec.name || 'harmonia')
-    .replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, ' ').trim().slice(0, 80) || 'harmonia';
-  return base + '.mid';
+  // Общая база с видео и WAV: «Ля-До-Ми.mid».
+  return recordingFileName(rec, 'mid');
 }
 function exportSelectedMidi() {
   const rec = selectedRecording();
-  if (!rec || !rec.events || !rec.events.length || state.videoExport) return '';
+  if (!rec || !rec.events || !rec.events.length || exportBusy()) return '';
   const bytes = buildMidiFile(rec);
   const name = midiFileName(rec);
   try {
@@ -800,7 +841,7 @@ function exportSelectedMidi() {
 }
 function deleteSelectedRecording() {
   const rec = selectedRecording();
-  if (!rec || state.recording || state.recordingCountIn || state.playingRecording || state.videoExport) return;
+  if (!rec || state.recording || state.recordingCountIn || state.playingRecording || exportBusy()) return;
   recordings = recordings.filter(r => r.id !== rec.id);
   selectedRecId = recordings.length ? recordings[0].id : null;
   saveRecordings();

@@ -22,7 +22,7 @@
                                                 │
                  transport ── composition ── ui-compose
                      └── groove (необязательный слой: барабаны; composition о нём не знает)
-                        game ── listen ── ui-hud ── recorder ── research ── ui-panel ── ui-drawers ── input
+                        game ── listen ── ui-hud ── recorder ── video ── audio-export ── research ── ui-panel ── ui-drawers ── input
                           │        │          │
                         midi ──────┴── render ─┴── main
 ```
@@ -44,9 +44,10 @@
 | `game` | правила и счёт | `chordEvent`, `playChordAudio`, `playHarmonic`, `triggerBall`, `pressCode`, `setMode`, `advanceCombo`, `requestAdaptiveAnchor`, `setAdaptiveAnchor`, `resetAdaptive` |
 | `listen` | слух приложения | `Heard` (`notes`, `latched`, `sustain`, `recognize()`) |
 | `ui-hud` | отображение состояния | `updateHUD`, `updateHomeIndicator`, `renderPalette`, `renderHint`, `updateHeardChip`, `paintSoundChip` |
-| `recorder` | запись, автозапись станции, прослушивание, MIDI и видео | `recordChord/Note`, `recordDrum/recordDrumAt`, `recordingTimeline`, `startRecording`, `stopRecording`, `autoRecordStart/Finalize/Status`, `setAutoRecord`, `playSelected`, `deleteSelectedRecording`, `recordingById`, `buildMidiFile`, `midiRecordingEvents`, `exportSelectedMidi` |
+| `recorder` | запись, автозапись станции, прослушивание, MIDI и общие имена файлов | `recordChord/Note`, `recordDrum/recordDrumAt`, `recordingTimeline`, `startRecording`, `stopRecording`, `autoRecordStart/Finalize/Status`, `setAutoRecord`, `playSelected`, `deleteSelectedRecording`, `recordingById`, `recordingTonic/Title/FileName`, `buildMidiFile`, `midiRecordingEvents`, `exportSelectedMidi` |
 | `video` | рендер записи в WebM | `startVideoExport(rec)`, `cancelVideoExport`, `videoExportStatus`, `videoSupported`, `videoFileName`, `videoDuration`, `videoSize`, `videoCaption`, `copyVideoCaption`, `videoLegacyWarning`, `paintVideoFrame` |
-| `research` | необязательные оценки комбо и поведение | `Research` (`enable`, `disable`, `setAsk`, `status`, `exportData`, `download`, `gateKey`, `linkRecording`, `askRecording`, `exportAskVideo`, `holdAsk`, `onChord/Note`, `enterCombo/leaveCombo`), `CFG.research` |
+| `audio-export` | сохранение записи в WAV | `startAudioExport(rec)`, `cancelAudioExport`, `audioExportStatus`, `audioSupported`, `audioFileName`, `audioDuration`, `audioPcmToWav`, `#recAudio`/`#researchAskAudio`/`#audioExport` |
+| `research` | оценки комбо и поведение (по умолчанию включены) | `Research` (`enable`, `disable`, `setAsk`, `status`, `exportData`, `download`, `gateKey`, `linkRecording`, `askRecording`, `exportAskVideo`, `exportAskAudio`, `holdAsk`, `onChord/Note`, `enterCombo/leaveCombo`), `CFG.research` |
 | `ui-panel` | настройки | `bindRange`, `bindSelect`, `bindToggle`, `syncAll`, `togglePedal` |
 | `ui-drawers` | выдвижные панели | `drawers`, `drawerOpen`, `drawerIntro`, `setDrawer`, `toggleDrawer`, `setDrawerIntro`, `initDrawers` |
 | `ui-compose` | HUD/панель формы и результат | `buildFormHud`, `updateFormHUD`, `resetFormHud`, `setFormEnabled`, `showFormResult`, `initCompose` |
@@ -376,7 +377,7 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
   `Composition.onNote`: MIDI-пэд канала 10 (`Midi.handle()`, `DRUM_MAP`) играет звук
   и сразу выходит из обработчика. Для записи удар — отдельное событие `drums`:
   `_fire()` передаёт `recordDrumAt(kind, vel, wall*1000)`, и дорожка хранит
-  фактическое время звучания. Во время `state.replay`/`state.videoExport`
+  фактическое время звучания. Во время `state.replay`/`state.videoExport`/`state.audioExport`
   `Groove.update()` молчит, иначе записанные удары наложились бы на живой грув.
   MIDI-экспорт мелодии ударные не включает.
 - **Панель.** `#groovePg` (`#grooveToggle`, `#groovePattern`, `#pGrooveBpm`,
@@ -388,11 +389,12 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
 
 ## Исследование оценок: необязательный слой
 
-`js/research.js` — наблюдатель, а не игровой слой. По умолчанию он выключен
-(`harmonia.research.settings`), поэтому обычный игрок не видит ни карточки, ни
-секции панели; включает его `?research=1`, `HARMONIA.research.enable()` или
-кнопка **Исследование** в панели. Модуль не меняет pitch class, очки, раскладку
-и звук: он только записывает то, что уже произошло, и возвращает оценку.
+`js/research.js` — наблюдатель, а не игровой слой. По умолчанию он **включён**:
+настройка `harmonia.research.settings` версии 2 хранит явный выбор, старые
+настройки без версии один раз мигрируют на `enabled: true`. Выключают сбор
+`?research=0`, `HARMONIA.research.disable()` или кнопка **Исследование** в панели;
+включают `?research=1` или `enable()`. Модуль не меняет pitch class, очки,
+раскладку и звук: он только записывает то, что уже произошло, и возвращает оценку.
 
 - **Посещение комбо.** `loadCombo()` закрывает прошлый сегмент и открывает новый;
   первый `onChord()`/`onNote()` материализует его (`playFrom`), пустые визиты
@@ -422,14 +424,17 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
   нажать **⬇ Видео**, затем закрыть карточку. Оценка и комментарий дописываются
   в уже сохранённый сегмент (`rating.score/comment/skipped/answerMs`); «Готово»
   после оценки не затирает её пропуском.
-- **Видео из карточки.** Сегмент хранит `recordingId` фоновой авто-записи этого
-  визита (`autoRecordStart()` отдаёт id, `linkRecording()` кладёт его в сегмент).
-  Кнопка **⬇ Видео** резолвит запись через `recordingById()` и зовёт
-  `startVideoExport(rec)`, поэтому выбор в панели не важен. `holdAsk(true)`
-  останавливает автопропуск на время рендера, `holdAsk(false)` возвращает его;
-  если авто-запись пустая или выключена, кнопка disabled и объясняет причину.
+- **Кнопки.** Сегмент хранит `recordingId` фоновой авто-записи этого визита
+  (`autoRecordStart()` отдаёт id, `linkRecording()` кладёт его в сегмент).
+  Кнопки **⬇ Аудио** и **⬇ Видео** резолвят запись через `recordingById()` и
+  зовут `startAudioExport(rec)` / `startVideoExport(rec)`, поэтому выбор в панели
+  не важен. `holdAsk(true)` останавливает автопропуск на время экспорта,
+  `holdAsk(false)` возвращает его; если авто-запись пустая или выключена,
+  кнопки disabled и объясняют причину.
 - **Данные.** `harmonia.research.v1` — массив сегментов, `harmonia.research.settings`
-  — `{enabled, ask}`. Лимиты — `CFG.research`: 400 посещений, 4000 событий на
+  — `{version: 2, enabled, ask}`. Настройки без `version` один раз мигрируют на
+  `enabled: true`; после этого явный выбор (включая `?research=0`) сохраняется.
+  Лимиты — `CFG.research`: 400 посещений, 4000 событий на
   визит, ~3.5 МБ JSON; при переполнении уходят самые старые, запись обёрнута в
   `try/catch`. Комментарий — свободный текст (не переводится), ≤160 символов.
 - **Выгрузка.** `exportData()` кладёт в файл не только сегменты, но и снимок
@@ -590,11 +595,11 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
 записи посреди такта и смена BPM/паттерна не сдвигают уже сыгранный ритм.
 Пустой массив `drums` — метка нового формата: у старых записей поля нет.
 Пустой визит по-прежнему определяется мелодией, а `recordEvent()` не пишется во
-время `state.replay` и `state.videoExport`.
+время `state.replay`, `state.videoExport` и `state.audioExport`.
 Записи лежат в `localStorage` (`rithm.recordings.v1`), список ограничен 30 записями,
 6000 событий и 3 минутами на дорожку. Ручная запись тоже снимает `combo`
 (включая аккорды), `station`, `plot`, `gesture`, `bpm` и `beatsPerBar` на момент
-старта: эти поля нужны видео и готовому описанию, а старые записи просто
+старта: эти поля нужны видео, WAV и готовому описанию, а старые записи просто
 обходятся без них.
 
 `recordingTimeline(rec)` объединяет `rec.events` и `rec.drums` и сортирует по `t`.
@@ -628,6 +633,16 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
   note-on/note-off для теста; note-off на том же тике ставится раньше note-on.
   `exportSelectedMidi()` скачивает выбранную запись как `.mid`. Дорожка `drums`
   в MIDI не попадает: у неё нет высоты, а формат записи остаётся прежним.
+- **Аудио.** `startAudioExport(rec)` в `js/audio-export.js` собирает WAV 16-bit
+  PCM без внешних библиотек. Захват идёт с `audioCaptureStream()` (после
+  компрессора и до `monitorGain`, поэтому mute не делает файл немым), а
+  `ScriptProcessorNode` складывает PCM-чанки в `Int16Array`; это совместимо с
+  `file://`, в отличие от AudioWorklet. `playRecordedAudio()` планирует события
+  по часам AudioContext с `AUDIO_LOOKAHEAD`; `AUDIO_LEAD_MS`/`AUDIO_TAIL_MS`
+  оставляют по секунде воздуха, `AUDIO_FLUSH_MS` выпускает уже запланированные
+  живые удары до захвата. `audioPcmToWav()` — чистая функция RIFF/WAVE, её
+  проверяет smoke. Имена `.mid`, `.wav` и `.webm` строятся из одной базы
+  `recordingFileName()` (тоническое трезвучие комбо).
 - **Видео.** `startVideoExport(rec)` в `js/video.js` собирает вертикальный
   `video/webm` 1080×1920 (9:16) из `canvas.captureStream(30)` и
   `audioCaptureStream()`. Без аргумента берётся выбранная запись панели; карточка
@@ -646,14 +661,16 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
   идёт финальная карточка `VIDEO_ENDCARD_MS`. Заголовок кадра и первая строка
   `videoCaption()` — тоническое трезвучие комбо (`Ля-До-Ми` / `A-C-E`), а не
   служебное имя авто-записи «Станция 13 · эталон»; у старых записей аккорд
-  берётся из `COMBOS` по `combo.id`. `state.videoExport`
-  блокирует ввод, MIDI и запись; `cancelVideoExport()` / Esc отменяют рендер,
+  берётся из `COMBOS` по `combo.id`. `state.videoExport`/`state.audioExport`
+  через `exportBusy()` блокируют ввод, MIDI, запись и второй экспорт;
+  `cancelVideoExport()`/`cancelAudioExport()` или Esc отменяют захват,
   после завершения фокус и автозапись возвращаются. `videoCaption()` и кнопка
   **📋 Подпись** дают готовое описание для соцсетей. Если у записи нет массива
   `drums` (старый формат), видео выходит без ударных и показывает
   предупреждение: подставлять текущий паттерн нельзя, он мог быть другим.
   Пока рендер идёт из карточки оценки, `Research.holdAsk(true)` держит её
-  автопропуск; `finishVideoExport()` возвращает таймер и автозапись.
+  автопропуск; `finishVideoExport()` возвращает таймер и автозапись. Кнопка
+  **⬇ Аудио** использует тот же `holdAsk` и `finishAudioExport()`.
 - **Отсчёт.** `startRecording()` читает `P.recCountIn` (0/1/2 такта). При ненулевом
   значении `state.recording` остаётся `false`, поэтому ручная дорожка молчит;
   авто-дорожка станции при этом может писать фон. `state.recordingCountIn` и
@@ -806,6 +823,7 @@ Translate через `translate.js` (тот же приём, что в сосе�
 | Другой алгоритм очков формы | `Composition.onChord/finishBar/finishSection` |
 | Экран результата | `showFormResult()` / `hideFormResult()` в `ui-compose.js` |
 | Формат записи / лимиты | `recorder.js`: `REC_*`, `recordEvent`, `recordDrumAt`, `playRecordedEvent` |
+| Экспорт WAV | `audio.js` (`audioCaptureStream`) + `audio-export.js` (`startAudioExport`, `audioPcmToWav`), `#recAudio`/`#researchAskAudio`/`#audioExport` |
 | Рендер видео | `video.js`: `VIDEO_*`, `startVideoExport(rec)`, `paintVideoFrame`, `videoCaption`, `#recVideo`/`#recCaption`/`#researchAskVideo`/`#videoExport` |
 | Вопрос/шкала исследования | `RATE_KEYS` и разметка `#researchAsk` (`research.js`, `index.html`), `rate()`/`skip()` |
 | Лимиты/формат исследования | `CFG.research` + `research.js` (`saveSegments`, `exportData`, `leaveCombo`) |
@@ -874,20 +892,23 @@ Translate через `translate.js` (тот же приём, что в сосе�
   (смена источника часов и подписи) и `groove-hits` (планировщик: удары растут,
   быстрый темп даёт больше шагов, выключенный грув молчит) держат это в
   headless-прогоне.
-- Запись и видео: `station-auto-record-midi` проверяет автодорожку и SMF,
-  `record-drums-video` — отдельный `drums`, `recordingTimeline()`, отсутствие
-  ударных в MIDI, предупреждение старого формата, кадр 1080×1920 (9:16),
-  обрезку хвостовой тишины, `videoCaption()` и наличие `#recVideo` /
-  `#recCaption` / `#videoExport`. Сам MediaRecorder в smoke не запускается:
-  рендер зависит от реального времени, его проверяют вручную кнопкой
-  **⬇ Видео**.
-- Исследование: `HARMONIA.research.enable()` → `loadCombo()` → аккорд/нота →
-  `HARMONIA.advanceCombo()` → `#researchAsk.show`, затем `J`/`I`/`O`/`P`/`[`
-  или клик по `[data-score]` → `status().rated`; `Esc` пишет `skipped`;
-  `HARMONIA.research.exportData()` отдаёт сегменты с `STATION_STYLES` и
-  библиотекой комбо; `nextCombo()` карточку не открывает, replay не пишется.
-  Шаг `research-rating` держит всё это (включая счёт при «Сессии заново» и
-  `pagehide`) и очищает `localStorage` в конце.
+- Запись, аудио и видео: `station-auto-record-midi` проверяет автодорожку, SMF и
+  общую базу имён `.mid`/`.wav`/`.webm`, `record-drums-video` — отдельный `drums`,
+  `recordingTimeline()`, отсутствие ударных в MIDI, `audioDuration()`,
+  `audioPcmToWav()` (RIFF/WAVE, 16-bit, stereo), предупреждение старого формата,
+  кадр 1080×1920 (9:16), обрезку хвостовой тишины, `videoCaption()` и наличие
+  `#recAudio` / `#researchAskAudio` / `#audioExport` / `#recVideo` / `#recCaption`
+  / `#videoExport`. Сам MediaRecorder и ScriptProcessor в smoke не запускаются:
+  захват зависит от реального времени, его проверяют вручную кнопками
+  **⬇ Аудио** и **⬇ Видео**.
+- Исследование: по умолчанию включено; `HARMONIA.research.disable()` / `enable()`
+  переключают сбор. `loadCombo()` → аккорд/нота → `HARMONIA.advanceCombo()` →
+  `#researchAsk.show`, затем `J`/`I`/`O`/`P`/`[` или клик по `[data-score]` →
+  `status().rated`; `Esc` пишет `skipped`; `HARMONIA.research.exportData()` отдаёт
+  сегменты с `STATION_STYLES` и библиотекой комбо; `nextCombo()` карточку не
+  открывает, replay не пишется. Шаг `research-rating` держит всё это (включая
+  `version: 2`, счёт при «Сессии заново» и `pagehide`) и очищает `localStorage`
+  в конце.
 - `python tools/research.py --self-test` — проверка расчёта на 12 синтетических
   визитах (средняя 3.90, станции 4.75/4.33/2.33, `--min-n=4` оставляет одну).
   `python tools/research.py FILE.json --md -` печатает отчёт, `--csv` — строки.

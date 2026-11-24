@@ -120,7 +120,7 @@ const Midi = {
   select(id) { this.activeId = id || null; Heard.clear(); this.refresh(); },
   handle(msg) {
     if (!this.activeId || (msg.target && msg.target.id !== this.activeId)) return;
-    if (state.videoExport) return;
+    if (exportBusy()) return;
     const data = msg.data, type = data[0] & 0xf0;
     // Канал 10 — ударные. Ветка стоит первой и выходит сразу: пэд не попадает
     // ни в слух (Heard), ни в распознавание трезвучий, ни в счёт. Для записи он

@@ -245,6 +245,15 @@
         </div>
       </div>
 
+      <!-- Сохранение WAV: тот же таймлайн, что у видео, но без картинки. -->
+      <div id="audioExport" class="video-export" role="status" aria-live="polite" hidden>
+        <div class="ve-card">
+          <div class="ve-title">🎧 Аудио</div>
+          <div class="ve-text" id="audioExportText">Запись аудио…</div>
+          <button class="big-btn alt" id="audioCancel" type="button">Отменить</button>
+        </div>
+      </div>
+
       <div id="formResult" role="dialog" aria-modal="true" aria-labelledby="formResultTitle" aria-hidden="true">
         <div class="fr-card">
           <div class="fr-kicker" id="formResultKicker">Форма · 16 тактов</div>
@@ -259,9 +268,10 @@
         </div>
       </div>
 
-      <!-- Карточка оценки комбо. Открывается только Space-переходом и только
-           когда исследование включено. J I O P [ — оценки 5–1, Space/Esc —
-           пропуск, поле комментария забирает те же клавиши как буквы. -->
+      <!-- Карточка оценки комбо. Открывается только Space-переходом; по умолчанию
+           исследование включено, ?research=0 или панель его выключают. J I O P [ —
+           оценки 5–1, Space/Esc — пропуск, поле комментария забирает те же клавиши
+           как буквы. -->
       <div id="researchAsk" role="dialog" aria-modal="true" aria-labelledby="researchAskTitle" aria-hidden="true">
         <div class="fr-card ra-card" id="researchAskCard" tabindex="-1">
           <div class="fr-kicker" id="researchAskKicker">Комбо · оценка</div>
@@ -279,6 +289,7 @@
                  placeholder="Что понравилось или что не так?" aria-label="Комментарий к комбо">
           <div class="ra-hint" id="researchAskHint">J I O P [ — оценка · Space / Esc — пропустить</div>
           <div class="fr-actions">
+            <button class="big-btn" id="researchAskAudio" type="button" title="Сохранить это комбо как WAV-файл" disabled>⬇ Аудио</button>
             <button class="big-btn" id="researchAskVideo" type="button" title="Сохранить это комбо как вертикальное видео 9:16 (WebM)" disabled>⬇ Видео</button>
             <button class="big-btn alt" id="researchAskSkip" type="button">Пропустить</button>
           </div>
@@ -358,7 +369,7 @@
         </select>
       </div>
       <button class="tg" id="recLoop" aria-pressed="false" title="Повторять выбранную запись по кругу">Повтор: выкл</button>
-      <button class="tg" id="recAuto" aria-pressed="true" title="Автоматически записывать каждую станцию для прослушивания, MIDI и видео">Автозапись станции: вкл</button>
+      <button class="tg" id="recAuto" aria-pressed="true" title="Автоматически записывать каждую станцию для прослушивания, MIDI, аудио и видео">Автозапись станции: вкл</button>
       <div class="prow rec-pick">
         <label for="recList">Запись</label>
         <select id="recList" aria-label="Сохранённые записи"><option value="">— нет записей —</option></select>
@@ -366,6 +377,7 @@
       <div class="pbtns">
         <button class="pbtn" id="recDel" title="Удалить выбранную запись" disabled>🗑 Удалить</button>
         <button class="pbtn" id="recMidi" title="Скачать выбранную запись как MIDI-файл" disabled>⬇ MIDI</button>
+        <button class="pbtn" id="recAudio" title="Скачать выбранную запись как WAV-файл" disabled>⬇ Аудио</button>
         <button class="pbtn" id="recVideo" title="Скачать выбранную запись как вертикальное видео 9:16 (WebM)" disabled>⬇ Видео</button>
         <button class="pbtn" id="recCaption" title="Скопировать готовое описание для соцсетей — с тональностью, темпом и ссылкой" disabled>📋 Подпись</button>
       </div>
@@ -373,13 +385,13 @@
     </div>
 
     <!-- Исследование — не игровой слой, а необязательный сбор оценок комбо.
-         Выключено по умолчанию; включает ?research=1, консоль или эта кнопка.
+         Включено по умолчанию; выключают ?research=0, консоль или эта кнопка.
          Тело секции скрыто, пока сбор не включён: обычный игрок видит только
-         одну строку «Исследование: выкл» и не читает служебные счётчики. -->
+         одну строку «Исследование: вкл» и не читает служебные счётчики. -->
     <details class="pg" id="researchPg">
       <summary>Исследование · оценки комбо</summary>
-      <button class="tg" id="researchToggle" aria-pressed="false" title="Собирать оценки комбо в этом браузере. Включается также адресом ?research=1">Исследование: выкл</button>
-      <div id="researchBody" hidden>
+      <button class="tg" id="researchToggle" aria-pressed="true" title="Собирать оценки комбо в этом браузере. Выключается адресом ?research=0">Исследование: вкл</button>
+      <div id="researchBody">
         <button class="tg" id="researchAskToggle" aria-pressed="true" title="Спрашивать оценку после Space-перехода в новое комбо">Спрашивать оценку: вкл</button>
         <div class="rec-status" id="researchStatus" aria-live="polite">Посещений: 0 · оценок: 0 · событий: 0</div>
         <div class="pbtns">
@@ -597,6 +609,7 @@
   <script src="js/ui-hud.js"></script>
   <script src="js/recorder.js"></script>
   <script src="js/video.js"></script>
+  <script src="js/audio-export.js"></script>
   <script src="js/research.js"></script>
   <script src="js/ui-panel.js"></script>
   <script src="js/ui-drawers.js"></script>

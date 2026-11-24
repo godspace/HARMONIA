@@ -13,8 +13,8 @@ window.addEventListener('unhandledrejection', function (e) {
 // виджет) иначе включится до проверок и сдвинет нотацию, как у живого игрока.
 try {
   localStorage.removeItem('harmonia.lang');
-  // Исследование должно начинаться выключенным: иначе настройка прошлого
-  // прогона включит карточки оценок посреди других шагов.
+  // Настройки исследования прошлого прогона не должны влиять на проверку
+  // нового дефолта: без записи в localStorage сбор обязан включиться сам.
   localStorage.removeItem('harmonia.research.settings');
   localStorage.removeItem('harmonia.research.v1');
   document.cookie = 'googtrans=;path=/;max-age=0';
@@ -40,6 +40,11 @@ $post = @'
     if (HARMONIA.state.form.running) throw new Error('form transport must be off by default');
     if (HARMONIA.Transport.running) throw new Error('Transport must be off by default');
     if ($('formHud').classList.contains('on')) throw new Error('form HUD must be hidden by default');
+    // Исследование включено по умолчанию; настройка без version не должна
+    // выключать его при первом запуске новой версии.
+    var research = HARMONIA.research.status();
+    if (!research.enabled) throw new Error('research must be on by default');
+    if (research.version !== 2) throw new Error('research settings version is not 2');
   });
 
   step('branding', function () {
@@ -1070,7 +1075,17 @@ $post = @'
       var ons = midi.filter(function (e) { return e.on; }).length;
       var offs = midi.filter(function (e) { return !e.on; }).length;
       if (!ons || ons !== offs) throw new Error('MIDI note-on/note-off are unbalanced');
-      if (H.midiFileName(auto).slice(-4) !== '.mid') throw new Error('MIDI file name is wrong');
+      var midiName = H.midiFileName(auto);
+      var wavName = H.audioFileName(auto);
+      var videoName = H.videoFileName(auto);
+      if (midiName.slice(-4) !== '.mid') throw new Error('MIDI file name is wrong');
+      if (wavName.slice(-4) !== '.wav') throw new Error('WAV file name is wrong');
+      if (videoName.slice(-5) !== '.webm') throw new Error('video file name is wrong');
+      if (midiName.slice(0, -4) !== wavName.slice(0, -4) ||
+          wavName.slice(0, -4) !== videoName.slice(0, -5)) {
+        throw new Error('MIDI, WAV and video names must share one base: ' +
+          midiName + ' / ' + wavName + ' / ' + videoName);
+      }
     } finally {
       P.autoRecord = savedAuto;
       st.mode = savedMode;
@@ -1131,6 +1146,41 @@ $post = @'
         throw new Error('a new recording was mistaken for an old one');
       }
       if (H.videoFileName(rec).slice(-5) !== '.webm') throw new Error('video file name is wrong');
+      if (H.audioFileName(rec).slice(-4) !== '.wav') throw new Error('WAV file name is wrong');
+      if (!(H.audioDuration(rec) >= 2000)) throw new Error('audio duration is too short');
+      var wav = H.audioPcmToWav([
+        new Float32Array([0, 0.5, -0.5]),
+        new Float32Array([0, -0.5, 0.5])
+      ], 48000);
+      function wavAscii(from, to) {
+        var s = '';
+        for (var wi = from; wi < to; wi++) s += String.fromCharCode(wav[wi]);
+        return s;
+      }
+      if (!(wav instanceof Uint8Array)) throw new Error('WAV result must be a byte array');
+      if (wavAscii(0, 4) !== 'RIFF') throw new Error('WAV RIFF header is missing');
+      if (wavAscii(8, 12) !== 'WAVE') throw new Error('WAV WAVE header is missing');
+      if (wavAscii(12, 16) !== 'fmt ') throw new Error('WAV fmt chunk is missing');
+      if (wavAscii(36, 40) !== 'data') throw new Error('WAV data chunk is missing');
+      var wavView = new DataView(wav.buffer, wav.byteOffset, wav.byteLength);
+      if (wavView.getUint32(4, true) !== wav.length - 8) throw new Error('WAV RIFF size is wrong');
+      if (wavView.getUint16(20, true) !== 1) throw new Error('WAV must be PCM');
+      if (wavView.getUint16(22, true) !== 2) throw new Error('WAV must be stereo');
+      if (wavView.getUint32(24, true) !== 48000) throw new Error('WAV sample rate is wrong');
+      if (wavView.getUint16(34, true) !== 16) throw new Error('WAV must be 16-bit');
+      if (wavView.getUint32(40, true) !== 12) throw new Error('WAV data length is wrong');
+      if (wavView.getInt16(46, true) !== 0 ||
+          wavView.getInt16(48, true) !== 16384 ||
+          wavView.getInt16(50, true) !== -16384) {
+        throw new Error('WAV samples are not interleaved/quantized');
+      }
+      if (!$('recAudio') || !$('researchAskAudio') || !$('audioExport')) {
+        throw new Error('the audio UI is missing');
+      }
+      if (!$('audioExport').hidden) throw new Error('the audio overlay must start hidden');
+      if (H.audioSupported() && $('recAudio').disabled) {
+        throw new Error('the audio button is disabled with a ready recording');
+      }
       if (!(H.videoDuration(rec) >= 2400)) throw new Error('video duration is too short');
       var spec = H.videoSize();
       if (!spec || spec.width !== 1080 || spec.height !== 1920) {
@@ -1735,11 +1785,13 @@ $post = @'
   });
 
   step('research-rating', function () {
-    // Исследование выключено по умолчанию: включаем его только здесь, чтобы
-    // проверить запись посещений, карточку оценки и отсутствие попапа на
-    // ручных переходах. В конце — выключаем и очищаем localStorage.
+    // Исследование включено по умолчанию: проверяем это, затем выключаем и
+    // очищаем, чтобы проверить запись посещений, карточку оценки и отсутствие
+    // попапа на ручных переходах. В конце — выключаем и очищаем localStorage.
     var H = HARMONIA, R = H.research;
     if (!R) throw new Error('research API is missing');
+    if (!R.status().enabled) throw new Error('research must be on by default');
+    if (R.status().version !== 2) throw new Error('research settings version is wrong');
     R.disable();
     R.clear();
     if (R.status().enabled || R.status().visits) throw new Error('research must start empty');
@@ -1784,6 +1836,14 @@ $post = @'
     }
     var videoBtn = $('researchAskVideo');
     if (!videoBtn) throw new Error('the rating card has no video button');
+    var audioBtn = $('researchAskAudio');
+    if (!audioBtn) throw new Error('the rating card has no audio button');
+    if (H.audioSupported() && audioBtn.disabled) {
+      throw new Error('the rating card audio button is disabled with a ready recording');
+    }
+    if (!H.audioSupported() && !audioBtn.disabled) {
+      throw new Error('the rating card audio button ignores browser support');
+    }
     if (H.videoSupported() && videoBtn.disabled) {
       throw new Error('the rating card video button is disabled with a ready recording');
     }
@@ -1791,7 +1851,7 @@ $post = @'
       throw new Error('the rating card video button ignores browser support');
     }
     // J = 5: пока карточка открыта, клавиша оценивает, а не играет ноту.
-    // После оценки карточка остаётся открытой, чтобы успеть сохранить видео.
+    // После оценки карточка остаётся открытой, чтобы успеть сохранить файлы.
     window.dispatchEvent(new KeyboardEvent('keydown', {
       code: 'KeyJ', key: 'j', bubbles: true, cancelable: true
     }));
@@ -1804,6 +1864,9 @@ $post = @'
     }
     if (H.videoSupported() && videoBtn.disabled) {
       throw new Error('the video button became disabled after the rating');
+    }
+    if (H.audioSupported() && audioBtn.disabled) {
+      throw new Error('the audio button became disabled after the rating');
     }
     var data = R.exportData();
     var seg = data.segments[data.segments.length - 1];

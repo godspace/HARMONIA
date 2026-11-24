@@ -20,9 +20,9 @@ const state = {
   // recordingCountIn — идёт отсчёт перед записью: state.recording ещё false,
   // поэтому случайные ноты во время отсчёта не попадут в запись.
   replay: false, recording: false, recordingCountIn: false, playingRecording: false,
-  // videoExport — идёт рендер ролика. В этом режиме живой грув и ввод молчат:
-  // картинка и звук собираются только из записанного таймлайна.
-  videoExport: false,
+  // videoExport/audioExport — идёт экспорт записи. В этих режимах живой грув и
+  // ввод молчат: картинка/звук собираются только из записанного таймлайна.
+  videoExport: false, audioExport: false,
   recCountInBeat: 0, recCountInTotal: 0,
   energy: [], keysDown: {}, energyAcc: 0,
   // echo — звучат ли ноты MIDI с ноутбука: контроллер без динамиков озвучиваем сами,
@@ -93,3 +93,6 @@ const rootMidi = () => 48 + combo().root +
   (typeof stationRegister === 'function' ? stationRegister(state.comboIdx) : 0);
 // Единый «можно ли играть» — используется вводом, MIDI, аккордами и нотами.
 const playable = () => state.started && state.running && !state.paused;
+// Экспорт (видео или WAV) занимает общий таймлайн: второй экспорт, запись,
+// прослушивание и игровые команды ждут его завершения.
+const exportBusy = () => !!(state.videoExport || state.audioExport);

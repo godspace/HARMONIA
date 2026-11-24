@@ -164,9 +164,9 @@ const Groove = {
   // должен звучать, иначе Enter на пробе ничего не демонстрирует.
   update() {
     if (!this.on || state.paused) return false;
-    // Прослушивание и экспорт видео идут по записанной дорожке: живой грув в это
-    // время молчит, иначе к записанным ударам добавился бы второй набор.
-    if (state.replay || state.videoExport) return false;
+    // Прослушивание и экспорт (видео/WAV) идут по записанной дорожке: живой
+    // грув в это время молчит, иначе к записанным ударам добавился бы второй набор.
+    if (state.replay || exportBusy()) return false;
     if (!state.running && !this.preview) return false;
     if (typeof audioCtx === 'undefined' || !audioCtx) return false;
     const now = this._now();
