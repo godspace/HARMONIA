@@ -549,7 +549,7 @@ HARMONIA.sunoStart(rec)       // скопировать промпт и сохр
 HARMONIA.sunoOpen(rec)        // открыть suno.com/create и заново скопировать промпт
 HARMONIA.sunoState()          // {ready, id, prompt} — для кнопок «🎛 Suno» / «↗ Suno»
 HARMONIA.SUNO_CREATE_URL      // https://suno.com/create
-HARMONIA.startVideoExport(rec) // вертикальный WebM 9:16: канвасы + звук; пустые края обрезаны, 1 с воздуха
+HARMONIA.startVideoExport(rec) // вертикальный WebM 9:16: канвасы + звук от одного медиа-времени; пустые края обрезаны, 1 с воздуха
 HARMONIA.cancelVideoExport()  // отменить текущий рендер
 HARMONIA.videoSize()          // {width:1080, height:1920, ratio:0.5625}
 HARMONIA.videoCaption(rec)    // описание для соцсетей: тоническое трезвучие, BPM, ссылка

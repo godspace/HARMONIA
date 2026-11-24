@@ -45,7 +45,7 @@
 | `listen` | слух приложения | `Heard` (`notes`, `latched`, `sustain`, `recognize()`) |
 | `ui-hud` | отображение состояния | `updateHUD`, `updateHomeIndicator`, `renderPalette`, `renderHint`, `updateHeardChip`, `paintSoundChip` |
 | `recorder` | запись, автозапись станции, прослушивание, MIDI и общие имена файлов | `recordChord/Note`, `recordDrum/recordDrumAt`, `recordingTimeline`, `startRecording`, `stopRecording`, `autoRecordStart/Finalize/Status`, `setAutoRecord`, `playSelected`, `deleteSelectedRecording`, `recordingById`, `recordingTonic/Title/FileName`, `buildMidiFile`, `midiRecordingEvents`, `exportSelectedMidi` |
-| `video` | рендер записи в WebM | `startVideoExport(rec)`, `cancelVideoExport`, `videoExportStatus`, `videoSupported`, `videoFileName`, `videoDuration`, `videoSize`, `videoCaption`, `copyVideoCaption`, `videoLegacyWarning`, `paintVideoFrame` |
+| `video` | рендер записи в WebM | `startVideoExport(rec)`, `cancelVideoExport`, `videoExportStatus`, `videoSupported`, `videoFileName`, `videoDuration`, `videoSize`, `videoCaption`, `copyVideoCaption`, `videoLegacyWarning`, `videoMediaElapsed`, `videoStepVisual`, `paintVideoFrame` |
 | `audio-export` | сохранение записи в WAV | `startAudioExport(rec, {purpose, onDone})`, `cancelAudioExport`, `audioExportStatus` (`id`, `purpose`), `audioSupported`, `audioFileName`, `audioDuration`, `audioPcmToWav`, `#recAudio`/`#researchAskAudio`/`#audioExport` |
 | `suno` | мостик к Suno без API: английский промпт + WAV | `SUNO_CREATE_URL`, `sunoPrompt`, `sunoStart`, `sunoOpen`, `sunoCopyText`, `sunoPaint`, `sunoState`, кнопки `#recSuno`/`#researchAskSuno` |
 | `research` | оценки комбо и поведение (по умолчанию включены) | `Research` (`enable`, `disable`, `setAsk`, `status`, `exportData`, `download`, `gateKey`, `linkRecording`, `askRecording`, `exportAskVideo`, `exportAskAudio`, `exportAskSuno`, `holdAsk`, `onChord/Note`, `enterCombo/leaveCombo`), `CFG.research` |
@@ -653,9 +653,14 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
   тональность/темп/длительность, текущий аккорд или нота, CTA и прогресс с
   тиками событий. Статичная рамка строится один раз в offscreen-canvas, поэтому
   текст и тени не пересобираются каждый кадр. Звук планируется по часам
-  AudioContext с упреждением `VIDEO_LOOKAHEAD`, картинка идёт по тому же
-  `recordingTimeline()` через `setTimeout`; живой `Groove` выключен. Перед
-  захватом рендер ждёт `VIDEO_FLUSH_MS` (220 мс), чтобы уже запланированные
+  AudioContext с упреждением `VIDEO_LOOKAHEAD`, а картинка идёт по тому же
+  `recordingTimeline()`. Оба потока стартуют от одного якоря: `mediaT0`
+  записывается сразу после `MediaRecorder.start()`, `videoMediaElapsed()`
+  переводит `AudioContext.currentTime` в медиа-миллисекунды, а
+  `videoStepVisual()` включает вспышки нот из `paintVideoFrame()` — без
+  отдельных `setTimeout`. Поэтому задержка запуска рекордера и очередь
+  таймеров не сдвигают кадры относительно звука. Живой `Groove` выключен.
+  Перед захватом рендер ждёт `VIDEO_FLUSH_MS` (220 мс), чтобы уже запланированные
   живым грувом удары успели прозвучать вне ролика. Пустые края записи
   обрезаются по первому и последнему событию: `VIDEO_LEAD_MS` (1 с) оставляет
   воздух перед первой нотой, `VIDEO_TAIL_MS` (1 с) — после последней, затем

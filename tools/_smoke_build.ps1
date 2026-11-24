@@ -1228,6 +1228,52 @@ $post = @'
     }
   });
 
+  step('video-media-clock', function () {
+    // Звук и картинка должны идти от одного mediaT0: первый визуальный тик
+    // случается только после секунды входа, ровно на t первого события, и не
+    // повторяется на следующем кадре. Отдельных setTimeout у видео больше нет.
+    var calls = [];
+    var savedPlay = playRecordedVisual;
+    try {
+      playRecordedVisual = function (ev) { calls.push(ev && ev.t); };
+      var v = {
+        timeline: [
+          { type: 'note', t: 0 },
+          { type: 'drum', t: 100 },
+          { type: 'chord', t: 500 }
+        ],
+        firstEventAt: 0, visualIdx: 0, rec: {}
+      };
+      videoStepVisual(v, 0);
+      if (calls.length) throw new Error('a visual event fired before the lead-in');
+      videoStepVisual(v, 999);
+      if (calls.length) throw new Error('a visual event fired before its timestamp');
+      videoStepVisual(v, 1000);
+      if (calls.length !== 1 || calls[0] !== 0) {
+        throw new Error('the first visual event did not fire at the lead-in');
+      }
+      videoStepVisual(v, 1500);
+      if (calls.length !== 2 || calls[1] !== 500) {
+        throw new Error('the chord visual did not follow the media clock: ' + calls.join(','));
+      }
+      videoStepVisual(v, 1500);
+      if (calls.length !== 2) throw new Error('a visual event fired twice');
+      var trimmed = {
+        timeline: [{ type: 'note', t: 5000 }],
+        firstEventAt: 5000, visualIdx: 0, rec: {}
+      };
+      videoStepVisual(trimmed, 1000);
+      if (calls.length !== 3 || calls[2] !== 5000) {
+        throw new Error('the trimmed timeline lost its first event');
+      }
+      if (videoMediaElapsed({ mediaT0: null, startedAt: 0 }) !== 0) {
+        throw new Error('the media clock must start at zero');
+      }
+    } finally {
+      playRecordedVisual = savedPlay;
+    }
+  });
+
   step('suno-handoff', function () {
     // Suno без API: промпт — чистый английский текст, кнопки есть, WAV-экспорт
     // получает purpose 'suno'. Сам рендер в smoke не запускается: он реального

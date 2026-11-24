@@ -2,7 +2,9 @@
    Модуль без сборки: подключается <script> после recorder.js.
    Звук и картинка идут по одному таймлайну recordingTimeline(): удары, ноты и
    аккорды берут свои записанные миллисекунды, поэтому грув не перезапускается
-   с начала такта и не накапливает сдвиг. Все модули делят глобальную область —
+   с начала такта и не накапливает сдвиг. Внутри рендера оба потока стартуют от
+   одного якоря AudioContext, поэтому задержка MediaRecorder.start() не разъезжает
+   картинку со звуком. Все модули делят глобальную область —
    имена функций/констант уникальны. */
 
 const VIDEO_W = 1080;
@@ -55,6 +57,17 @@ function videoFileName(rec) {
 }
 function videoSize() {
   return { width: VIDEO_W, height: VIDEO_H, ratio: VIDEO_W / VIDEO_H };
+}
+// Единые часы ролика. Звук планируется по AudioContext, поэтому и картинка,
+// подписи, прогресс и события визуализации считаются от того же якоря. Иначе
+// задержка MediaRecorder.start() и очередь setTimeout сдвигали бы кадры
+// относительно уже запланированных нот.
+function videoMediaElapsed(v) {
+  if (!v) return 0;
+  if (typeof audioCtx !== 'undefined' && audioCtx && v.mediaT0 != null) {
+    return Math.max(0, (audioCtx.currentTime - v.mediaT0) * 1000);
+  }
+  return v.startedAt ? Math.max(0, performance.now() - v.startedAt) : 0;
 }
 // Заголовок ролика и подписи — тоническое трезвучие комбо («Ля-До-Ми» /
 // «A-C-E»), а не служебное имя авто-записи «Станция 13 · эталон». У старых
@@ -150,7 +163,7 @@ function videoExportStatus() {
   return {
     active: true,
     name: videoJob.rec.name,
-    elapsed: Math.max(0, performance.now() - (videoJob.recorderStartedAt || performance.now())),
+    elapsed: videoMediaElapsed(videoJob),
     duration: videoJob.duration
   };
 }
@@ -165,8 +178,7 @@ function hideVideoOverlay() {
 function updateVideoOverlay(v) {
   const text = $('videoExportText');
   if (!text || !v) return;
-  const elapsed = Math.min(v.duration,
-    Math.max(0, performance.now() - (v.recorderStartedAt || performance.now())));
+  const elapsed = Math.min(v.duration, videoMediaElapsed(v));
   text.textContent = '🎬 Видео · ' + recDurationLabel(elapsed) + ' / ' +
     recDurationLabel(v.duration);
 }
@@ -677,14 +689,28 @@ function videoPaintProgress(ctx, v, elapsed) {
   ctx.fillText(recDurationLabel(Math.min(elapsed, duration)), VIDEO_BAR.x, VIDEO_BAR.y + 40);
   ctx.restore();
 }
+// Визуальные события не ставятся отдельными setTimeout: их включает тот же
+// кадр, который уже рисуется по медиа-часам. Один просроченный кадр может
+// задержать вспышку шара, но не сдвинет весь дальнейший таймлайн.
+function videoStepVisual(v, elapsed) {
+  if (!v || !v.timeline || !v.timeline.length) return;
+  // До первого события contentMs отрицательный: сравниваем с абсолютным t
+  // дорожки, а не обрезаем его нулём, иначе первая нота вспыхнула бы в кадре 0.
+  const at = (elapsed - VIDEO_LEAD_MS) + (Number(v.firstEventAt) || 0);
+  while (v.visualIdx < v.timeline.length) {
+    const ev = v.timeline[v.visualIdx];
+    if ((Number(ev && ev.t) || 0) > at) break;
+    v.visualIdx += 1;
+    if (ev.type === 'chord' || ev.type === 'note') playRecordedVisual(ev, v.rec);
+  }
+}
 function paintVideoFrame() {
   const v = videoJob;
   if (!v || !v.ctx) return;
   if (!v.base && !videoBuildBase(v)) return;
   const ctx = v.ctx;
-  const elapsed = v.recorderStartedAt
-    ? Math.max(0, performance.now() - v.recorderStartedAt)
-    : 0;
+  const elapsed = videoMediaElapsed(v);
+  videoStepVisual(v, elapsed);
   ctx.drawImage(v.base, 0, 0);
   videoPaintStage(ctx);
   // До первого события подпись остаётся «—»: секунда входа не показывает
@@ -841,8 +867,9 @@ async function startVideoExport(target) {
       token, rec, timeline, firstEventAt, lastEventAt, contentEndAt,
       endCardAt: VIDEO_LEAD_MS + contentEndAt + VIDEO_TAIL_MS,
       duration: videoDuration(rec),
-      chunks: [], timers: [], audioIdx: 0,
+      chunks: [], timers: [], audioIdx: 0, visualIdx: 0,
       labelIdx: 0, labelText: '—', labelColor: '#7e88a6',
+      mediaT0: null, startedAt: 0,
       canceled: false, preparing: true, save: false
     };
     if (!v.timeline.length) return '';
@@ -896,19 +923,13 @@ async function startVideoExport(target) {
       stopVideoRecorder(v, false);
     };
     recorder.start(250);
-    v.recorderStartedAt = performance.now();
-
-    v.audioStart = audioCtx.currentTime + VIDEO_LEAD_MS / 1000;
+    // Один якорь для звука и картинки. setTimeout больше не держит события:
+    // визуализацию включает paintVideoFrame() по этому же медиа-времени.
+    v.startedAt = performance.now();
+    v.mediaT0 = audioCtx.currentTime;
+    v.audioStart = v.mediaT0 + VIDEO_LEAD_MS / 1000;
     scheduleVideoAudio(v);
     v.scheduler = setInterval(() => scheduleVideoAudio(v), 40);
-    v.timeline.forEach(ev => {
-      const contentAt = Math.max(0, (Number(ev.t) || 0) - firstEventAt);
-      const delay = VIDEO_LEAD_MS + contentAt;
-      v.timers.push(setTimeout(() => {
-        if (videoJob !== v || v.canceled) return;
-        playRecordedVisual(ev, v.rec);
-      }, delay));
-    });
     v.progress = setInterval(() => {
       if (videoJob !== v) return;
       updateVideoOverlay(v);
