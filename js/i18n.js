@@ -190,10 +190,39 @@ var I18N = (function () {
     'Повторять выбранную запись по кругу': 'Play the selected recording in a loop',
     'Автозапись станции: вкл': 'Station auto-record: on',
     'Автозапись станции: выкл': 'Station auto-record: off',
-    'Автоматически записывать каждую станцию для прослушивания и MIDI':
-      'Automatically record each station for playback and MIDI',
+    'Автоматически записывать каждую станцию для прослушивания, MIDI и видео':
+      'Automatically record each station for playback, MIDI and video',
     'Скачать выбранную запись как MIDI-файл':
       'Download the selected recording as a MIDI file',
+    'Скачать выбранную запись как видео (WebM)':
+      'Download the selected recording as a video (WebM)',
+    'Скачать выбранную запись как вертикальное видео 9:16 (WebM)':
+      'Download the selected recording as a vertical 9:16 video (WebM)',
+    'Скопировать готовое описание для соцсетей — с тональностью, темпом и ссылкой':
+      'Copy a ready-made social caption with the key, tempo and link',
+    '📋 Подпись': '📋 Caption',
+    'Описание скопировано': 'Caption copied',
+    'Не удалось скопировать описание': 'Could not copy the caption',
+    '⬇ Видео': '⬇ Video',
+    'Сохранить это комбо как вертикальное видео 9:16 (WebM)':
+      'Save this combo as a vertical 9:16 video (WebM)',
+    'Запись этого комбо не сохранилась — включите автозапись станции.':
+      'This combo’s recording was not saved — turn on station auto-record.',
+    'Запись этого комбо не сохранилась': 'This combo’s recording was not saved',
+    'Браузер не поддерживает запись видео.': 'This browser cannot record video.',
+    'Дождитесь окончания записи или рендера.': 'Wait for the recording or render to finish.',
+    '🎬 Видео': '🎬 Video',
+    'Рендер видео…': 'Rendering video…',
+    'Отменить': 'Cancel',
+    'Видео сохранено': 'Video saved',
+    'Видео не удалось сохранить': 'Could not save the video',
+    'Видео не поддерживается браузером': 'This browser cannot export video',
+    'Экспорт видео отменён': 'Video export cancelled',
+    'В записи нет нот': 'The recording has no notes',
+    'Старая запись: партия барабанов не сохранилась — видео будет без ударных.':
+      'This is an old recording: its drum track was not saved, so the video will have no drums.',
+    'рендер…': 'rendering…',
+    'уд.': 'hits',
     'MIDI сохранён': 'MIDI saved',
     'MIDI не удалось сохранить': 'Could not save MIDI',
     'Запись': 'Recording',
@@ -255,7 +284,10 @@ var I18N = (function () {
     'Что понравилось или что не так?': 'What felt right or what felt wrong?',
     'Комментарий к комбо': 'Comment on the combo',
     'J I O P [ — оценка · Space / Esc — пропустить': 'J I O P [ — rate · Space / Esc — skip',
+    'Можно сохранить видео или нажать «Готово»':
+      'Save the video or press “Done”',
     'Пропустить': 'Skip',
+    'Готово': 'Done',
     'Оценка сохранена': 'Rating saved',
     'Оценка пропущена': 'Rating skipped',
     'Данные исследования очищены': 'Research data cleared',
@@ -575,6 +607,7 @@ var I18N = (function () {
     [/^нот (\d+)$/, 'notes $1'],
     [/^(\d+) т\.$/, '$1 bars'],
     [/^(\d+) соб\.$/, '$1 events'],
+    [/^(\d+) уд\.$/, '$1 hits'],
 
     // ===== Отсчёт и запись =====
     [/^⏱ Отсчёт (\d+)\/(\d+)$/, '⏱ Count-in $1/$2'],

@@ -35,7 +35,7 @@
 | `station` | характер станции: подача гармонии по паре комбо + реактивный сюжет + жест | `STATION_STYLES`, `STATION_NEUTRAL`, `STATION_TOUCH`, `STATION_GESTURES`, `STATION_PLOT_GESTURES`, `STATION_PLOT_PHASES`, `STATION_PLOT_ARCHETYPES`, `STATION_PLOT_BY_STYLE`, `stationStyleAt/For/ById`, `stationRegister`, `stationPadVoices`, `stationBassOffset`, `stationShape`, `stationGesture`, `stationGestureDelays`, `stationVoiceDelays`, `stationPlotPhase/ForChord/Archetype/Style/StyleForChord/WindowBias/Text/Advance/Reset`, `setStationStyle`, `setStationPlot`, `setStationGesture` |
 | `harmony` | аккорды комбо и весь лад | `HARMONY`, `PALETTE_SLOTS`, `INPUT`, `harmonicChords()`, `diatonicPalette()`, `handNoteBalls()`, `smartNoteWindow()`, `smartChordDegrees()`, `smartTargetDegree()`, `smartHarmonyForNote()`, `chordOnDegree()`, `classifyTriad()`, `describeTriad()`, `noteRole()` |
 | `state` | изменяемое состояние сессии | `state`, `state.adaptive`, `combo()`, `rootMidi()`, `playable()` |
-| `audio` | синтез и тракт | `initAudio`, `bell`, `noteChordPlan`, `noteChord`, `scheduleNoteChord`, `cancelPendingNoteChord`, `echoNote`, `holdStart/Stop`, `bass`, `drumHit`, `drumPlan`, `DRUM_TIMBRES` |
+| `audio` | синтез и тракт | `initAudio`, `bell`, `noteChordPlan`, `noteChord`, `scheduleNoteChord`, `cancelPendingNoteChord`, `echoNote`, `holdStart/Stop`, `bass`, `drumHit`, `drumPlan`, `DRUM_TIMBRES`, `audioCaptureStream`, `releaseAudioCapture` |
 | `transport` | часы необязательной формы | `Transport.start/update/pause/resume/stop`, `beatsPerBar`, `countInBeats`, `setBpm`, `setMetronome` |
 | `groove` | необязательный грув (барабаны) | `Groove` (`on`, `preview`, `setOn`, `startPreview`, `setPattern`, `setBpm`, `update`, `setPaused`, `paint`, `statusText`, `_clockSource`, `bpm`, `meter`), `toggleGroove`, `groovePattern`, `grooveSteps`, `groovePlan`, `GROOVE_LANES` |
 | `composition` | драматургия и очки пьесы | `Composition.start/stop/restart`, `sectionForBar`, `targetForBar`, `onBeat`, `onNote`, `onChord`, `finishPiece` |
@@ -44,8 +44,9 @@
 | `game` | правила и счёт | `chordEvent`, `playChordAudio`, `playHarmonic`, `triggerBall`, `pressCode`, `setMode`, `advanceCombo`, `requestAdaptiveAnchor`, `setAdaptiveAnchor`, `resetAdaptive` |
 | `listen` | слух приложения | `Heard` (`notes`, `latched`, `sustain`, `recognize()`) |
 | `ui-hud` | отображение состояния | `updateHUD`, `updateHomeIndicator`, `renderPalette`, `renderHint`, `updateHeardChip`, `paintSoundChip` |
-| `recorder` | запись, автозапись станции, прослушивание и MIDI | `recordChord/Note`, `startRecording`, `stopRecording`, `autoRecordStart/Finalize/Status`, `setAutoRecord`, `playSelected`, `deleteSelectedRecording`, `buildMidiFile`, `midiRecordingEvents`, `exportSelectedMidi` |
-| `research` | необязательные оценки комбо и поведение | `Research` (`enable`, `disable`, `setAsk`, `status`, `exportData`, `download`, `gateKey`, `onChord/Note`, `enterCombo/leaveCombo`), `CFG.research` |
+| `recorder` | запись, автозапись станции, прослушивание, MIDI и видео | `recordChord/Note`, `recordDrum/recordDrumAt`, `recordingTimeline`, `startRecording`, `stopRecording`, `autoRecordStart/Finalize/Status`, `setAutoRecord`, `playSelected`, `deleteSelectedRecording`, `recordingById`, `buildMidiFile`, `midiRecordingEvents`, `exportSelectedMidi` |
+| `video` | рендер записи в WebM | `startVideoExport(rec)`, `cancelVideoExport`, `videoExportStatus`, `videoSupported`, `videoFileName`, `videoDuration`, `videoSize`, `videoCaption`, `copyVideoCaption`, `videoLegacyWarning`, `paintVideoFrame` |
+| `research` | необязательные оценки комбо и поведение | `Research` (`enable`, `disable`, `setAsk`, `status`, `exportData`, `download`, `gateKey`, `linkRecording`, `askRecording`, `exportAskVideo`, `holdAsk`, `onChord/Note`, `enterCombo/leaveCombo`), `CFG.research` |
 | `ui-panel` | настройки | `bindRange`, `bindSelect`, `bindToggle`, `syncAll`, `togglePedal` |
 | `ui-drawers` | выдвижные панели | `drawers`, `drawerOpen`, `drawerIntro`, `setDrawer`, `toggleDrawer`, `setDrawerIntro`, `initDrawers` |
 | `ui-compose` | HUD/панель формы и результат | `buildFormHud`, `updateFormHUD`, `resetFormHud`, `setFormEnabled`, `showFormResult`, `initCompose` |
@@ -366,12 +367,18 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
   preview и пересчитывает часы, поэтому дальше действуют обычные правила.
   Шаг считается как `floor((now - base) / dur)`, где `dur` — шестнадцатая; удары
   планируются с упреждением `CFG.groove.lookahead` по часам `AudioContext`. Если
-  кадр отстал, пачка пропущенных шагов не догоняется. `groovePlan()` — чистая
-  функция (аналог `noteChordPlan`), поэтому smoke-тест проверяет фигуры без аудио.
+  кадр отстал, пачка пропущенных шагов не догоняется. `_mark` помнит последний
+  запланированный шаг и может опережать часы на `leadSteps`; без этого допуска
+  проверка `pos < mark` откатывала бы его назад каждый кадр и повторяла один и тот
+  же удар (важно для записи и видео). `groovePlan()` — чистая функция (аналог
+  `noteChordPlan`), поэтому smoke-тест проверяет фигуры без аудио.
 - **Только ритм.** Барабаны не вызывают ни `Heard`, ни `noteChord`, ни
   `Composition.onNote`: MIDI-пэд канала 10 (`Midi.handle()`, `DRUM_MAP`) играет звук
-  и сразу выходит из обработчика. Запись тоже не видит ударов — `rec.groove`
-  оставлен на будущую версию, чтобы формат файлов не менялся молча.
+  и сразу выходит из обработчика. Для записи удар — отдельное событие `drums`:
+  `_fire()` передаёт `recordDrumAt(kind, vel, wall*1000)`, и дорожка хранит
+  фактическое время звучания. Во время `state.replay`/`state.videoExport`
+  `Groove.update()` молчит, иначе записанные удары наложились бы на живой грув.
+  MIDI-экспорт мелодии ударные не включает.
 - **Панель.** `#groovePg` (`#grooveToggle`, `#groovePattern`, `#pGrooveBpm`,
   `#grooveStatus`) привязывается в `ui-panel.js` (`bindGroove`): список фигур
   строится из `CFG.groove.patterns`, состояние живёт в `Groove`, а `P` хранит выбор
@@ -409,8 +416,18 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
   `gateKey()` в `input.js` перехватывает `J I O P [` (5…1), `Space`/`Esc`
   (пропуск); в поле комментария те же клавиши остаются буквами, `Enter`
   заканчивает ввод. Автопропуск `CFG.research.askMs` (12 с) стоит, пока поле в
-  фокусе или непустое, и на `window.blur`. Оценка и комментарий дописываются в
-  уже сохранённый сегмент (`rating.score/comment/skipped/answerMs`).
+  фокусе или непустое, и на `window.blur`. После сохранённой оценки карточка
+  **не закрывается**: заголовок показывает `Оценка сохранена · N/5`, кнопка
+  «Пропустить» становится «Готово», а автопропуск выключается — игрок успевает
+  нажать **⬇ Видео**, затем закрыть карточку. Оценка и комментарий дописываются
+  в уже сохранённый сегмент (`rating.score/comment/skipped/answerMs`); «Готово»
+  после оценки не затирает её пропуском.
+- **Видео из карточки.** Сегмент хранит `recordingId` фоновой авто-записи этого
+  визита (`autoRecordStart()` отдаёт id, `linkRecording()` кладёт его в сегмент).
+  Кнопка **⬇ Видео** резолвит запись через `recordingById()` и зовёт
+  `startVideoExport(rec)`, поэтому выбор в панели не важен. `holdAsk(true)`
+  останавливает автопропуск на время рендера, `holdAsk(false)` возвращает его;
+  если авто-запись пустая или выключена, кнопка disabled и объясняет причину.
 - **Данные.** `harmonia.research.v1` — массив сегментов, `harmonia.research.settings`
   — `{enabled, ask}`. Лимиты — `CFG.research`: 400 посещений, 4000 событий на
   визит, ~3.5 МБ JSON; при переполнении уходят самые старые, запись обёрнута в
@@ -432,8 +449,13 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
 
 ## Звук
 
-`initAudio()` строит `master → компрессор → destination` и параллельный посыл в
-свёрточный реверб (`wetGain` ← `P.reverb`). Перед `master` стоят три шины громкости:
+`initAudio()` строит `master → компрессор → monitorGain → destination` и параллельный
+посыл в свёрточный реверб (`wetGain` ← `P.reverb`). `monitorGain` — только
+прослушивание: mute гасит его, а не `master`. Для рендера видео
+`audioCaptureStream()` на время подключает `MediaStreamAudioDestinationNode`
+прямо к компрессору, поэтому выключенный звук не делает ролик немым; анализатор
+(спектр, RMS, центр масс) стоит после `monitorGain` и показывает то, что слышит
+игрок. Перед `master` стоят три шины громкости:
 `noteGain` (`P.noteVol`, по умолчанию 0.25), `chordGain` (`P.chordVol`, 1) и
 `drumGain` (`P.drumVol`, 0.20).
 `routeVoice()` отправляет сухой сигнал в нужную шину, а реверб-посыл масштабирует
@@ -556,23 +578,45 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
 `recorder.js` пишет события, а не аудио: `recordChord(h, vel)` сохраняет снимок
 аккорда с исходной `rootMidi()` и басом, `recordNote(midi, vel, pan, withChord)` —
 реальную высоту и признак «гармонизировать ли ноту». `recordEvent()` раскладывает
-одно событие в две независимые дорожки: ручную (`recEvents`, когда `state.recording`)
-и авто-дорожку текущей станции (`autoRec.active`). MIDI-ноты пишет `Midi.noteOn`
-(без подложки), а распознанный с MIDI аккорд не дублируется (`source: 'midi'`).
-Записи лежат в `localStorage` (`rithm.recordings.v1`), список ограничен 30 записями,
-6000 событий и 3 минутами на дорожку.
+мелодическое событие в две независимые дорожки: ручную (`recEvents`, когда
+`state.recording`) и авто-дорожку текущей станции (`autoRec.active`). MIDI-ноты
+пишет `Midi.noteOn` (без подложки), а распознанный с MIDI аккорд не дублируется
+(`source: 'midi'`).
 
-`playSelected()` ставит `state.replay = true` и запускает события по таймерам через
-`playChordAudio()` / `bell()` + `noteChord()`. В этом режиме `addScore()`,
-`cashEnergy()`, шаги и переход по Space не срабатывают: прослушивание не
-зарабатывает очки. `stopPlayback()` отменяет таймеры и гасит педальные хвосты.
+Ударные — отдельная дорожка `rec.drums`, а не событие мелодии. `Groove._fire()`
+и MIDI-пэд канала 10 зовут `recordDrumAt(kind, vel, atMs)`; будущий удар ждёт
+короткий `setTimeout` и попадает в запись в момент, когда реально звучит, а не
+когда его запланировал грув с упреждением `CFG.groove.lookahead`. Поэтому старт
+записи посреди такта и смена BPM/паттерна не сдвигают уже сыгранный ритм.
+Пустой массив `drums` — метка нового формата: у старых записей поля нет.
+Пустой визит по-прежнему определяется мелодией, а `recordEvent()` не пишется во
+время `state.replay` и `state.videoExport`.
+Записи лежат в `localStorage` (`rithm.recordings.v1`), список ограничен 30 записями,
+6000 событий и 3 минутами на дорожку. Ручная запись тоже снимает `combo`
+(включая аккорды), `station`, `plot`, `gesture`, `bpm` и `beatsPerBar` на момент
+старта: эти поля нужны видео и готовому описанию, а старые записи просто
+обходятся без них.
+
+`recordingTimeline(rec)` объединяет `rec.events` и `rec.drums` и сортирует по `t`.
+По нему идут и прослушивание, и рендер видео: живой `Groove.update()` в этих
+режимах возвращает `false`, поэтому второй набор барабанов не появляется.
+
+`playSelected()` ставит `state.replay = true` и запускает события общего
+таймлайна по таймерам через `playChordAudio()` / `bell()` + `noteChord()` и
+`drumHit()`. В этом режиме `addScore()`, `cashEnergy()`, шаги и переход по Space
+не срабатывают: прослушивание не зарабатывает очки. `stopPlayback()` отменяет
+таймеры и гасит педальные хвосты.
 
 - **Автозапись станции.** `autoRecordStart()` вызывается в конце `loadCombo()`;
   `autoRecordFinalize()` — в начале следующего `loadCombo()`, на паузе и на
   `beforeunload`. Пустая дорожка не сохраняется, поэтому в списке нет каждого
-  пройденного комбо. Запись получает `auto: true`, `combo`, `station`, `plot`,
-  `gesture` и `duration`; имя — «Станция 3 · войлок». Ручная запись идёт
-  параллельно и по-прежнему сохраняется только по «Стоп». `P.autoRecord` (по
+  пройденного комбо; пустота считается по мелодии, а дорожка `drums` едет вместе
+  с ней. Запись получает `auto: true`, `combo`, `station`, `plot`,
+  `gesture`, `events`, `drums` и `duration`; имя — «Станция 3 · войлок». `id`
+  выдаётся уже при `autoRecordStart()`, поэтому исследование может сохранить
+  `recordingId` визита и открыть видео именно этой записи, не полагаясь на выбор
+  в панели. Ручная
+  запись идёт параллельно и по-прежнему сохраняется только по «Стоп». `P.autoRecord` (по
   умолчанию `true`) и кнопка **Автозапись станции** включают/выключают слой;
   `setAutoRecord(true)` начинает текущее посещение сразу. При прослушивании
   авто-запись передаёт `rec.station` в `playChordAudio()` и `STATION_TOUCH[...]` в
@@ -582,15 +626,41 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
   темп из `rec.form.bpm`, аккорд — корень/терция/квинта в октаве пэда плюс
   записанный бас, мелодия — реальные midi-ноты. `midiRecordingEvents()` отдаёт
   note-on/note-off для теста; note-off на том же тике ставится раньше note-on.
-  `exportSelectedMidi()` скачивает выбранную запись как `.mid`. Аудиофайл
-  (WAV/MP3/WebM) не экспортируется: запись остаётся событиями.
+  `exportSelectedMidi()` скачивает выбранную запись как `.mid`. Дорожка `drums`
+  в MIDI не попадает: у неё нет высоты, а формат записи остаётся прежним.
+- **Видео.** `startVideoExport(rec)` в `js/video.js` собирает вертикальный
+  `video/webm` 1080×1920 (9:16) из `canvas.captureStream(30)` и
+  `audioCaptureStream()`. Без аргумента берётся выбранная запись панели; карточка
+  оценки передаёт запись по `recordingId` и не зависит от текущего выбора.
+  Сцена 800×540 вписывается в брендированную рамку:
+  сверху логотип-орбита и словесный знак, в центре карточка сцены, снизу
+  тональность/темп/длительность, текущий аккорд или нота, CTA и прогресс с
+  тиками событий. Статичная рамка строится один раз в offscreen-canvas, поэтому
+  текст и тени не пересобираются каждый кадр. Звук планируется по часам
+  AudioContext с упреждением `VIDEO_LOOKAHEAD`, картинка идёт по тому же
+  `recordingTimeline()` через `setTimeout`; живой `Groove` выключен. Перед
+  захватом рендер ждёт `VIDEO_FLUSH_MS` (220 мс), чтобы уже запланированные
+  живым грувом удары успели прозвучать вне ролика. Пустые края записи
+  обрезаются по первому и последнему событию: `VIDEO_LEAD_MS` (1 с) оставляет
+  воздух перед первой нотой, `VIDEO_TAIL_MS` (1 с) — после последней, затем
+  идёт финальная карточка `VIDEO_ENDCARD_MS`. Заголовок кадра и первая строка
+  `videoCaption()` — тоническое трезвучие комбо (`Ля-До-Ми` / `A-C-E`), а не
+  служебное имя авто-записи «Станция 13 · эталон»; у старых записей аккорд
+  берётся из `COMBOS` по `combo.id`. `state.videoExport`
+  блокирует ввод, MIDI и запись; `cancelVideoExport()` / Esc отменяют рендер,
+  после завершения фокус и автозапись возвращаются. `videoCaption()` и кнопка
+  **📋 Подпись** дают готовое описание для соцсетей. Если у записи нет массива
+  `drums` (старый формат), видео выходит без ударных и показывает
+  предупреждение: подставлять текущий паттерн нельзя, он мог быть другим.
+  Пока рендер идёт из карточки оценки, `Research.holdAsk(true)` держит её
+  автопропуск; `finishVideoExport()` возвращает таймер и автозапись.
 - **Отсчёт.** `startRecording()` читает `P.recCountIn` (0/1/2 такта). При ненулевом
   значении `state.recording` остаётся `false`, поэтому ручная дорожка молчит;
   авто-дорожка станции при этом может писать фон. `state.recordingCountIn` и
   `recCountInBeat` показывают тик, а `metronomeClick()` идёт через мастер-шину.
   `beginRecordingNow()` стартует запись на следующей сильной доле и обнуляет
-  `recEvents`. `stopRecording()` во время отсчёта отменяет таймеры, не создавая
-  пустую запись.
+  `recEvents` и `recDrums`. `stopRecording()` во время отсчёта отменяет таймеры,
+  не создавая пустую запись.
 - **Повтор.** `startPlaybackCycle(rec, token)` планирует один проход; в конце цикла
   при `P.recLoop` он вызывает себя снова, а иначе `finishPlayback()`. `playbackToken`
   и `state.playingRecording` остаются едиными для всех кругов, поэтому «Стоп»,
@@ -735,7 +805,8 @@ Translate через `translate.js` (тот же приём, что в сосе�
 | Мелодическая статистика пьесы | `Composition.onNote()` + `state.form.melody` + `showFormResult()` |
 | Другой алгоритм очков формы | `Composition.onChord/finishBar/finishSection` |
 | Экран результата | `showFormResult()` / `hideFormResult()` в `ui-compose.js` |
-| Формат записи / лимиты | `recorder.js`: `REC_*`, `recordEvent`, `playRecordedEvent` |
+| Формат записи / лимиты | `recorder.js`: `REC_*`, `recordEvent`, `recordDrumAt`, `playRecordedEvent` |
+| Рендер видео | `video.js`: `VIDEO_*`, `startVideoExport(rec)`, `paintVideoFrame`, `videoCaption`, `#recVideo`/`#recCaption`/`#researchAskVideo`/`#videoExport` |
 | Вопрос/шкала исследования | `RATE_KEYS` и разметка `#researchAsk` (`research.js`, `index.html`), `rate()`/`skip()` |
 | Лимиты/формат исследования | `CFG.research` + `research.js` (`saveSegments`, `exportData`, `leaveCombo`) |
 | Новая метрика посещения | `Research.enterCombo/leaveCombo` + строка в `ROW_FIELDS` (`tools/research.py`) |
@@ -803,6 +874,13 @@ Translate через `translate.js` (тот же приём, что в сосе�
   (смена источника часов и подписи) и `groove-hits` (планировщик: удары растут,
   быстрый темп даёт больше шагов, выключенный грув молчит) держат это в
   headless-прогоне.
+- Запись и видео: `station-auto-record-midi` проверяет автодорожку и SMF,
+  `record-drums-video` — отдельный `drums`, `recordingTimeline()`, отсутствие
+  ударных в MIDI, предупреждение старого формата, кадр 1080×1920 (9:16),
+  обрезку хвостовой тишины, `videoCaption()` и наличие `#recVideo` /
+  `#recCaption` / `#videoExport`. Сам MediaRecorder в smoke не запускается:
+  рендер зависит от реального времени, его проверяют вручную кнопкой
+  **⬇ Видео**.
 - Исследование: `HARMONIA.research.enable()` → `loadCombo()` → аккорд/нота →
   `HARMONIA.advanceCombo()` → `#researchAsk.show`, затем `J`/`I`/`O`/`P`/`[`
   или клик по `[data-score]` → `status().rated`; `Esc` пишет `skipped`;

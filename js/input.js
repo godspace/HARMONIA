@@ -6,6 +6,7 @@
 // Команды (Enter / Backspace / стрелки / M / C / Esc / 0 / Space) живут в INPUT.commands —
 // их же сможет вызывать MIDI-контроллер или экранная кнопка.
 function runCommand(id) {
+  if (state.videoExport) return;
   switch (id) {
     case 'next': if (state.started && state.running) nextCombo(); break;
     case 'prev': if (state.started && state.running) prevCombo(); break;
@@ -33,6 +34,14 @@ function runCommand(id) {
 window.addEventListener('keydown', (e) => {
   // Ctrl/⌘/Alt + клавиша — команда браузера, а не игра (Ctrl+R, Ctrl+M, ⌘Q…).
   if (e.ctrlKey || e.metaKey || e.altKey) return;
+  // Во время рендера ролика клавиши не играют; Esc отменяет экспорт.
+  if (state.videoExport) {
+    if (e.code === 'Escape' && typeof cancelVideoExport === 'function') {
+      cancelVideoExport();
+      e.preventDefault();
+    }
+    return;
+  }
   // Карточка оценки комбо (js/research.js) забирает J I O P [ / Space / Esc,
   // пока открыта; в поле комментария те же клавиши остаются обычными буквами.
   if (typeof Research !== 'undefined' && Research.gateKey(e)) return;
@@ -75,6 +84,9 @@ window.addEventListener('keydown', (e) => {
 window.addEventListener('keyup', (e) => releaseCode(e.code));
 window.addEventListener('pointerup', stopChordHold);
 window.addEventListener('blur', () => {
+  // Рендер идёт по записанной дорожке: уход фокуса не ставит сессию на паузу,
+  // иначе MediaRecorder получил бы разрыв посреди ролика.
+  if (state.videoExport) return;
   state.keysDown = {};
   notePointerCode = null;
   stopChordHold();

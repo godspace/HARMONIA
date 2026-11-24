@@ -234,6 +234,17 @@
 
       <div id="toast"></div>
 
+      <!-- Рендер видео: сцена и звук собираются из выбранной записи. Оверлей
+           закрывает сцену от случайного ввода, но сам в кадр не попадает —
+           canvas.captureStream() видит только канвасы. -->
+      <div id="videoExport" class="video-export" role="status" aria-live="polite" hidden>
+        <div class="ve-card">
+          <div class="ve-title">🎬 Видео</div>
+          <div class="ve-text" id="videoExportText">Рендер видео…</div>
+          <button class="big-btn alt" id="videoCancel" type="button">Отменить</button>
+        </div>
+      </div>
+
       <div id="formResult" role="dialog" aria-modal="true" aria-labelledby="formResultTitle" aria-hidden="true">
         <div class="fr-card">
           <div class="fr-kicker" id="formResultKicker">Форма · 16 тактов</div>
@@ -266,8 +277,9 @@
           <label class="ra-comment-label" for="researchAskComment">Комментарий (необязательно)</label>
           <input id="researchAskComment" class="ra-comment" type="text" maxlength="160" autocomplete="off"
                  placeholder="Что понравилось или что не так?" aria-label="Комментарий к комбо">
-          <div class="ra-hint">J I O P [ — оценка · Space / Esc — пропустить</div>
+          <div class="ra-hint" id="researchAskHint">J I O P [ — оценка · Space / Esc — пропустить</div>
           <div class="fr-actions">
+            <button class="big-btn" id="researchAskVideo" type="button" title="Сохранить это комбо как вертикальное видео 9:16 (WebM)" disabled>⬇ Видео</button>
             <button class="big-btn alt" id="researchAskSkip" type="button">Пропустить</button>
           </div>
         </div>
@@ -346,7 +358,7 @@
         </select>
       </div>
       <button class="tg" id="recLoop" aria-pressed="false" title="Повторять выбранную запись по кругу">Повтор: выкл</button>
-      <button class="tg" id="recAuto" aria-pressed="true" title="Автоматически записывать каждую станцию для прослушивания и MIDI">Автозапись станции: вкл</button>
+      <button class="tg" id="recAuto" aria-pressed="true" title="Автоматически записывать каждую станцию для прослушивания, MIDI и видео">Автозапись станции: вкл</button>
       <div class="prow rec-pick">
         <label for="recList">Запись</label>
         <select id="recList" aria-label="Сохранённые записи"><option value="">— нет записей —</option></select>
@@ -354,6 +366,8 @@
       <div class="pbtns">
         <button class="pbtn" id="recDel" title="Удалить выбранную запись" disabled>🗑 Удалить</button>
         <button class="pbtn" id="recMidi" title="Скачать выбранную запись как MIDI-файл" disabled>⬇ MIDI</button>
+        <button class="pbtn" id="recVideo" title="Скачать выбранную запись как вертикальное видео 9:16 (WebM)" disabled>⬇ Видео</button>
+        <button class="pbtn" id="recCaption" title="Скопировать готовое описание для соцсетей — с тональностью, темпом и ссылкой" disabled>📋 Подпись</button>
       </div>
       <div class="rec-status" id="recStatus" aria-live="polite">Нажмите «Запись», чтобы сохранить мелодию.</div>
     </div>
@@ -582,6 +596,7 @@
   <script src="js/listen.js"></script>
   <script src="js/ui-hud.js"></script>
   <script src="js/recorder.js"></script>
+  <script src="js/video.js"></script>
   <script src="js/research.js"></script>
   <script src="js/ui-panel.js"></script>
   <script src="js/ui-drawers.js"></script>

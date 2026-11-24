@@ -10,9 +10,16 @@ const REC_MAX_EVENTS = 6000;
 const REC_MAX_MS = 180000;
 let recordings = [];
 let recEvents = [];
+// Барабаны — отдельная дорожка: удар не мелодическое событие, и MIDI по-прежнему
+// собирается только из rec.events. Пустой массив drums — метка формата: у старых
+// записей поля нет, и видео честно предупреждает, что ударных в ней не было.
+let recDrums = [];
 let recStartedAt = 0;
 let recTicker = null;
 let recFormMeta = null;
+// Снимок станции и темпа на момент старта ручной записи. Если игрок сменит
+// комбо во время игры, запись всё равно будет подписана тем, с чего началась.
+let recSessionMeta = null;
 let recCountInTimers = [];
 let recCountInToken = 0;
 let playbackTimers = [];
@@ -35,7 +42,10 @@ function autoRecordSnapshot() {
   return {
     combo: {
       id: c.id, mode: c.mode, keyName: c.keyName,
-      keyNameLatin: c.keyNameLatin, root: c.root
+      keyNameLatin: c.keyNameLatin, root: c.root,
+      // Тоническое трезвучие — заголовок ролика и подписи. Копия нужна,
+      // чтобы старые записи читались даже после правки COMBOLIST.
+      chords: (c.chords || []).map(ch => ch.slice())
     },
     station: {
       id: st.id, label: st.label, voicing: st.voicing,
@@ -53,17 +63,30 @@ function autoRecordingName(a) {
 }
 function autoRecordStart() {
   if (!P.autoRecord || state.replay || !state.started || !state.running || state.paused) return null;
-  if (autoRec && autoRec.active) return autoRec;
+  if (autoRec && autoRec.active) {
+    if (typeof Research !== 'undefined' &&
+        typeof Research.linkRecording === 'function') {
+      Research.linkRecording(autoRec.id);
+    }
+    return autoRec;
+  }
   const meta = autoRecordSnapshot();
+  const created = Date.now();
   autoRec = {
     active: true,
+    // id выдаётся в начале визита, а не при сохранении: карточка оценки
+    // открывается уже после finalize, и ей нужен точный адрес этой записи.
+    id: 'auto-' + created + '-' + Math.random().toString(36).slice(2, 6),
     events: [],
+    drums: [],
     startedAt: performance.now(),
-    created: Date.now(),
+    created,
     combo: meta.combo,
     station: meta.station,
     plot: meta.plot,
     gesture: meta.gesture,
+    bpm: recordingBpm(),
+    beatsPerBar: recordingBeatsPerBar(),
     form: state.form && state.form.enabled ? {
       bpm: state.transport.bpm || P.formBpm,
       beatsPerBar: Number(state.transport.beatsPerBar) === 3 ? 3 : 4,
@@ -71,6 +94,12 @@ function autoRecordStart() {
     } : null
   };
   paintRecorder();
+  // Текущий визит исследования получает id этой дорожки. Так карточка оценки
+  // умеет отдать в видео именно сыгранное комбо, а не выбранную запись панели.
+  if (typeof Research !== 'undefined' &&
+      typeof Research.linkRecording === 'function') {
+    Research.linkRecording(autoRec.id);
+  }
   return autoRec;
 }
 // save=false — отмена (например, «Сессия заново»): недописанное посещение не
@@ -82,15 +111,19 @@ function autoRecordFinalize(save) {
   if (!a || !a.active) { paintRecorder(); return null; }
   a.active = false;
   const events = a.events;
+  const drums = Array.isArray(a.drums) ? a.drums : [];
+  // Пустой визит определяется мелодией: одни удары без нот интересны как ритм,
+  // но запись станции — это сыгранная фраза, а не метроном.
   if (save === false || !events.length) { paintRecorder(); return null; }
   const created = a.created;
   const duration = Math.max(0, performance.now() - a.startedAt);
   const rec = {
-    id: 'auto-' + created + '-' + Math.random().toString(36).slice(2, 6),
+    id: a.id || ('auto-' + created + '-' + Math.random().toString(36).slice(2, 6)),
     name: autoRecordingName(a),
     created,
     duration,
     events,
+    drums,
     auto: true,
     combo: a.combo,
     station: a.station,
@@ -121,10 +154,12 @@ function autoRecordStatus() {
   if (!autoRec || !autoRec.active) return null;
   return {
     active: true,
+    id: autoRec.id,
     combo: autoRec.combo,
     station: autoRec.station,
     plot: autoRec.plot,
-    events: autoRec.events.length
+    events: autoRec.events.length,
+    drums: Array.isArray(autoRec.drums) ? autoRec.drums.length : 0
   };
 }
 
@@ -164,15 +199,28 @@ function saveRecordings() {
 function selectedRecording() {
   return recordings.find(r => r.id === selectedRecId) || null;
 }
+// Оценка комбо хранит id авто-записи, поэтому карточке нужен доступ к записи
+// по id, а не к той, что выбрана в панели. Неизвестный id — null.
+function recordingById(id) {
+  const key = String(id || '');
+  return key ? (recordings.find(r => r.id === key) || null) : null;
+}
+function recordDrumCount(rec) {
+  return rec && Array.isArray(rec.drums) ? rec.drums.length : 0;
+}
+function recordDrumSuffix(rec) {
+  const n = recordDrumCount(rec);
+  return n ? ' · ' + n + ' уд.' : '';
+}
 function recordOptionText(rec) {
   const form = rec.form ? ' · пьеса ' + rec.form.bpm + ' BPM' : '';
   return rec.name + ' · ' + recDurationLabel(rec.duration) +
-    ' · ' + rec.events.length + ' соб.' + form;
+    ' · ' + rec.events.length + ' соб.' + recordDrumSuffix(rec) + form;
 }
 function paintRecorder() {
   const btn = $('recBtn'), play = $('playBtn'), del = $('recDel');
   const list = $('recList'), status = $('recStatus');
-  const midi = $('recMidi'), autoBtn = $('recAuto');
+  const midi = $('recMidi'), video = $('recVideo'), caption = $('recCaption'), autoBtn = $('recAuto');
   if (!btn || !play || !del || !list || !status) return;
   if (!recordings.some(r => r.id === selectedRecId)) {
     selectedRecId = recordings.length ? recordings[0].id : null;
@@ -193,7 +241,8 @@ function paintRecorder() {
     list.value = selectedRecId || '';
   }
   const countIn = !!state.recordingCountIn;
-  const busy = !!state.recording || countIn;
+  const videoBusy = !!state.videoExport;
+  const busy = !!state.recording || countIn || videoBusy;
   btn.textContent = countIn ? '✕ Отмена' : state.recording ? '■ Стоп' : '● Запись';
   btn.setAttribute('aria-pressed', String(busy));
   btn.classList.toggle('live', busy);
@@ -203,7 +252,10 @@ function paintRecorder() {
   del.disabled = busy || state.playingRecording || !hasSelected;
   list.disabled = busy || state.playingRecording;
   if (midi) midi.disabled = busy || state.playingRecording || !hasSelected;
+  if (video) video.disabled = busy || state.playingRecording || !hasSelected;
+  if (caption) caption.disabled = busy || state.playingRecording || !hasSelected;
   if (autoBtn) {
+    autoBtn.disabled = videoBusy || !!state.recording || countIn;
     autoBtn.setAttribute('aria-pressed', String(!!P.autoRecord));
     autoBtn.textContent = P.autoRecord ? 'Автозапись станции: вкл' : 'Автозапись станции: выкл';
   }
@@ -214,7 +266,12 @@ function paintRecorder() {
       Math.max(1, state.recCountInTotal || 1) + ' · запись начнётся с 1-го такта';
   } else if (state.recording) {
     status.textContent = '● Запись · ' + recDurationLabel(performance.now() - recStartedAt) +
-      ' · ' + recEvents.length + ' соб.';
+      ' · ' + recEvents.length + ' соб.' + (recDrums.length ? ' · ' + recDrums.length + ' уд.' : '');
+  } else if (state.videoExport) {
+    const v = typeof videoExportStatus === 'function' ? videoExportStatus() : null;
+    status.textContent = v
+      ? '🎬 Видео · ' + recDurationLabel(v.elapsed) + ' / ' + recDurationLabel(v.duration)
+      : '🎬 Видео · рендер…';
   } else if (state.playingRecording) {
     const rec = selectedRecording();
     status.textContent = '▶ Прослушивание' + (rec ? ' · ' + rec.name : '') +
@@ -223,7 +280,7 @@ function paintRecorder() {
     const rec = selectedRecording();
     const form = rec.form ? ' · пьеса ' + rec.form.bpm + ' BPM' : '';
     status.textContent = 'Выбрано: ' + rec.name + ' · ' + recDurationLabel(rec.duration) +
-      ' · ' + rec.events.length + ' соб.' + form;
+      ' · ' + rec.events.length + ' соб.' + recordDrumSuffix(rec) + form;
   } else {
     status.textContent = 'Нажмите «Запись», чтобы сохранить мелодию.';
   }
@@ -254,6 +311,7 @@ function beginRecordingNow() {
   state.recording = true;
   recStartedAt = performance.now();
   recEvents = [];
+  recDrums = [];
   if (recTicker) clearInterval(recTicker);
   recTicker = setInterval(paintRecorder, 250);
   paintRecorder();
@@ -289,11 +347,21 @@ function startRecordCountIn(bars) {
   toast('⏱ Отсчёт · ' + bars + (bars === 1 ? ' такт' : ' такта') + ' до записи');
 }
 function startRecording() {
-  if (state.recording || state.recordingCountIn) return;
+  if (state.recording || state.recordingCountIn || state.videoExport) return;
   if (!state.started) { initAudio(); beginFromOverlay(); }
   if (state.paused) setPaused(false);
   stopPlayback();
   recEvents = [];
+  recDrums = [];
+  const snapshot = autoRecordSnapshot();
+  recSessionMeta = {
+    combo: snapshot.combo,
+    station: snapshot.station,
+    plot: snapshot.plot,
+    gesture: snapshot.gesture,
+    bpm: recordingBpm(),
+    beatsPerBar: recordingBeatsPerBar()
+  };
   recFormMeta = state.form && state.form.enabled ? {
     bpm: state.transport.bpm || P.formBpm,
     beatsPerBar: Number(state.transport.beatsPerBar) === 3 ? 3 : 4,
@@ -309,6 +377,7 @@ function stopRecording(save) {
   if (state.recordingCountIn) {
     clearRecordCountIn();
     recFormMeta = null;
+    recSessionMeta = null;
     paintRecorder();
     if (save !== false) toast('Отсчёт отменён');
     return;
@@ -318,14 +387,27 @@ function stopRecording(save) {
   if (recTicker) { clearInterval(recTicker); recTicker = null; }
   const duration = Math.max(0, performance.now() - recStartedAt);
   const events = recEvents;
+  const drums = recDrums;
+  const sessionMeta = recSessionMeta;
   recEvents = [];
+  recDrums = [];
   if (save !== false && events.length) {
     const created = Date.now();
     const rec = {
       id: 'rec-' + created + '-' + Math.random().toString(36).slice(2, 6),
       name: 'Запись ' + recCreatedLabel(created),
-      created, duration, events
+      created, duration, events, drums
     };
+    // Снимок нужен видео: тональность и темп попали в кадр, даже если после
+    // записи игрок успел сменить комбо. Старые записи просто не имеют полей.
+    if (sessionMeta) {
+      rec.combo = sessionMeta.combo;
+      rec.station = sessionMeta.station;
+      rec.plot = sessionMeta.plot;
+      rec.gesture = sessionMeta.gesture;
+      rec.bpm = sessionMeta.bpm;
+      rec.beatsPerBar = sessionMeta.beatsPerBar;
+    }
     if (recFormMeta) rec.form = recFormMeta;
     recordings.unshift(rec);
     recordings = recordings.slice(0, REC_MAX_ITEMS);
@@ -338,12 +420,14 @@ function stopRecording(save) {
     toast('Запись пустая — сыграйте хотя бы одну ноту');
   }
   recFormMeta = null;
+  recSessionMeta = null;
   paintRecorder();
 }
 function discardRecording() {
   if (state.recordingCountIn) {
     clearRecordCountIn();
     recFormMeta = null;
+    recSessionMeta = null;
     paintRecorder();
     return;
   }
@@ -414,6 +498,58 @@ function recordNote(midi, vel, pan, withChord) {
     withChord: withChord !== false
   });
 }
+// Удар записывается в момент, когда он реально звучит, а не когда его
+// запланировал Groove: у планировщика упреждение 150 мс, и время удара в
+// записи должно совпадать со слухом. Поэтому будущий удар ждёт короткий
+// setTimeout — к моменту срабатывания запись уже открыта, если её начали.
+function recordDrum(kind, vel, atMs) {
+  if (state.replay || state.videoExport) return false;
+  const now = performance.now();
+  const at = Number.isFinite(Number(atMs)) ? Number(atMs) : now;
+  const plan = typeof drumPlan === 'function' ? drumPlan(kind, vel) : null;
+  const ev = {
+    type: 'drum',
+    kind: plan ? plan.kind : (kind || 'hat'),
+    vel: plan ? plan.vel : clamp(vel == null ? 0.8 : vel, 0.05, 1)
+  };
+  let wrote = false;
+  // Событие, прозвучавшее до старта дорожки, не принадлежит ей. Допуск 20 мс
+  // гасит разницу часов performance.now() и таймера.
+  if (state.recording && at >= recStartedAt - 20) {
+    wrote = pushRecordEvent(recDrums, ev, at, recStartedAt, () => stopRecording(true)) || wrote;
+  }
+  if (autoRec && autoRec.active && at >= autoRec.startedAt - 20) {
+    wrote = pushRecordEvent(autoRec.drums, ev, at, autoRec.startedAt,
+      () => autoRecordFinalize()) || wrote;
+  }
+  if (wrote && state.recording && recDrums.length % 8 === 0) paintRecorder();
+  return wrote;
+}
+function recordDrumAt(kind, vel, atMs) {
+  if (state.replay || state.videoExport) return null;
+  const now = performance.now();
+  const at = Number.isFinite(Number(atMs)) ? Math.max(now, Number(atMs)) : now;
+  const delay = at - now;
+  // Ближайший удар пишем сразу; будущий — после того, как он прозвучит.
+  // Таймер не отменяется при «Стоп»: запись сама проверит, открыта ли дорожка,
+  // а авто-дорожка может остаться активной.
+  if (delay <= 2) return recordDrum(kind, vel, now);
+  const id = setTimeout(() => recordDrum(kind, vel, at), Math.min(1000, delay));
+  return id;
+}
+// Один таймлайн для прослушивания и видео: мелодия и удары сортируются по
+// записанному времени. Массив не меняется — копии событий остаются в записи.
+function recordingTimeline(rec) {
+  const list = [];
+  if (rec && Array.isArray(rec.events)) {
+    rec.events.forEach(ev => { if (ev) list.push(ev); });
+  }
+  if (rec && Array.isArray(rec.drums)) {
+    rec.drums.forEach(ev => { if (ev) list.push(ev); });
+  }
+  return list.sort((a, b) =>
+    (Number(a.t) || 0) - (Number(b.t) || 0));
+}
 function ballForMidi(midi) {
   const pc = ((midi % 12) + 12) % 12;
   let best = null;
@@ -423,28 +559,52 @@ function ballForMidi(midi) {
   });
   return best;
 }
-function playRecordedEvent(ev, rec) {
-  if (!ev) return;
+function recordedStation(rec) {
   // Авто-запись хранит характер станции: прослушивание возвращает её голос,
   // а не подачу той станции, которая открыта сейчас. Ручная запись остаётся
   // нейтральной, как раньше.
-  const station = rec && rec.auto && rec.station ? rec.station : null;
-  const shape = station && typeof STATION_TOUCH !== 'undefined'
+  return rec && rec.auto && rec.station ? rec.station : null;
+}
+function recordedShape(rec) {
+  const station = recordedStation(rec);
+  return station && typeof STATION_TOUCH !== 'undefined'
     ? (STATION_TOUCH[station.touch] || null) : null;
+}
+// Звук события отдельно от картинки: видео планирует звук по часам AudioContext
+// с упреждением, а шары и HUD включает в момент события на экране.
+function playRecordedAudio(ev, rec, when) {
+  if (!ev) return;
+  const station = recordedStation(rec);
+  const shape = recordedShape(rec);
+  if (ev.type === 'drum') {
+    if (typeof drumHit === 'function') drumHit(ev.kind, when, ev.vel);
+    return;
+  }
   if (ev.type === 'chord' && ev.h) {
     // base из записи сохраняет исходную тональность прослушивания.
-    playChordAudio(ev.h, ev.vel, ev.base, null, station, shape);
-    chordEvent(ev.h, ev.vel, 'replay');
+    playChordAudio(ev.h, ev.vel, ev.base, when, station, shape);
     return;
   }
   if (ev.type !== 'note' || ev.midi == null) return;
   const midi = ev.midi, vel = ev.vel == null ? 0.8 : ev.vel;
   const pan = ev.pan == null ? clamp((midi - 60) / 48, -0.8, 0.8) : ev.pan;
-  bell(midi, vel, pan, null, 'note', 0, shape);
-  if (ev.withChord !== false) noteChord(midi, vel, pan);
-  const ball = ballForMidi(midi);
+  bell(midi, vel, pan, when, 'note', 0, shape);
+  if (ev.withChord !== false) noteChord(midi, vel, pan, when);
+}
+function playRecordedVisual(ev, rec) {
+  if (!ev) return;
+  if (ev.type === 'chord' && ev.h) {
+    chordEvent(ev.h, ev.vel, 'replay');
+    return;
+  }
+  if (ev.type !== 'note' || ev.midi == null) return;
+  const ball = ballForMidi(ev.midi);
   // withAudio=false: звук уже создан выше, шар только показывает ноту.
-  if (ball) triggerBall(ball, vel, false);
+  if (ball) triggerBall(ball, ev.vel == null ? 0.8 : ev.vel, false);
+}
+function playRecordedEvent(ev, rec, when) {
+  playRecordedAudio(ev, rec, when);
+  playRecordedVisual(ev, rec);
 }
 function finishPlayback(token) {
   if (token !== playbackToken) return;
@@ -483,7 +643,7 @@ function startPlaybackCycle(rec, token) {
   playbackTimers.forEach(id => clearTimeout(id));
   playbackTimers = [];
   if (playbackEndTimer) { clearTimeout(playbackEndTimer); playbackEndTimer = null; }
-  const events = rec.events.slice().sort((a, b) => a.t - b.t);
+  const events = recordingTimeline(rec);
   events.forEach(ev => {
     playbackTimers.push(setTimeout(() => {
       if (token !== playbackToken || !state.playingRecording) return;
@@ -502,7 +662,7 @@ function startPlaybackCycle(rec, token) {
 }
 function playSelected() {
   const rec = selectedRecording();
-  if (!rec || !rec.events.length || state.recording || state.recordingCountIn) return;
+  if (!rec || !rec.events.length || state.recording || state.recordingCountIn || state.videoExport) return;
   if (!state.started) { initAudio(); beginFromOverlay(); }
   if (state.paused) setPaused(false);
   stopPlayback();
@@ -540,7 +700,8 @@ function midiAscii(text) {
 // Длительность аккорда берётся до следующего события (120…1500 мс), ноты —
 // короче (120…900 мс), чтобы мелодия не «заливала» следующие доли.
 function midiRecordingEvents(rec) {
-  const list = (rec && rec.events ? rec.events : []).slice()
+  const list = (rec && rec.events ? rec.events : []).filter(ev => ev && ev.type !== 'drum')
+    .slice()
     .sort((a, b) => (Number(a.t) || 0) - (Number(b.t) || 0));
   const bpm = clamp(Number(rec && rec.form && rec.form.bpm) || Number(P.formBpm) || 84, 40, 200);
   const ppq = 480;
@@ -615,7 +776,7 @@ function midiFileName(rec) {
 }
 function exportSelectedMidi() {
   const rec = selectedRecording();
-  if (!rec || !rec.events || !rec.events.length) return '';
+  if (!rec || !rec.events || !rec.events.length || state.videoExport) return '';
   const bytes = buildMidiFile(rec);
   const name = midiFileName(rec);
   try {
@@ -639,7 +800,7 @@ function exportSelectedMidi() {
 }
 function deleteSelectedRecording() {
   const rec = selectedRecording();
-  if (!rec || state.recording || state.recordingCountIn || state.playingRecording) return;
+  if (!rec || state.recording || state.recordingCountIn || state.playingRecording || state.videoExport) return;
   recordings = recordings.filter(r => r.id !== rec.id);
   selectedRecId = recordings.length ? recordings[0].id : null;
   saveRecordings();

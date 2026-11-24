@@ -57,11 +57,16 @@ window.HARMONIA = {
   stationPlotStyle, stationPlotStyleForChord, stationPlotWindowBias, stationPlotText,
   stationPlotAdvance, stationPlotReset, setStationPlot,
   startRecording, stopRecording, playSelected, stopPlayback, deleteSelectedRecording,
-  // Автозапись станции и MIDI-экспорт: запись — тот же формат событий, что и
-  // ручная, плюс combo/station/plot. buildMidiFile() возвращает Uint8Array.
+  // Автозапись станции, MIDI и видео: запись — тот же формат событий, что и
+  // ручная, плюс combo/station/plot. Ударные живут в отдельной дорожке drums.
   setAutoRecord, autoRecordStart, autoRecordFinalize, autoRecordStatus,
   buildMidiFile, midiRecordingEvents, midiFileName, exportSelectedMidi,
-  getRecordings: () => recordings,
+  recordDrumAt, recordDrum, recordingTimeline, recordDrumCount,
+  recordNote, recordChord, recordEvent,
+  startVideoExport, cancelVideoExport, videoExportStatus, videoSupported,
+  videoFileName, videoDuration, videoLegacyWarning, videoSize,
+  videoCaption, copyVideoCaption,
+  getRecordings: () => recordings, selectedRecording, recordingById,
   toggleSound, audioRms, spectralCentroid, resetVizLayers, vizDebug, setViz, cycleViz
 };
 // Алиас на один релиз: старые консольные привычки и внешние сниппеты не ломаются.

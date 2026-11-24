@@ -1079,6 +1079,105 @@ $post = @'
     }
   });
 
+  step('record-drums-video', function () {
+    // Ударные — отдельная дорожка: время удара пишется в момент звучания,
+    // таймлайн для прослушивания/видео объединяет её с мелодией, а MIDI
+    // по-прежнему собирается только из rec.events.
+    var H = HARMONIA, st = H.state;
+    if (st.recording || st.recordingCountIn) H.stopRecording(true);
+    H.stopPlayback();
+    if (!st.running) H.beginFromOverlay();
+    if (st.paused) $('mResume').click();
+    var savedAuto = H.P.autoRecord, savedCountIn = H.P.recCountIn;
+    try {
+      H.setAutoRecord(false);
+      H.P.recCountIn = 0;
+      H.startRecording();
+      if (!st.recording) throw new Error('the drum take did not start');
+      H.recordDrumAt('kick', 0.9, performance.now());
+      H.recordDrumAt('snare', 0.7, performance.now());
+      H.recordNote(60, 0.8, 0, false);
+      H.recordChord(H.harmonicChords()[0], 0.9);
+      H.stopRecording(true);
+      var rec = H.getRecordings()[0];
+      if (!rec || !Array.isArray(rec.drums) || rec.drums.length !== 2) {
+        throw new Error('drum hits did not reach the separate track');
+      }
+      if (!rec.combo || !rec.combo.keyName || !(rec.bpm >= 40)) {
+        throw new Error('the take lost its key or tempo metadata');
+      }
+      if (rec.drums[0].type !== 'drum' || rec.drums[0].kind !== 'kick') {
+        throw new Error('the drum event lost its kind');
+      }
+      var timeline = H.recordingTimeline(rec);
+      if (timeline.length !== rec.events.length + rec.drums.length) {
+        throw new Error('the recording timeline lost events');
+      }
+      for (var i = 1; i < timeline.length; i++) {
+        if ((timeline[i].t || 0) < (timeline[i - 1].t || 0)) {
+          throw new Error('the recording timeline is not sorted');
+        }
+      }
+      if (!timeline.some(function (ev) { return ev.type === 'drum'; })) {
+        throw new Error('the merged timeline has no drums');
+      }
+      var withDrums = H.midiRecordingEvents(rec).events.length;
+      var withoutDrums = H.midiRecordingEvents(Object.assign({}, rec, { drums: [] })).events.length;
+      if (withDrums !== withoutDrums) throw new Error('MIDI export included the drum track');
+      if (!H.videoLegacyWarning({ name: 'old', events: rec.events })) {
+        throw new Error('old recordings must warn about missing drums');
+      }
+      if (H.videoLegacyWarning(rec) !== '') {
+        throw new Error('a new recording was mistaken for an old one');
+      }
+      if (H.videoFileName(rec).slice(-5) !== '.webm') throw new Error('video file name is wrong');
+      if (!(H.videoDuration(rec) >= 2400)) throw new Error('video duration is too short');
+      var spec = H.videoSize();
+      if (!spec || spec.width !== 1080 || spec.height !== 1920) {
+        throw new Error('video frame is not 1080x1920');
+      }
+      if (spec.width * 16 !== spec.height * 9) throw new Error('video frame is not 9:16');
+      // Ролик начинается за секунду до первого события и заканчивается через
+      // секунду после последнего: заминки записи не растягивают видео.
+      var trimmed = H.videoDuration({
+        events: [
+          { type: 'note', t: 5000, midi: 60 },
+          { type: 'note', t: 25000, midi: 64 }
+        ],
+        drums: [], duration: 60000
+      });
+      if (trimmed < 23000 || trimmed > 24000) {
+        throw new Error('leading/trailing silence was not trimmed: ' + trimmed);
+      }
+      var single = H.videoDuration({
+        events: [{ type: 'note', t: 60000, midi: 60 }], drums: [], duration: 60000
+      });
+      if (single < 3000 || single > 4000) {
+        throw new Error('one-event video must keep only one second around it: ' + single);
+      }
+      var caption = H.videoCaption(rec);
+      if (!caption || caption.indexOf('https://godspace.github.io/HARMONIA/') === -1) {
+        throw new Error('the social caption lost the canonical link');
+      }
+      var tonic = H.chordLabel(rec.combo.chords[0]);
+      if (!tonic || caption.indexOf('HARMONIA · ' + tonic) !== 0) {
+        throw new Error('the caption must start with the tonic chord: ' + caption);
+      }
+      if (caption.indexOf('Станция ') !== -1) {
+        throw new Error('the caption still uses the station name');
+      }
+      if (!$('recVideo') || !$('recCaption') || !$('videoExport')) {
+        throw new Error('the video UI is missing');
+      }
+      if (!$('videoExport').hidden) throw new Error('the video overlay must start hidden');
+    } finally {
+      H.P.autoRecord = savedAuto;
+      H.P.recCountIn = savedCountIn;
+      H.autoRecordFinalize();
+      if (savedAuto) H.setAutoRecord(true);
+    }
+  });
+
   step('groove-patterns', function () {
     // Паттерны — это строки шагов: длина строки и есть размер такта. Опечатку
     // в строке звук не заметит (шаги добиваются точками), поэтому её ловим тут.
@@ -1248,6 +1347,14 @@ $post = @'
     }
     var slow = walk(40);
     if (slow < 4) throw new Error('the scheduler planned no hits: ' + slow);
+    // Упреждение не должно повторять уже запланированный шаг: с тем же временем
+    // кадра _mark стоит на месте, и новые удары не появляются.
+    G.update();
+    var stable = G.hits;
+    G.update(); G.update();
+    if (G.hits !== stable) {
+      throw new Error('lookahead repeated a scheduled step: ' + stable + ' -> ' + G.hits);
+    }
     // Тот же отрезок на быстром темпе даёт больше ударов: темп — это сетка,
     // а не только подпись в панели.
     $('pGrooveBpm').value = '168';
@@ -1665,16 +1772,51 @@ $post = @'
     if (ask.getAttribute('aria-hidden') !== 'false') {
       throw new Error('the rating card is hidden from screen readers');
     }
+    // Карточка знает точную авто-запись этого визита и умеет отдать её видео.
+    var askData = R.exportData();
+    var askSeg = askData.segments[askData.segments.length - 1];
+    if (!askSeg || !askSeg.recordingId) {
+      throw new Error('the visit has no linked auto-recording');
+    }
+    var askRec = H.recordingById(askSeg.recordingId);
+    if (!askRec || askRec.id !== askSeg.recordingId || !askRec.auto) {
+      throw new Error('the linked auto-recording cannot be found');
+    }
+    var videoBtn = $('researchAskVideo');
+    if (!videoBtn) throw new Error('the rating card has no video button');
+    if (H.videoSupported() && videoBtn.disabled) {
+      throw new Error('the rating card video button is disabled with a ready recording');
+    }
+    if (!H.videoSupported() && !videoBtn.disabled) {
+      throw new Error('the rating card video button ignores browser support');
+    }
     // J = 5: пока карточка открыта, клавиша оценивает, а не играет ноту.
+    // После оценки карточка остаётся открытой, чтобы успеть сохранить видео.
     window.dispatchEvent(new KeyboardEvent('keydown', {
       code: 'KeyJ', key: 'j', bubbles: true, cancelable: true
     }));
-    if (ask.classList.contains('show')) throw new Error('J did not submit the rating');
+    if (!ask.classList.contains('show')) throw new Error('J closed the rating card');
+    if ($('researchAskTitle').textContent.indexOf('5/5') === -1) {
+      throw new Error('the rated card lost its score label');
+    }
+    if ($('researchAskSkip').textContent !== 'Готово') {
+      throw new Error('the rated card did not switch Skip to Done');
+    }
+    if (H.videoSupported() && videoBtn.disabled) {
+      throw new Error('the video button became disabled after the rating');
+    }
     var data = R.exportData();
     var seg = data.segments[data.segments.length - 1];
     if (!seg) throw new Error('the visit was not saved');
     if (!seg.rating || seg.rating.score !== 5) {
       throw new Error('the rating was not stored: ' + JSON.stringify(seg.rating));
+    }
+    $('researchAskSkip').click();
+    if (ask.classList.contains('show')) throw new Error('Done did not close the rated card');
+    data = R.exportData();
+    seg = data.segments[data.segments.length - 1];
+    if (!seg.rating || seg.rating.score !== 5 || seg.rating.skipped) {
+      throw new Error('Done overwrote the saved rating with a skip');
     }
     if (seg.exit.via !== 'space') throw new Error('exit.via is not space: ' + seg.exit.via);
     if (seg.score !== H.CFG.comboAdvanceAt) {
@@ -1746,12 +1888,16 @@ $post = @'
     // Уходим из поля и ставим оценку мышью: комментарий сохраняется с ней.
     field.blur();
     ask.querySelector('[data-score="3"]').click();
+    if (!ask.classList.contains('show')) throw new Error('the mouse rating closed the card');
     data = R.exportData();
     seg = data.segments[data.segments.length - 1];
     if (!seg.rating || seg.rating.score !== 3) throw new Error('the mouse rating was not stored');
     if (seg.rating.comment !== 'мягко и тепло') {
       throw new Error('the comment was not stored: ' + seg.rating.comment);
     }
+    // Закрываем уже оценённую карточку кнопкой «Готово».
+    $('researchAskSkip').click();
+    if (ask.classList.contains('show')) throw new Error('Done did not close the mouse-rated card');
 
     // Esc пропускает: посещение остаётся, но без оценки.
     H.chordEvent(chord, 0.8, 'keys');

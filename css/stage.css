@@ -419,6 +419,9 @@ canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
 .fr-row b { color: #74cc3d; font-size: 11px; }
 .fr-actions { display: flex; gap: 8px; margin-top: 13px; }
 .fr-actions .big-btn { flex: 1 1 0; padding: 9px 10px; font-size: 12.5px; border-radius: 8px; }
+.fr-actions .big-btn:disabled {
+  opacity: 0.45; cursor: not-allowed; transform: none; box-shadow: none;
+}
 
 /* Оценка комбо — исследовательский слой (js/research.js). Карточка живёт
    внутри сцены, поэтому масштабируется вместе с ней; затемнение закрывает
@@ -441,7 +444,8 @@ canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
 }
 .ra-btn b { font-size: 19px; line-height: 1; }
 .ra-key { font-size: 9px; font-weight: 800; color: #8b95b3; }
-.ra-btn:hover, .ra-btn:focus-visible {
+.ra-btn:hover, .ra-btn:focus-visible,
+.ra-btn.selected {
   transform: translateY(-1px); border-color: #ffd166; background: rgba(255, 209, 102, 0.16);
 }
 .ra-comment-label {

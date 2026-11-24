@@ -12,6 +12,9 @@ let audioCtx = null, master = null, convolver = null, wetGain = null;
 // Раздельные шины громкости: одиночная нота, аккордовая подложка и барабаны не
 // должны бороться за один ползунок. Шины стоят до master и после голосов.
 let noteGain = null, chordGain = null, drumGain = null;
+// monitorGain — только прослушивание: mute гасит его, а запись видео берёт
+// сигнал до него с компрессора. Так выключенный звук не делает ролик немым.
+let monitorGain = null, compressorNode = null, captureDest = null;
 // Активные «хвосты» под педалью: при выключении педали их можно погасить сразу.
 let pedalVoices = [];
 // Отложенное автотрезвучие: быстрая арпеджио-фраза отменяет предыдущий аккорд,
@@ -75,7 +78,7 @@ function initAudio() {
   // а не после буфера плавного воспроизведения.
   audioCtx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
   master = audioCtx.createGain();
-  master.gain.value = state.muted ? 0 : 0.9;
+  master.gain.value = 0.9;
   noteGain = audioCtx.createGain();
   chordGain = audioCtx.createGain();
   drumGain = audioCtx.createGain();
@@ -85,21 +88,42 @@ function initAudio() {
   noteGain.connect(master);
   chordGain.connect(master);
   drumGain.connect(master);
-  const comp = audioCtx.createDynamicsCompressor();
-  comp.threshold.value = -14; comp.knee.value = 18; comp.ratio.value = 3;
-  comp.attack.value = 0.004; comp.release.value = 0.18;
-  master.connect(comp); comp.connect(audioCtx.destination);
+  compressorNode = audioCtx.createDynamicsCompressor();
+  compressorNode.threshold.value = -14; compressorNode.knee.value = 18; compressorNode.ratio.value = 3;
+  compressorNode.attack.value = 0.004; compressorNode.release.value = 0.18;
+  master.connect(compressorNode);
+  // Мониторинг отделён от записи: mute закрывает только выход в колонки.
+  monitorGain = audioCtx.createGain();
+  monitorGain.gain.value = state.muted ? 0 : 1;
+  compressorNode.connect(monitorGain);
+  monitorGain.connect(audioCtx.destination);
   // Ответвление в анализатор: на выход не влияет, только читает сигнал.
   analyser = audioCtx.createAnalyser();
   analyser.fftSize = 2048;
   analyser.smoothingTimeConstant = 0.8;
-  comp.connect(analyser);
+  monitorGain.connect(analyser);
   convolver = audioCtx.createConvolver();
   convolver.buffer = makeImpulse(audioCtx, 1.6, 2.6);
   wetGain = audioCtx.createGain();
   wetGain.gain.value = P.reverb;
   convolver.connect(wetGain); wetGain.connect(master);
   if (audioCtx.state === 'suspended') audioCtx.resume();
+}
+// Поток для записи ролика: сигнал берётся после компрессора, но до monitorGain,
+// поэтому mute и громкость колонок не влияют на дорожку видео. Узел создаётся
+// только на время экспорта: постоянная копия тракта не нужна.
+function audioCaptureStream() {
+  if (!audioCtx) return null;
+  if (!captureDest) {
+    captureDest = audioCtx.createMediaStreamDestination();
+    (compressorNode || master).connect(captureDest);
+  }
+  return captureDest.stream;
+}
+function releaseAudioCapture() {
+  if (!captureDest) return;
+  try { captureDest.disconnect(); } catch (e) { /* узел мог быть уже отключён */ }
+  captureDest = null;
 }
 // ===== Измерения выхода: спектр, громкость, центр масс спектра =====
 // Массив бинов в 0..255 (нормализованные дБ) или null, если звук ещё не стартовал.
@@ -571,7 +595,13 @@ function metronomeClick(when, accent) {
   osc.start(t); osc.stop(t + 0.07);
 }
 function applyMute() {
-  if (audioCtx && master) master.gain.setTargetAtTime(state.muted ? 0 : 0.9, audioCtx.currentTime, 0.03);
+  // master остаётся неизменным: mute — это только мониторинг, а не запись.
+  if (audioCtx && monitorGain) {
+    monitorGain.gain.setTargetAtTime(state.muted ? 0 : 1, audioCtx.currentTime, 0.03);
+  } else if (audioCtx && master && !monitorGain) {
+    // Совместимость с очень старым трактом без monitorGain.
+    master.gain.setTargetAtTime(state.muted ? 0 : 0.9, audioCtx.currentTime, 0.03);
+  }
   const b = $('muteBtn');
   b.textContent = state.muted ? '🔇 Звук: выкл' : '🔊 Звук: вкл';
   b.setAttribute('aria-pressed', String(state.muted));

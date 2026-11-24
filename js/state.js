@@ -20,6 +20,9 @@ const state = {
   // recordingCountIn — идёт отсчёт перед записью: state.recording ещё false,
   // поэтому случайные ноты во время отсчёта не попадут в запись.
   replay: false, recording: false, recordingCountIn: false, playingRecording: false,
+  // videoExport — идёт рендер ролика. В этом режиме живой грув и ввод молчат:
+  // картинка и звук собираются только из записанного таймлайна.
+  videoExport: false,
   recCountInBeat: 0, recCountInTotal: 0,
   energy: [], keysDown: {}, energyAcc: 0,
   // echo — звучат ли ноты MIDI с ноутбука: контроллер без динамиков озвучиваем сами,

@@ -120,14 +120,18 @@ const Midi = {
   select(id) { this.activeId = id || null; Heard.clear(); this.refresh(); },
   handle(msg) {
     if (!this.activeId || (msg.target && msg.target.id !== this.activeId)) return;
+    if (state.videoExport) return;
     const data = msg.data, type = data[0] & 0xf0;
     // Канал 10 — ударные. Ветка стоит первой и выходит сразу: пэд не попадает
-    // ни в слух (Heard), ни в распознавание трезвучий, ни в счёт, ни в запись —
-    // он играет ритм, а не гармонию. Velocity пэда — громкость удара.
+    // ни в слух (Heard), ни в распознавание трезвучий, ни в счёт. Для записи он
+    // остаётся ритмическим событием и идёт в отдельную дорожку drums.
     if ((data[0] & 0x0f) === 9) {
       if (type === 0x90 && data[2] > 0) {
         initAudio();
-        drumHit(DRUM_MAP[data[1]] || 'hat', null, data[2] / 127);
+        const kind = DRUM_MAP[data[1]] || 'hat';
+        const vel = data[2] / 127;
+        drumHit(kind, null, vel);
+        if (typeof recordDrumAt === 'function') recordDrumAt(kind, vel, performance.now());
       }
       return;
     }

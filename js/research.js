@@ -52,6 +52,7 @@ var Research = (function () {
   let askSeg = null;         // посещение, которое ждёт оценки
   let askPerf = 0;
   let askTimer = 0;
+  let askHeld = false;       // таймер карточки стоит, пока идёт рендер видео
   let clearArmedAt = 0;
 
   // ===== Хранилище =====
@@ -261,7 +262,10 @@ var Research = (function () {
       combo: {
         id: c.id, mode: c.mode, keyName: c.keyName,
         keyNameLatin: c.keyNameLatin, root: c.root,
-        degrees: (c.degrees || []).slice()
+        degrees: (c.degrees || []).slice(),
+        // Тоническое трезвучие: по нему карточка и видео подписывают комбо
+        // без служебных слов «станция» и «эталон».
+        chords: (c.chords || []).map(ch => ch.slice())
       },
       station: {
         id: st.id, label: st.label, voicing: st.voicing,
@@ -358,15 +362,31 @@ var Research = (function () {
         groove: typeof Groove !== 'undefined' && !!Groove.on
       },
       scoreStart: state.score,
+      // id фоновой записи этого визита: карточка оценки сможет отдать в видео
+      // именно сыгранное комбо, даже если в панели выбрана другая запись.
+      recordingId: '',
       events: [],
       counts: { notes: 0, chords: 0 },
       overflow: false
     };
     enterPerf = performance.now();
     seg.plot = initialPlotLog(enterPerf);
+    // Если исследование включили посреди визита, авто-дорожка уже идёт:
+    // подхватываем её id из recorder.js.
+    if (typeof autoRecordStatus === 'function') {
+      const active = autoRecordStatus();
+      if (active && active.id) seg.recordingId = active.id;
+    }
     playFromPerf = 0;
     pendingExit = '';
     return seg;
+  }
+  // loadCombo зовёт это сразу после autoRecordStart(): сегмент и запись
+  // начинаются в один момент, поэтому карточка оценки знает точный адрес.
+  function linkRecording(id) {
+    const key = String(id || '');
+    if (seg && key) seg.recordingId = key;
+    return seg ? (seg.recordingId || '') : '';
   }
   // Выход из комбо. keepAsk нужен паузе: карточка оценки не должна исчезать
   // из-за ухода фокуса окна — пауза лишь останавливает её таймер.
@@ -449,10 +469,39 @@ var Research = (function () {
   }
 
   // ===== Карточка оценки =====
+  // Подписи карточки в двух состояниях: до оценки и после. После оценки
+  // карточка не закрывается: игрок успевает скачать видео этого комбо и
+  // закрыть её кнопкой «Готово»/Space/Esc.
+  const ASK_HINT = 'J I O P [ — оценка · Space / Esc — пропустить';
+  const ASK_HINT_RATED = 'Можно сохранить видео или нажать «Готово»';
   function askMeta(s) {
     const sec = Math.max(1, Math.round((s.playMs || 0) / 1000));
     const key = P.notation === 'letters' ? s.combo.keyNameLatin : s.combo.keyName;
     return key + ' · ' + sec + ' с в комбо · ' + s.counts.notes + ' нот · ' + s.score + ' очков';
+  }
+  function paintAskState(s) {
+    const score = s && s.rating && typeof s.rating.score === 'number'
+      ? s.rating.score : 0;
+    const kicker = $('researchAskKicker');
+    const title = $('researchAskTitle');
+    const hint = $('researchAskHint');
+    const skipBtn = $('researchAskSkip');
+    if (kicker) kicker.textContent = 'Комбо · оценка';
+    if (score >= 1 && score <= 5) {
+      if (title) title.textContent = 'Оценка сохранена · ' + score + '/5';
+      if (hint) hint.textContent = ASK_HINT_RATED;
+      if (skipBtn) skipBtn.textContent = 'Готово';
+    } else {
+      if (title) title.textContent = 'Как звучало комбо?';
+      if (hint) hint.textContent = ASK_HINT;
+      if (skipBtn) skipBtn.textContent = 'Пропустить';
+    }
+    document.querySelectorAll('#researchAsk [data-score]').forEach(btn => {
+      const active = score >= 1 && parseInt(btn.dataset.score, 10) === score;
+      btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+      btn.classList.toggle('selected', active);
+    });
+    paintAskVideo();
   }
   function commentEl() { return $('researchAskComment'); }
   function readComment() {
@@ -464,6 +513,60 @@ var Research = (function () {
     const el = commentEl();
     return !!el && (document.activeElement === el || !!el.value.trim());
   }
+  // Запись, к которой относится открытая карточка. Это не «выбранная в панели»
+  // запись: оценка привязана к конкретному визиту через seg.recordingId.
+  function askRecording() {
+    if (!askSeg || !askSeg.recordingId) return null;
+    return typeof recordingById === 'function'
+      ? recordingById(askSeg.recordingId) : null;
+  }
+  // Кнопка видео живёт рядом с оценкой, но не мешает ей: пока рендер идёт,
+  // карточка остаётся открытой, а её таймер стоит (holdAsk).
+  function paintAskVideo() {
+    const btn = $('researchAskVideo');
+    if (!btn) return;
+    const rec = askRecording();
+    const available = !!rec && Array.isArray(rec.events) && rec.events.length > 0;
+    const supported = typeof videoSupported === 'function' ? videoSupported() : false;
+    const busy = !!state.videoExport || !!state.recording || !!state.recordingCountIn;
+    btn.disabled = !available || !supported || busy;
+    btn.textContent = '⬇ Видео';
+    if (!available) {
+      btn.title = 'Запись этого комбо не сохранилась — включите автозапись станции.';
+    } else if (!supported) {
+      btn.title = 'Браузер не поддерживает запись видео.';
+    } else if (busy) {
+      btn.title = 'Дождитесь окончания записи или рендера.';
+    } else {
+      btn.title = 'Сохранить это комбо как вертикальное видео 9:16 (WebM)';
+    }
+  }
+  function exportAskVideo() {
+    const rec = askRecording();
+    if (!rec) {
+      toast('Запись этого комбо не сохранилась');
+      paintAskVideo();
+      return '';
+    }
+    if (typeof startVideoExport !== 'function') {
+      toast('Видео не поддерживается браузером');
+      return '';
+    }
+    const job = startVideoExport(rec);
+    paintAskVideo();
+    return job;
+  }
+  // Рендер занимает реальное время, а автопропуск карточки — 12 секунд.
+  // Пока видео собирается, таймер стоит; после — снова идёт с полным окном.
+  function holdAsk(on) {
+    askHeld = !!on;
+    if (askHeld) stopTimer();
+    else {
+      paintAskVideo();
+      armTimer();
+    }
+    return askHeld;
+  }
   function stopTimer() {
     if (askTimer) {
       clearTimeout(askTimer);
@@ -474,7 +577,10 @@ var Research = (function () {
   // в фокусе или непустое — таймер стоит.
   function armTimer() {
     stopTimer();
-    if (!askSeg) return;
+    if (!askSeg || askHeld) return;
+    // После сохранённой оценки автозакрытия нет: игрок решает сам, когда
+    // закончить с видео и нажать «Готово».
+    if (askSeg.rating && typeof askSeg.rating.score === 'number') return;
     if (commentBusy()) return;
     askTimer = setTimeout(() => {
       askTimer = 0;
@@ -486,18 +592,15 @@ var Research = (function () {
     if (!el || !s) return false;
     askSeg = s;
     askPerf = performance.now();
-    const kicker = $('researchAskKicker');
-    const title = $('researchAskTitle');
     const meta = $('researchAskMeta');
     const field = commentEl();
-    if (kicker) kicker.textContent = 'Комбо · оценка';
-    if (title) title.textContent = 'Как звучало комбо?';
     if (meta) meta.textContent = askMeta(s);
     if (field) field.value = '';
     el.classList.add('show');
     el.setAttribute('aria-hidden', 'false');
     const card = $('researchAskCard');
     if (card && card.focus) card.focus();
+    paintAskState(s);
     armTimer();
     return true;
   }
@@ -523,11 +626,13 @@ var Research = (function () {
     }
     askSeg = null;
     stopTimer();
+    askHeld = false;
     if (el) {
       el.classList.remove('show');
       el.setAttribute('aria-hidden', 'true');
     }
     if (field) field.value = '';
+    paintAskVideo();
     paint();
     return !!s;
   }
@@ -542,23 +647,35 @@ var Research = (function () {
       answerMs: Math.max(0, Math.round(performance.now() - askPerf))
     };
     saveSegments();
-    closeAsk(false);
+    // Не закрываем карточку: следом игрок может сохранить видео этого комбо.
+    // Повторная оценка просто обновит уже сохранённую.
+    paintAskState(s);
+    stopTimer();
     toast('Оценка сохранена: ' + score + '/5', 'good');
     return true;
   }
   function skip(silent) {
     const s = askSeg;
     if (!s) return false;
-    s.rating = {
-      score: null,
-      comment: readComment(),
-      skipped: true,
-      at: Date.now(),
-      answerMs: Math.max(0, Math.round(performance.now() - askPerf))
-    };
-    saveSegments();
+    const rated = !!(s.rating && typeof s.rating.score === 'number' &&
+      s.rating.score >= 1 && s.rating.score <= 5);
+    if (rated) {
+      // «Готово» после оценки не должно затирать её пропуском; комментарий,
+      // добавленный уже после оценки, всё равно сохраняем.
+      if (commentEl()) s.rating.comment = readComment();
+      saveSegments();
+    } else {
+      s.rating = {
+        score: null,
+        comment: readComment(),
+        skipped: true,
+        at: Date.now(),
+        answerMs: Math.max(0, Math.round(performance.now() - askPerf))
+      };
+      saveSegments();
+    }
     closeAsk(false);
-    if (!silent) toast('Оценка пропущена');
+    if (!silent && !rated) toast('Оценка пропущена');
     return true;
   }
 
@@ -713,6 +830,8 @@ var Research = (function () {
       });
       const skipBtn = $('researchAskSkip');
       if (skipBtn) skipBtn.addEventListener('click', () => skip());
+      const videoBtn = $('researchAskVideo');
+      if (videoBtn) videoBtn.addEventListener('click', exportAskVideo);
     }
     const toggle = $('researchToggle');
     if (toggle) {
@@ -753,9 +872,10 @@ var Research = (function () {
     // Настройки
     enable, disable, setAsk, clear,
     // Жизненный цикл посещения и события — их зовут game.js/midi.js
-    onSessionStart, exitHint, enterCombo, leaveCombo, onChord, onNote,
+    onSessionStart, exitHint, enterCombo, leaveCombo, linkRecording, onChord, onNote,
     // Карточка
-    offerLast, gateKey, rate, skip,
+    offerLast, gateKey, rate, skip, askRecording, exportAskVideo,
+    holdAsk, refreshAsk: paintAskVideo,
     // Данные
     status, totals, exportData, download, paint,
     // Лимиты пригодятся инструменту анализа и тестам

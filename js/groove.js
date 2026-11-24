@@ -164,6 +164,9 @@ const Groove = {
   // должен звучать, иначе Enter на пробе ничего не демонстрирует.
   update() {
     if (!this.on || state.paused) return false;
+    // Прослушивание и экспорт видео идут по записанной дорожке: живой грув в это
+    // время молчит, иначе к записанным ударам добавился бы второй набор.
+    if (state.replay || state.videoExport) return false;
     if (!state.running && !this.preview) return false;
     if (typeof audioCtx === 'undefined' || !audioCtx) return false;
     const now = this._now();
@@ -178,12 +181,16 @@ const Groove = {
     const dur = 60 / this.bpm() / 4;
     const pos = (now - base) / dur;
     if (!isFinite(pos)) return false;
-    let mark = this._mark;
-    // Кадр мог отстать (вкладка была неактивна) — не догоняем пачку ударов,
-    // а просто встаём на текущий шаг.
-    if (mark == null || Math.abs(pos - mark) > 8 || pos < mark) mark = Math.floor(pos);
     const swing = grooveSteps(this.patternId, this.meter()).swing;
     const horizon = CFG.groove.lookahead;
+    let mark = this._mark;
+    // _mark — последний уже запланированный шаг. Из-за упреждения он может
+    // опережать часы на несколько шагов; это не «перемотка назад». Сброс нужен
+    // только при реальном откате часов или долгом пропуске кадров.
+    const leadSteps = Math.ceil(horizon / dur) + 1;
+    if (mark == null || pos < mark - leadSteps || Math.abs(pos - mark) > 8) {
+      mark = Math.floor(pos);
+    }
     let guard = 0;
     while (guard++ < 8) {
       const step = mark + 1;
@@ -203,6 +210,9 @@ const Groove = {
     const when = audioCtx.currentTime + Math.max(0, wall - now);
     hits.forEach(hit => {
       if (typeof drumHit === 'function') drumHit(hit.kind, when, hit.vel);
+      // wall — время на часах performance.now(), когда удар прозвучит. Рекордер
+      // ждёт этот момент и пишет удар уже по фактическому звучанию.
+      if (typeof recordDrumAt === 'function') recordDrumAt(hit.kind, hit.vel, wall * 1000);
     });
     this.hits += hits.length;
   },

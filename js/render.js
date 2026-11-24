@@ -139,6 +139,10 @@ function render() {
     m.ring(spriteCtx, f, 1 - age);
   }
 
+  // Видео собирает оба канваса в один кадр: так в ролик попадают и перо, и
+  // sprite-слой. Рисуем после сцены, чтобы кадр был завершённым.
+  if (state.videoExport && typeof paintVideoFrame === 'function') paintVideoFrame();
+
   requestAnimationFrame(render);
 }
 

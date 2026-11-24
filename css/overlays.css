@@ -233,3 +233,31 @@
 .big-btn.alt { background: rgba(255, 255, 255, 0.1); color: #d0d7ee; box-shadow: none; border: 1px solid rgba(255, 255, 255, 0.25); }
 #modal { display: none; cursor: default; }
 #modalStats { font-size: 15px; color: #ffd166; font-weight: 800; margin-bottom: 18px; }
+/* ===== Рендер видео =====
+   Оверлей лежит внутри сцены и закрывает её от случайного ввода. В кадр он не
+   попадает: video.js снимает только канвасы через captureStream(). */
+.video-export {
+  position: absolute; inset: 0; z-index: 24;
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px; text-align: center; cursor: default;
+  background: rgba(8, 10, 16, 0.84); backdrop-filter: blur(7px);
+}
+.video-export[hidden] { display: none; }
+.ve-card {
+  width: min(360px, 86%);
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  padding: 22px 24px;
+  border-radius: 14px;
+  background: rgba(18, 22, 34, 0.92);
+  border: 1px solid rgba(107, 223, 255, 0.28);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.48);
+}
+.ve-title {
+  font-size: 13px; font-weight: 800; letter-spacing: 1px;
+  text-transform: uppercase; color: #6bdfff;
+}
+.ve-text {
+  font-size: 13px; line-height: 1.45; color: #c2cae0;
+  font-variant-numeric: tabular-nums;
+}
+.ve-card .big-btn { padding: 9px 20px; font-size: 13px; }
