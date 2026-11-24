@@ -256,6 +256,7 @@ function paintRecorder() {
   const list = $('recList'), status = $('recStatus');
   const midi = $('recMidi'), video = $('recVideo'), audio = $('recAudio');
   const caption = $('recCaption'), autoBtn = $('recAuto');
+  const suno = $('recSuno');
   if (!btn || !play || !del || !list || !status) return;
   if (!recordings.some(r => r.id === selectedRecId)) {
     selectedRecId = recordings.length ? recordings[0].id : null;
@@ -290,6 +291,7 @@ function paintRecorder() {
   if (midi) midi.disabled = busy || state.playingRecording || !hasSelected;
   if (video) video.disabled = busy || state.playingRecording || !hasSelected;
   if (audio) audio.disabled = busy || state.playingRecording || !hasSelected;
+  if (suno) suno.disabled = busy || state.playingRecording || !hasSelected;
   if (caption) caption.disabled = busy || state.playingRecording || !hasSelected;
   if (autoBtn) {
     autoBtn.disabled = videoBusy || audioBusy || !!state.recording || countIn;
@@ -306,9 +308,10 @@ function paintRecorder() {
       ' · ' + recEvents.length + ' соб.' + (recDrums.length ? ' · ' + recDrums.length + ' уд.' : '');
   } else if (state.audioExport) {
     const a = typeof audioExportStatus === 'function' ? audioExportStatus() : null;
+    const label = a && a.purpose === 'suno' ? '🎧 WAV для Suno' : '🎧 Аудио';
     status.textContent = a
-      ? '🎧 Аудио · ' + recDurationLabel(a.elapsed) + ' / ' + recDurationLabel(a.duration)
-      : '🎧 Аудио · запись…';
+      ? label + ' · ' + recDurationLabel(a.elapsed) + ' / ' + recDurationLabel(a.duration)
+      : label + ' · запись…';
   } else if (state.videoExport) {
     const v = typeof videoExportStatus === 'function' ? videoExportStatus() : null;
     status.textContent = v
@@ -326,6 +329,9 @@ function paintRecorder() {
   } else {
     status.textContent = 'Нажмите «Запись», чтобы сохранить мелодию.';
   }
+  // Кнопка Suno живёт в js/suno.js и знает про готовый WAV; панель только
+  // просит её перерисоваться после смены записи или экспорта.
+  if (typeof sunoPaint === 'function') sunoPaint();
 }
 function recordingBeatsPerBar() {
   if (Number(state.transport.beatsPerBar) === 3) return 3;

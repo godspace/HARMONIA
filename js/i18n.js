@@ -231,6 +231,25 @@ var I18N = (function () {
     'Аудио не удалось сохранить': 'Could not save the audio',
     'Аудио не поддерживается браузером': 'This browser cannot export audio',
     'Экспорт аудио отменён': 'Audio export cancelled',
+    // Suno без API: WAV + английский промпт, затем ручная загрузка на сайте.
+    'Подготовить WAV и английский промпт для Suno':
+      'Prepare a WAV and an English prompt for Suno',
+    'Открыть Suno и скопировать промпт заново':
+      'Open Suno and copy the prompt again',
+    'Сначала выберите запись с нотами.':
+      'Choose a recording with notes first.',
+    '🎧 WAV для Suno': '🎧 Suno WAV',
+    'WAV для Suno сохранён': 'The WAV for Suno was saved',
+    'WAV для Suno готов — нажмите «↗ Suno»':
+      'The WAV for Suno is ready — press “↗ Suno”',
+    'Не удалось подготовить WAV для Suno':
+      'Could not prepare the WAV for Suno',
+    'Промпт скопирован · загрузите WAV и вставьте его в Suno':
+      'Prompt copied · upload the WAV and paste the prompt into Suno',
+    'Не удалось скопировать промпт': 'Could not copy the prompt',
+    'Suno не открылся — браузер заблокировал окно. Откройте suno.com/create вручную.':
+      'Suno did not open — the browser blocked the window. Open suno.com/create manually.',
+    'Suno недоступен в этой сборке': 'Suno is not available in this build',
     'В записи нет нот': 'The recording has no notes',
     'Старая запись: партия барабанов не сохранилась — видео будет без ударных.':
       'This is an old recording: its drum track was not saved, so the video will have no drums.',

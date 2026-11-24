@@ -69,6 +69,9 @@ window.HARMONIA = {
   videoCaption, copyVideoCaption,
   startAudioExport, cancelAudioExport, audioExportStatus, audioSupported,
   audioFileName, audioDuration, audioPcmToWav,
+  // Suno без API: английский промпт + WAV → ручная загрузка на suno.com/create.
+  SUNO_CREATE_URL, sunoPrompt, sunoStart, sunoOpen, sunoCopyText, sunoPaint,
+  sunoState,
   getRecordings: () => recordings, selectedRecording, recordingById,
   toggleSound, audioRms, spectralCentroid, resetVizLayers, vizDebug, setViz, cycleViz
 };

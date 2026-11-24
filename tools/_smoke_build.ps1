@@ -1228,6 +1228,81 @@ $post = @'
     }
   });
 
+  step('suno-handoff', function () {
+    // Suno без API: промпт — чистый английский текст, кнопки есть, WAV-экспорт
+    // получает purpose 'suno'. Сам рендер в smoke не запускается: он реального
+    // времени, как и WAV/видео.
+    var H = HARMONIA;
+    if (H.SUNO_CREATE_URL !== 'https://suno.com/create') {
+      throw new Error('the Suno URL is wrong');
+    }
+    if (typeof H.sunoPrompt !== 'function' || typeof H.sunoState !== 'function') {
+      throw new Error('the Suno API is missing');
+    }
+    if (!$('recSuno') || !$('researchAskSuno')) {
+      throw new Error('the Suno UI is missing');
+    }
+    var probe = H.sunoPrompt({
+      events: [{ type: 'note', t: 0, midi: 60 }],
+      combo: { id: 1, mode: 'major', keyNameLatin: 'C major', chords: [['до', 'ми', 'соль']] },
+      bpm: 84, beatsPerBar: 4,
+      station: { touch: 'felt' },
+      drums: [{ type: 'drum', t: 0, kind: 'kick' }]
+    });
+    if (probe.indexOf('Instrumental') !== 0) {
+      throw new Error('the Suno prompt must start with Instrumental: ' + probe);
+    }
+    if (probe.indexOf('no vocals') === -1) throw new Error('the prompt lost "no vocals"');
+    if (probe.indexOf('C major') === -1) throw new Error('the prompt lost the key');
+    if (probe.indexOf('84 BPM') === -1) throw new Error('the prompt lost the tempo');
+    if (probe.indexOf('4/4') === -1) throw new Error('the prompt lost the meter');
+    if (probe.indexOf('soft felt piano') === -1) {
+      throw new Error('the prompt lost the station timbre');
+    }
+    if (probe.indexOf('soft brushed drums') === -1) {
+      throw new Error('the prompt lost the drum track');
+    }
+    if (/[\u0400-\u04FF]/.test(probe)) throw new Error('the Suno prompt must be English');
+    if (/undefined|null/.test(probe)) throw new Error('the Suno prompt has an empty value');
+    var quiet = H.sunoPrompt({
+      events: [],
+      combo: { id: 13, mode: 'minor', keyNameLatin: 'A minor', chords: [['ля', 'до', 'ми']] },
+      form: { bpm: 72, beatsPerBar: 3 }, station: { touch: 'glass' }, drums: []
+    });
+    if (quiet.indexOf('A minor') === -1 || quiet.indexOf('72 BPM') === -1) {
+      throw new Error('the prompt lost the minor key or form tempo: ' + quiet);
+    }
+    if (quiet.indexOf('3/4') === -1) throw new Error('the prompt ignored the 3/4 meter');
+    if (quiet.indexOf('no drums') === -1) throw new Error('the prompt must say "no drums"');
+    var ruKey = H.sunoPrompt({
+      events: [], combo: { mode: 'minor', keyName: 'ля минор', chords: [['ля', 'до', 'ми']] }
+    });
+    if (ruKey.indexOf('A minor') === -1 || /[\u0400-\u04FF]/.test(ruKey)) {
+      throw new Error('an old Russian-only combo did not become a Latin key: ' + ruKey);
+    }
+    var legacy = H.sunoPrompt({ events: [{ type: 'note', t: 0, midi: 60 }], name: 'old' });
+    if (!legacy || /undefined|null/.test(legacy) || /[\u0400-\u04FF]/.test(legacy)) {
+      throw new Error('the legacy prompt is not clean English: ' + legacy);
+    }
+    if (legacy.indexOf('C major') === -1 || legacy.indexOf('84 BPM') === -1) {
+      throw new Error('the legacy prompt lost its safe defaults: ' + legacy);
+    }
+    if (H.sunoPrompt(null) !== '') throw new Error('an empty recording must give an empty prompt');
+    var state = H.sunoState();
+    if (state.ready || state.id || state.prompt) {
+      throw new Error('the Suno hand-off must start without a ready WAV');
+    }
+    if (!H.audioSupported() && !$('recSuno').disabled) {
+      throw new Error('the Suno button ignores browser audio support');
+    }
+    if (H.audioSupported() && $('recSuno').disabled) {
+      throw new Error('the Suno button is disabled with a ready recording');
+    }
+    if (!$('researchAskSuno').disabled) {
+      throw new Error('the rating card Suno button must wait for a recording');
+    }
+  });
+
   step('groove-patterns', function () {
     // Паттерны — это строки шагов: длина строки и есть размер такта. Опечатку
     // в строке звук не заметит (шаги добиваются точками), поэтому её ловим тут.

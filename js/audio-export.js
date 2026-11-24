@@ -103,6 +103,10 @@ function audioExportStatus() {
   if (!audioJob) return null;
   return {
     active: true,
+    id: audioJob.rec && audioJob.rec.id ? audioJob.rec.id : '',
+    // purpose различает обычный WAV и подготовку для Suno: файл и имя те же,
+    // меняется только подпись прогресса и кнопка после завершения.
+    purpose: audioJob.purpose || 'audio',
     name: recordingTitle(audioJob.rec),
     elapsed: Math.max(0, performance.now() -
       (audioJob.startedAt || performance.now())),
@@ -120,10 +124,13 @@ function hideAudioOverlay() {
 function updateAudioOverlay(job) {
   const text = $('audioExportText');
   if (!text || !job) return;
+  const suno = job.purpose === 'suno';
+  const title = document.querySelector('#audioExport .ve-title');
+  if (title) title.textContent = suno ? '🎧 WAV для Suno' : '🎧 Аудио';
   const elapsed = Math.min(job.duration, Math.max(0, performance.now() -
     (job.startedAt || performance.now())));
-  text.textContent = '🎧 Аудио · ' + recDurationLabel(elapsed) + ' / ' +
-    recDurationLabel(job.duration);
+  text.textContent = (suno ? '🎧 WAV для Suno · ' : '🎧 Аудио · ') +
+    recDurationLabel(elapsed) + ' / ' + recDurationLabel(job.duration);
 }
 // Звук ставится по часам AudioContext с упреждением: setTimeout не отвечает за
 // ритм, поэтому захват не зависит от частоты кадров.
@@ -164,7 +171,8 @@ function downloadAudioJob(job) {
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1500);
-    toast('Аудио сохранено · ' + name, 'good');
+    toast((job.purpose === 'suno' ? 'WAV для Suno сохранён' : 'Аудио сохранено') +
+      ' · ' + name, 'good');
     return name;
   } catch (e) {
     if (typeof console !== 'undefined') console.warn('audio: download failed', e);
@@ -203,6 +211,20 @@ function finishAudioExport(job, save, silent) {
   let name = '';
   if (save && !job.canceled) name = downloadAudioJob(job);
   else if (job.canceled && !silent) toast('Экспорт аудио отменён');
+  // Соло-подготовка для Suno ждёт имя файла: по нему кнопка становится «↗ Suno».
+  // Колбэк не должен ломать завершение экспорта, поэтому ошибки только в консоль.
+  if (typeof job.onDone === 'function') {
+    try {
+      job.onDone({
+        name: name,
+        canceled: !!job.canceled,
+        rec: job.rec,
+        purpose: job.purpose || 'audio'
+      });
+    } catch (e) {
+      if (typeof console !== 'undefined') console.warn('audio: onDone failed', e);
+    }
+  }
   // После файла возвращаем фоновую автозапись и таймер карточки оценки.
   if (typeof autoRecordStart === 'function') autoRecordStart();
   if (typeof Research !== 'undefined' &&
@@ -215,9 +237,11 @@ function cancelAudioExport() {
   job.canceled = true;
   finishAudioExport(job, false);
 }
-async function startAudioExport(target) {
+async function startAudioExport(target, options) {
   // Без аргумента — выбранная запись панели; с аргументом — запись карточки
-  // оценки. Имя файла то же, что у MIDI и видео.
+  // оценки. Имя файла то же, что у MIDI и видео. options.purpose/onDone
+  // использует js/suno.js: WAV остаётся тем же, меняется только подпись.
+  const opts = options || {};
   const rec = target || selectedRecording();
   if (audioJob || audioStarting || exportBusy() || !rec || !rec.events || !rec.events.length) {
     if (rec && (!rec.events || !rec.events.length)) toast('В записи нет нот');
@@ -247,6 +271,8 @@ async function startAudioExport(target) {
     const token = ++audioToken;
     job = {
       token, rec, timeline,
+      purpose: opts.purpose || 'audio',
+      onDone: typeof opts.onDone === 'function' ? opts.onDone : null,
       firstEventAt: Math.max(0, Number(timeline[0].t) || 0),
       duration, sampleRate: audioCtx.sampleRate || 48000,
       left: [], right: [], audioIdx: 0,
@@ -310,7 +336,8 @@ async function startAudioExport(target) {
       if (audioJob !== job || job.canceled) return;
       finishAudioExport(job, true);
     }, duration + 80);
-    toast('🎧 Аудио: ' + recordingTitle(rec));
+    toast((opts.purpose === 'suno' ? '🎧 WAV для Suno: ' : '🎧 Аудио: ') +
+      recordingTitle(rec));
     return rec.id;
   } catch (e) {
     if (typeof console !== 'undefined') console.warn('audio: export failed', e);

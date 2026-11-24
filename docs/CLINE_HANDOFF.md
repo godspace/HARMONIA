@@ -149,6 +149,19 @@
   **⬇ Аудио** и **⬇ Видео**: `recordingId` сегмента указывает на
   авто-запись этого визита, поэтому экспорт не зависит от выбора в панели.
   Smoke-шаги `station-auto-record-midi` и `record-drums-video`.
+- **Suno без API** — `js/suno.js`. `sunoPrompt(rec)` собирает только английский
+  текст из `combo.keyNameLatin`, `bpm`/`form.bpm`, `beatsPerBar`,
+  `station.touch` и `drums`; старые записи получают `C major`, 84 BPM, 4/4,
+  `warm piano`, `no drums`. Первый клик **🎛 Suno** копирует промпт и зовёт
+  `startAudioExport(rec, {purpose:'suno', onDone})` — WAV и имя файла те же, что
+  у **⬇ Аудио**. После сохранения кнопка становится **↗ Suno**; второй клик
+  копирует промпт и сразу открывает `https://suno.com/create` (отложенный
+  `window.open` блокируется). В панели и карточке оценки кнопки
+  `#recSuno` / `#researchAskSuno` делят `sunoReady`, но привязаны к id записи.
+  Официальный API Suno не используется: он требует ключ и сервер, а форма на
+  чужом домене недоступна. Free-план: 50 кредитов/день, загрузка до 8 минут,
+  без скачивания и коммерческих прав (проверено 24.11.2026); запись HARMONIA
+  ограничена 3 минутами. Smoke-шаг `suno-handoff`.
 - **Исследование оценок комбо** — `js/research.js`, по умолчанию включено
   (`harmonia.research.settings`, `version: 2`). Выключается `?research=0`,
   `HARMONIA.research.disable()` или секцией

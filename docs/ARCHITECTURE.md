@@ -46,8 +46,9 @@
 | `ui-hud` | отображение состояния | `updateHUD`, `updateHomeIndicator`, `renderPalette`, `renderHint`, `updateHeardChip`, `paintSoundChip` |
 | `recorder` | запись, автозапись станции, прослушивание, MIDI и общие имена файлов | `recordChord/Note`, `recordDrum/recordDrumAt`, `recordingTimeline`, `startRecording`, `stopRecording`, `autoRecordStart/Finalize/Status`, `setAutoRecord`, `playSelected`, `deleteSelectedRecording`, `recordingById`, `recordingTonic/Title/FileName`, `buildMidiFile`, `midiRecordingEvents`, `exportSelectedMidi` |
 | `video` | рендер записи в WebM | `startVideoExport(rec)`, `cancelVideoExport`, `videoExportStatus`, `videoSupported`, `videoFileName`, `videoDuration`, `videoSize`, `videoCaption`, `copyVideoCaption`, `videoLegacyWarning`, `paintVideoFrame` |
-| `audio-export` | сохранение записи в WAV | `startAudioExport(rec)`, `cancelAudioExport`, `audioExportStatus`, `audioSupported`, `audioFileName`, `audioDuration`, `audioPcmToWav`, `#recAudio`/`#researchAskAudio`/`#audioExport` |
-| `research` | оценки комбо и поведение (по умолчанию включены) | `Research` (`enable`, `disable`, `setAsk`, `status`, `exportData`, `download`, `gateKey`, `linkRecording`, `askRecording`, `exportAskVideo`, `exportAskAudio`, `holdAsk`, `onChord/Note`, `enterCombo/leaveCombo`), `CFG.research` |
+| `audio-export` | сохранение записи в WAV | `startAudioExport(rec, {purpose, onDone})`, `cancelAudioExport`, `audioExportStatus` (`id`, `purpose`), `audioSupported`, `audioFileName`, `audioDuration`, `audioPcmToWav`, `#recAudio`/`#researchAskAudio`/`#audioExport` |
+| `suno` | мостик к Suno без API: английский промпт + WAV | `SUNO_CREATE_URL`, `sunoPrompt`, `sunoStart`, `sunoOpen`, `sunoCopyText`, `sunoPaint`, `sunoState`, кнопки `#recSuno`/`#researchAskSuno` |
+| `research` | оценки комбо и поведение (по умолчанию включены) | `Research` (`enable`, `disable`, `setAsk`, `status`, `exportData`, `download`, `gateKey`, `linkRecording`, `askRecording`, `exportAskVideo`, `exportAskAudio`, `exportAskSuno`, `holdAsk`, `onChord/Note`, `enterCombo/leaveCombo`), `CFG.research` |
 | `ui-panel` | настройки | `bindRange`, `bindSelect`, `bindToggle`, `syncAll`, `togglePedal` |
 | `ui-drawers` | выдвижные панели | `drawers`, `drawerOpen`, `drawerIntro`, `setDrawer`, `toggleDrawer`, `setDrawerIntro`, `initDrawers` |
 | `ui-compose` | HUD/панель формы и результат | `buildFormHud`, `updateFormHUD`, `resetFormHud`, `setFormEnabled`, `showFormResult`, `initCompose` |
@@ -671,6 +672,24 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
   Пока рендер идёт из карточки оценки, `Research.holdAsk(true)` держит её
   автопропуск; `finishVideoExport()` возвращает таймер и автозапись. Кнопка
   **⬇ Аудио** использует тот же `holdAsk` и `finishAudioExport()`.
+- **Suno без API.** `js/suno.js` не обращается к Suno: он готовит то, что
+  сервис принимает вручную. `sunoPrompt(rec)` — чистая функция: `Instrumental,
+  no vocals…`, тональность из `rec.combo.keyNameLatin` (для старых записей —
+  `COMBOS` по id или аккорды), BPM из `rec.bpm`/`rec.form`, размер из
+  `form.beatsPerBar`/`beatsPerBar`, тембр из `rec.station.touch` и строка
+  `soft brushed drums` / `no drums` из `rec.drums`. Только английский текст, без
+  `undefined`: старые записи получают `C major`, 84 BPM, 4/4, `warm piano`.
+  Первый клик **🎛 Suno** копирует промпт и зовёт `startAudioExport(rec,
+  {purpose:'suno', onDone})`; WAV и его имя не меняются. После сохранения
+  `onDone` получает имя файла, `sunoReady = {id, prompt}` и кнопка становится
+  **↗ Suno**. Второй клик копирует промпт и в том же жесте вызывает
+  `window.open('https://suno.com/create')` — отложенное открытие браузеры
+  блокируют. Если окно заблокировано, тост просит открыть адрес вручную.
+  Кнопки панели и карточки оценки делят `sunoReady`, но привязаны к id своей
+  записи; `sunoPaint()` обновляет обе. `Research.exportAskSuno()` берёт
+  авто-запись визита и использует тот же `holdAsk`, что аудио и видео.
+  Ограничения Free-плана Suno (50 кредитов/день, загрузка до 8 минут, без
+  скачивания и коммерческих прав) описаны в README; запись HARMONIA — до 3 минут.
 - **Отсчёт.** `startRecording()` читает `P.recCountIn` (0/1/2 такта). При ненулевом
   значении `state.recording` остаётся `false`, поэтому ручная дорожка молчит;
   авто-дорожка станции при этом может писать фон. `state.recordingCountIn` и
@@ -824,6 +843,7 @@ Translate через `translate.js` (тот же приём, что в сосе�
 | Экран результата | `showFormResult()` / `hideFormResult()` в `ui-compose.js` |
 | Формат записи / лимиты | `recorder.js`: `REC_*`, `recordEvent`, `recordDrumAt`, `playRecordedEvent` |
 | Экспорт WAV | `audio.js` (`audioCaptureStream`) + `audio-export.js` (`startAudioExport`, `audioPcmToWav`), `#recAudio`/`#researchAskAudio`/`#audioExport` |
+| Мостик к Suno | `suno.js`: `SUNO_CREATE_URL`, `sunoPrompt`, `sunoStart`, `sunoOpen`, `sunoPaint`; `audio-export.js` (`purpose:'suno'`, `onDone`), `#recSuno`/`#researchAskSuno` |
 | Рендер видео | `video.js`: `VIDEO_*`, `startVideoExport(rec)`, `paintVideoFrame`, `videoCaption`, `#recVideo`/`#recCaption`/`#researchAskVideo`/`#videoExport` |
 | Вопрос/шкала исследования | `RATE_KEYS` и разметка `#researchAsk` (`research.js`, `index.html`), `rate()`/`skip()` |
 | Лимиты/формат исследования | `CFG.research` + `research.js` (`saveSegments`, `exportData`, `leaveCombo`) |
@@ -898,7 +918,10 @@ Translate через `translate.js` (тот же приём, что в сосе�
   `audioPcmToWav()` (RIFF/WAVE, 16-bit, stereo), предупреждение старого формата,
   кадр 1080×1920 (9:16), обрезку хвостовой тишины, `videoCaption()` и наличие
   `#recAudio` / `#researchAskAudio` / `#audioExport` / `#recVideo` / `#recCaption`
-  / `#videoExport`. Сам MediaRecorder и ScriptProcessor в smoke не запускаются:
+  / `#videoExport`. Шаг `suno-handoff` проверяет `sunoPrompt()` на английский
+  текст без `undefined` (тональность, BPM, размер, тембр, барабаны), безопасные
+  значения старых записей и наличие `#recSuno` / `#researchAskSuno`.
+  Сам MediaRecorder и ScriptProcessor в smoke не запускаются:
   захват зависит от реального времени, его проверяют вручную кнопками
   **⬇ Аудио** и **⬇ Видео**.
 - Исследование: по умолчанию включено; `HARMONIA.research.disable()` / `enable()`

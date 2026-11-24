@@ -158,6 +158,18 @@ a.pbtn { text-decoration: none; }
 a.pbtn:hover { text-decoration: none; }
 .extra-links { margin-top: 6px; }
 .pbtn.accent { color: #ffd166; border-color: rgba(255, 209, 102, 0.5); background: rgba(255, 209, 102, 0.1); }
+/* Suno: после сохранения WAV кнопка становится переходом, а не экспортом.
+   Золотая рамка отличает «↗ Suno» от обычных кнопок панели и карточки оценки. */
+.pbtn.suno-ready, .big-btn.suno-ready {
+  color: #ffd166; border-color: rgba(255, 209, 102, 0.62);
+  background: rgba(255, 209, 102, 0.13);
+}
+.pbtn.suno-busy, .big-btn.suno-busy {
+  color: #6bdfff; border-color: rgba(107, 223, 255, 0.55);
+  background: rgba(107, 223, 255, 0.10);
+}
+/* Прогресс должен читаться: обычная «выключенность» гасит кнопку до 42–45 %. */
+.pbtn.suno-busy:disabled, .big-btn.suno-busy:disabled { opacity: 0.86; }
 /* Запись мелодии: кнопки, выбор сохранённой записи и статус. */
 .rec-actions { display: flex; gap: 6px; margin-bottom: 7px; }
 .rec-actions .pbtn { flex: 1 1 0; padding-left: 5px; padding-right: 5px; }

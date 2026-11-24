@@ -542,6 +542,12 @@ var Research = (function () {
   function paintAskButtons() {
     paintAskVideo();
     paintAskAudio();
+    paintAskSuno();
+  }
+  // Suno — тот же WAV, но с английским промптом и переходом на suno.com/create.
+  // Вся логика в js/suno.js; карточка только просит кнопку перерисоваться.
+  function paintAskSuno() {
+    if (typeof sunoPaint === 'function') sunoPaint();
   }
   function paintAskVideo() {
     const btn = $('researchAskVideo');
@@ -612,6 +618,24 @@ var Research = (function () {
     const job = startAudioExport(rec);
     paintAskButtons();
     return job;
+  }
+  function exportAskSuno() {
+    const rec = askRecording();
+    if (!rec) {
+      toast('Запись этого комбо не сохранилась');
+      paintAskButtons();
+      return '';
+    }
+    if (typeof sunoStart !== 'function') {
+      toast('Suno недоступен в этой сборке');
+      return '';
+    }
+    const done = typeof sunoState === 'function' ? sunoState() : null;
+    const ready = !!done && done.ready && done.id === rec.id;
+    const result = ready && typeof sunoOpen === 'function'
+      ? sunoOpen(rec) : sunoStart(rec);
+    paintAskButtons();
+    return result;
   }
   // Экспорт занимает реальное время, а автопропуск карточки — 12 секунд.
   // Пока файл собирается, таймер стоит; после — снова идёт с полным окном.
@@ -891,6 +915,8 @@ var Research = (function () {
       if (videoBtn) videoBtn.addEventListener('click', exportAskVideo);
       const audioBtn = $('researchAskAudio');
       if (audioBtn) audioBtn.addEventListener('click', exportAskAudio);
+      const sunoBtn = $('researchAskSuno');
+      if (sunoBtn) sunoBtn.addEventListener('click', exportAskSuno);
     }
     const toggle = $('researchToggle');
     if (toggle) {
@@ -934,7 +960,7 @@ var Research = (function () {
     onSessionStart, exitHint, enterCombo, leaveCombo, linkRecording, onChord, onNote,
     // Карточка
     offerLast, gateKey, rate, skip, askRecording, exportAskVideo, exportAskAudio,
-    holdAsk, refreshAsk: paintAskButtons,
+    exportAskSuno, holdAsk, refreshAsk: paintAskButtons,
     // Данные
     status, totals, exportData, download, paint,
     // Лимиты пригодятся инструменту анализа и тестам
