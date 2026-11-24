@@ -1147,7 +1147,7 @@ $post = @'
       }
       if (H.videoFileName(rec).slice(-5) !== '.webm') throw new Error('video file name is wrong');
       if (H.audioFileName(rec).slice(-4) !== '.wav') throw new Error('WAV file name is wrong');
-      if (!(H.audioDuration(rec) >= 2000)) throw new Error('audio duration is too short');
+      if (!(H.audioDuration(rec) >= 1500)) throw new Error('audio duration is too short');
       var wav = H.audioPcmToWav([
         new Float32Array([0, 0.5, -0.5]),
         new Float32Array([0, -0.5, 0.5])
@@ -1208,6 +1208,50 @@ $post = @'
       });
       if (trimmed < 21200 || trimmed > 21700) {
         throw new Error('the video did not trim the recording edges: ' + trimmed);
+      }
+      // Фоновый грув не задаёт края: удар на входе (t=0) и удар после последней
+      // ноты (t=14000) не должны вернуть в ролик четыре секунды бездействия.
+      var background = {
+        events: [
+          { type: 'note', t: 5000, midi: 60 },
+          { type: 'note', t: 9000, midi: 64 }
+        ],
+        drums: [
+          { type: 'drum', t: 0, kind: 'kick' },
+          { type: 'drum', t: 14000, kind: 'snare' }
+        ],
+        duration: 15000
+      };
+      var backgroundTake = H.recordingExportTimeline(background);
+      if (backgroundTake.firstEventAt !== 5000 || backgroundTake.lastEventAt !== 9000) {
+        throw new Error('the melody did not set the export window');
+      }
+      if (backgroundTake.timeline.length !== 2 ||
+          backgroundTake.timeline.some(function (ev) { return ev.type === 'drum'; })) {
+        throw new Error('background drums leaked into the export timeline');
+      }
+      var backgroundVideo = H.videoDuration(background);
+      if (backgroundVideo < 5400 || backgroundVideo > 5500) {
+        throw new Error('background drums stretched the video: ' + backgroundVideo);
+      }
+      var backgroundAudio = H.audioDuration(background);
+      if (backgroundAudio < 5550 || backgroundAudio > 5650) {
+        throw new Error('background drums stretched the WAV: ' + backgroundAudio);
+      }
+      // WAV-захват длиннее затухания: цифровая тишина по краям срезается, а
+      // слышимые сэмплы и небольшие поля вокруг них остаются.
+      var pcm = new Int16Array(48000);
+      pcm[12000] = 3000;
+      pcm[24000] = -3000;
+      var trimmedPcm = H.audioPcmTrim([pcm], 48000);
+      if (!trimmedPcm || !trimmedPcm[0] || !(trimmedPcm[0] instanceof Int16Array)) {
+        throw new Error('audioPcmTrim lost the channel');
+      }
+      if (trimmedPcm[0].length >= pcm.length || trimmedPcm[0].length < 10000) {
+        throw new Error('audioPcmTrim kept the silent edges: ' + trimmedPcm[0].length);
+      }
+      if (trimmedPcm[0][1440] !== 3000 || trimmedPcm[0][13440] !== -3000) {
+        throw new Error('audioPcmTrim moved the audible samples');
       }
       var single = H.videoDuration({
         events: [{ type: 'note', t: 60000, midi: 60 }], drums: [], duration: 60000

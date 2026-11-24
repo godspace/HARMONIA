@@ -4,13 +4,17 @@
    файл. Запись хранит события, а не семплы: WAV собирается тем же синтезатором
    по recordingTimeline(), как прослушивание и ролик. Захват идёт с
    audioCaptureStream() (после компрессора, до mute): ScriptProcessorNode пишет
-   PCM в память, затем audioPcmToWav() добавляет RIFF/WAVE-заголовок. Всё
-   работает на file:// и GitHub Pages, зависимостей нет. */
+   PCM в память, audioPcmTrim() срезает тишину по краям, затем audioPcmToWav()
+   добавляет RIFF/WAVE-заголовок. Всё работает на file:// и GitHub Pages,
+   зависимостей нет. */
 
-const AUDIO_LEAD_MS = 1000;    // секунда воздуха до первой ноты
-const AUDIO_TAIL_MS = 1000;    // секунда воздуха после последней
+const AUDIO_LEAD_MS = 0;       // первая нота звучит с первого сэмпла файла
+const AUDIO_TAIL_MS = 1600;    // запас на затухание; тишину после него срезаем
 const AUDIO_FLUSH_MS = 220;    // даём живым ударам прозвучать вне файла
 const AUDIO_MIN_MS = AUDIO_LEAD_MS + AUDIO_TAIL_MS;
+const AUDIO_SILENCE = 0.003;   // порог цифровой тишины (≈ −50 dBFS)
+const AUDIO_KEEP_HEAD_MS = 30; // запас перед атакой, чтобы не щёлкнуть
+const AUDIO_KEEP_TAIL_MS = 140; // запас после последнего слышимого сэмпла
 const AUDIO_LOOKAHEAD = 0.35;
 const AUDIO_BUFFER = 4096;
 
@@ -24,15 +28,16 @@ function audioSupported() {
   return !!Ctx && typeof Ctx.prototype.createScriptProcessor === 'function' &&
     typeof audioCaptureStream === 'function' && typeof MediaStream !== 'undefined';
 }
-// Длительность WAV повторяет логику видео, но без финальной карточки: 1 с до
-// первого события, всё содержание и 1 с после последнего.
+// Длительность WAV повторяет логику видео, но без финальной карточки: файл
+// начинается с первой сыгранной ноты, затем идёт содержание и запас на
+// затухание. Границы берутся по мелодии: фоновый грув до/после игры не
+// растягивает файл. Тишину по краям окончательно срезает audioPcmTrim().
 function audioDuration(rec) {
-  const timeline = recordingTimeline(rec);
-  if (!timeline.length) return 0;
-  const first = Math.max(0, Number(timeline[0].t) || 0);
-  const last = Math.max(0, Number(timeline[timeline.length - 1].t) || 0);
+  const take = recordingExportTimeline(rec);
+  if (!take.timeline.length) return 0;
   return Math.round(Math.max(AUDIO_MIN_MS,
-    AUDIO_LEAD_MS + Math.max(0, last - first) + AUDIO_TAIL_MS));
+    AUDIO_LEAD_MS + Math.max(0, take.lastEventAt - take.firstEventAt) +
+    AUDIO_TAIL_MS));
 }
 function audioFileName(rec) {
   return recordingFileName(rec, 'wav');
@@ -99,6 +104,42 @@ function audioPcmJoin(chunks, frames) {
   }
   return out;
 }
+// Запас AUDIO_TAIL_MS нужен, чтобы длинное затухание успело записаться, но если
+// оно короче, файл не должен заканчиваться секундами пустоты. Ищем первый и
+// последний слышимый сэмпл и оставляем маленькие поля, чтобы атака и хвост не
+// обрезались щелчком. Полностью немой захват не трогаем.
+function audioPcmTrim(channels, sampleRate) {
+  const list = Array.isArray(channels) ? channels : [channels];
+  const left = list[0];
+  if (!left || !left.length) return channels;
+  const right = list[1] && list[1].length ? list[1] : left;
+  const frames = Math.max(left.length, right.length);
+  const scale = left instanceof Int16Array ? 32768 : 1;
+  const floor = scale * AUDIO_SILENCE;
+  const loud = i => Math.abs(left[i] || 0) >= floor ||
+    Math.abs(right[i] || 0) >= floor;
+  let first = -1;
+  for (let i = 0; i < frames; i++) {
+    if (!loud(i)) continue;
+    first = i;
+    break;
+  }
+  if (first < 0) return channels;
+  let last = first;
+  for (let i = frames - 1; i >= first; i--) {
+    if (!loud(i)) continue;
+    last = i;
+    break;
+  }
+  const rate = Math.max(8000, Math.round(Number(sampleRate) || 48000));
+  const from = Math.max(0,
+    first - Math.round(rate * AUDIO_KEEP_HEAD_MS / 1000));
+  const to = Math.min(frames,
+    last + 1 + Math.round(rate * AUDIO_KEEP_TAIL_MS / 1000));
+  if (to <= from) return channels;
+  return list.map(ch => ch && typeof ch.subarray === 'function'
+    ? ch.subarray(from, to) : ch);
+}
 function audioExportStatus() {
   if (!audioJob) return null;
   return {
@@ -159,7 +200,8 @@ function downloadAudioJob(job) {
     const frames = Math.max(1, Math.round(job.duration / 1000 * job.sampleRate));
     const left = audioPcmJoin(job.left, frames);
     const right = audioPcmJoin(job.right.length ? job.right : job.left, frames);
-    const wav = audioPcmToWav([left, right], job.sampleRate);
+    const pcm = audioPcmTrim([left, right], job.sampleRate);
+    const wav = audioPcmToWav(pcm, job.sampleRate);
     const blob = new Blob([wav], { type: 'audio/wav' });
     const name = audioFileName(job.rec);
     const url = URL.createObjectURL(blob);
@@ -262,7 +304,8 @@ async function startAudioExport(target, options) {
     initAudio();
     if (!audioCtx) throw new Error('audio is not ready');
     if (audioCtx.state === 'suspended') await audioCtx.resume();
-    const timeline = recordingTimeline(rec);
+    const take = recordingExportTimeline(rec);
+    const timeline = take.timeline;
     if (!timeline.length) {
       toast('В записи нет нот');
       return '';
@@ -273,7 +316,7 @@ async function startAudioExport(target, options) {
       token, rec, timeline,
       purpose: opts.purpose || 'audio',
       onDone: typeof opts.onDone === 'function' ? opts.onDone : null,
-      firstEventAt: Math.max(0, Number(timeline[0].t) || 0),
+      firstEventAt: take.firstEventAt,
       duration, sampleRate: audioCtx.sampleRate || 48000,
       left: [], right: [], audioIdx: 0,
       capturing: false, canceled: false, finished: false, save: false

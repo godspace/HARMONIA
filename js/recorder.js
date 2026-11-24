@@ -598,6 +598,50 @@ function recordingTimeline(rec) {
   return list.sort((a, b) =>
     (Number(a.t) || 0) - (Number(b.t) || 0));
 }
+// Границы того, что игрок реально сыграл. Фоновая дорожка барабанов может
+// звучать с момента входа на станцию и после последней ноты, поэтому экспорт
+// не должен считать её края началом и концом записи: иначе заминки до первой
+// ноты и после неё остаются в видео и WAV. Если мелодии нет (старый формат или
+// запись только с MIDI-пэда), границы берутся по общему таймлайну.
+function recordingContentSpan(rec) {
+  const melody = rec && Array.isArray(rec.events) ? rec.events : [];
+  let first = -1;
+  let last = 0;
+  melody.forEach(ev => {
+    if (!ev) return;
+    const t = Math.max(0, Number(ev.t) || 0);
+    if (first < 0 || t < first) first = t;
+    if (t > last) last = t;
+  });
+  if (first >= 0) return { first, last, melodic: true };
+  const timeline = recordingTimeline(rec);
+  timeline.forEach(ev => {
+    const t = Math.max(0, Number(ev && ev.t) || 0);
+    if (first < 0 || t < first) first = t;
+    if (t > last) last = t;
+  });
+  return first < 0
+    ? { first: 0, last: 0, melodic: false }
+    : { first, last, melodic: false };
+}
+// Таймлайн для видео и WAV: мелодия задаёт окно, барабаны остаются только
+// внутри него. Удар, записанный до первой ноты или после последней, не
+// растягивает файл и не превращает бездействие игрока в «музыку».
+function recordingExportTimeline(rec) {
+  const timeline = recordingTimeline(rec);
+  const span = recordingContentSpan(rec);
+  const list = span.melodic
+    ? timeline.filter(ev => {
+        const t = Math.max(0, Number(ev && ev.t) || 0);
+        return t >= span.first && t <= span.last;
+      })
+    : timeline;
+  return {
+    timeline: list,
+    firstEventAt: span.first,
+    lastEventAt: span.last
+  };
+}
 function ballForMidi(midi) {
   const pc = ((midi % 12) + 12) % 12;
   let best = null;

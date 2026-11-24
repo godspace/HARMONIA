@@ -87,16 +87,15 @@ function videoTitle(rec) {
   return recordingTitle(rec) || videoText('HARMONIA');
 }
 function videoDuration(rec) {
-  const timeline = recordingTimeline(rec);
-  const first = timeline.length ? Math.max(0, Number(timeline[0].t) || 0) : 0;
-  const last = timeline.length ? Math.max(0, Number(timeline[timeline.length - 1].t) || 0) : 0;
-  // Длительность считается по первому и последнему событию, а не по времени
-  // старта/остановки записи: заминки до первой ноты и после последней не нужны.
-  // VIDEO_LEAD_MS не добавляет воздуха, VIDEO_TAIL_MS оставляет короткий
-  // музыкальный хвост, VIDEO_ENDCARD_MS — финальную карточку со ссылкой.
-  const span = Math.max(0, last - first);
+  // Границы — по сыгранной мелодии, а не по фоновым барабанам: грув может
+  // начаться со входа на станцию и продолжаться после последней ноты, и тогда
+  // заминки до/после игры остались бы в ролике. VIDEO_LEAD_MS не добавляет
+  // воздуха, VIDEO_TAIL_MS оставляет короткий музыкальный хвост,
+  // VIDEO_ENDCARD_MS — финальную карточку со ссылкой.
+  const span = recordingContentSpan(rec);
   const wanted = Math.max(VIDEO_MIN_MS,
-    VIDEO_LEAD_MS + span + VIDEO_TAIL_MS + VIDEO_ENDCARD_MS);
+    VIDEO_LEAD_MS + Math.max(0, span.last - span.first) +
+    VIDEO_TAIL_MS + VIDEO_ENDCARD_MS);
   const max = (typeof REC_MAX_MS === 'number' ? REC_MAX_MS : 180000) + VIDEO_MIN_MS;
   return Math.round(clamp(wanted, VIDEO_MIN_MS, max));
 }
@@ -932,13 +931,12 @@ async function startVideoExport(target) {
     if (!audioCtx) throw new Error('audio is not ready');
     if (audioCtx.state === 'suspended') await audioCtx.resume();
     const token = ++videoToken;
-    const timeline = recordingTimeline(rec);
-    const firstEventAt = timeline.length
-      ? Math.max(0, Number(timeline[0].t) || 0)
-      : 0;
-    const lastEventAt = timeline.length
-      ? Math.max(0, Number(timeline[timeline.length - 1].t) || 0)
-      : 0;
+    // Окно ролика — сыгранная мелодия и удары внутри неё. Фоновый грув до
+    // первой ноты и после последней в файл не попадает.
+    const take = recordingExportTimeline(rec);
+    const timeline = take.timeline;
+    const firstEventAt = take.firstEventAt;
+    const lastEventAt = take.lastEventAt;
     const contentEndAt = Math.max(0, lastEventAt - firstEventAt);
     v = {
       token, rec, timeline, firstEventAt, lastEventAt, contentEndAt,

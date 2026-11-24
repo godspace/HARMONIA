@@ -182,15 +182,17 @@
 библиотек: аккорд, бас и мелодия становятся обычными нотами, которые открывает
 любой MIDI-редактор; ударные в MIDI не входят. **⬇ Аудио** сохраняет ту же фразу
 в WAV 16-bit PCM: Suno и другие сервисы не принимают MIDI, а звук собирается тем
-же синтезатором по `recordingTimeline()` — с секундой воздуха до и после событий.
+же синтезатором по `recordingTimeline()`. Файл начинается с первой сыгранной
+ноты, запас на затухание остаётся, а цифровая тишина по краям срезается
+`audioPcmTrim()`. Фоновый грув до и после мелодии в WAV не попадает.
 Файлы MIDI, WAV и видео получают одно имя — тоническое трезвучие комбо
 (`Ля-До-Ми.mid` / `.wav` / `.webm`). **⬇ Видео** рендерит вертикальный WebM
 720×1280 (9:16) с брендингом сверху, подписью текущего аккорда/ноты, прогрессом
 по событиям и финальной карточкой со ссылкой. Разметка при этом остаётся в
 сетке 1080×1920 и уменьшается общим transform'ом: 720p заметно легче для
-рендера и кодирования. Пустые края записи обрезаются по
-первому и последнему событию: ролик стартует сразу с первой ноты, а после
-короткого музыкального хвоста показывает финальную карточку. Заголовок кадра
+рендера и кодирования. Края ролика задаёт мелодия, а не фоновый грув: первая
+сыгранная нота попадает в кадр 0, после короткого музыкального хвоста
+показывается финальная карточка. Заголовок кадра
 и первая строка
 подписи — тоническое трезвучие комбо (`Ля-До-Ми` / `A-C-E`). **📋 Подпись**
 копирует готовое описание для соцсетей с тональностью, темпом и канонической
@@ -541,18 +543,21 @@ HARMONIA.setAutoRecord(false) // выключить автозапись ста�
 HARMONIA.autoRecordStatus()   // {active, combo, station, plot, events, drums} текущего визита
 HARMONIA.recordDrumAt('kick', 0.9, performance.now() + 150) // удар в отдельную дорожку
 HARMONIA.recordingTimeline(rec) // rec.events + rec.drums, отсортированные по t
+HARMONIA.recordingContentSpan(rec) // {first,last,melodic} — окно сыгранной мелодии без фонового грува
+HARMONIA.recordingExportTimeline(rec) // таймлайн видео/WAV: удары только внутри мелодии
 HARMONIA.buildMidiFile(rec)   // Uint8Array SMF format 0 для выбранной записи
 HARMONIA.exportSelectedMidi() // скачать выбранную запись как .mid (без барабанов)
-HARMONIA.startAudioExport(rec) // WAV 16-bit PCM: тот же таймлайн, 1 с воздуха
+HARMONIA.startAudioExport(rec) // WAV 16-bit PCM: с первой ноты, без тишины по краям
 HARMONIA.cancelAudioExport()  // отменить текущий захват WAV
 HARMONIA.audioFileName(rec)   // общее имя с MIDI/видео, но с .wav
 HARMONIA.audioPcmToWav([left, right], 48000) // чистый RIFF/WAVE для теста
+HARMONIA.audioPcmTrim([left, right], 48000) // срезать цифровую тишину по краям захвата
 HARMONIA.sunoPrompt(rec)      // английский промпт: key, BPM, meter, timbre, drums
 HARMONIA.sunoStart(rec)       // скопировать промпт и сохранить WAV для Suno
 HARMONIA.sunoOpen(rec)        // открыть suno.com/create и заново скопировать промпт
 HARMONIA.sunoState()          // {ready, id, prompt} — для кнопок «🎛 Suno» / «↗ Suno»
 HARMONIA.SUNO_CREATE_URL      // https://suno.com/create
-HARMONIA.startVideoExport(rec) // вертикальный WebM 9:16: канвасы + звук от одного медиа-времени; пустые края обрезаны, без тишины на входе
+HARMONIA.startVideoExport(rec) // вертикальный WebM 9:16: первая нота в кадре 0, фоновый грув вне мелодии обрезан
 HARMONIA.cancelVideoExport()  // отменить текущий рендер
 HARMONIA.videoSize()          // {width:720, height:1280, ratio:0.5625}
 HARMONIA.videoCaption(rec)    // описание для соцсетей: тоническое трезвучие, BPM, ссылка
@@ -601,7 +606,8 @@ Google Search Console, счётчик Яндекс.Метрики и старт�
 replay, счёт при перезапуске сессии и `pagehide`, а затем очищает сбор и
 `localStorage`. Шаги записи проверяют общую
 базу имён `.mid`/`.wav`/`.webm`, `audioDuration()` и заголовок RIFF/WAVE из
-`audioPcmToWav()`, а также наличие `#recAudio`, `#researchAskAudio` и
+`audioPcmToWav()`, обрезку фонового грува по окну мелодии и цифровой тишины в
+`audioPcmTrim()`, а также наличие `#recAudio`, `#researchAskAudio` и
 `#audioExport`. Шаг `suno-handoff` проверяет `sunoPrompt()`: промпт начинается
 с `Instrumental`, содержит `no vocals`, тональность, BPM, размер, тембр и
 барабаны, не содержит кириллицы и `undefined`, а старые записи получают

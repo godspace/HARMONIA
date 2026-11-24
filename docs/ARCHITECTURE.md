@@ -606,6 +606,10 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
 `recordingTimeline(rec)` объединяет `rec.events` и `rec.drums` и сортирует по `t`.
 По нему идут и прослушивание, и рендер видео: живой `Groove.update()` в этих
 режимах возвращает `false`, поэтому второй набор барабанов не появляется.
+Экспорт берёт окно по `recordingContentSpan(rec)` — границам мелодии, а
+`recordingExportTimeline(rec)` оставляет удары только внутри этого окна. Так
+фоновый грув, звучащий с момента входа на станцию и после последней ноты, не
+возвращает в файл секунды бездействия игрока.
 
 `playSelected()` ставит `state.replay = true` и запускает события общего
 таймлайна по таймерам через `playChordAudio()` / `bell()` + `noteChord()` и
@@ -639,11 +643,12 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
   компрессора и до `monitorGain`, поэтому mute не делает файл немым), а
   `ScriptProcessorNode` складывает PCM-чанки в `Int16Array`; это совместимо с
   `file://`, в отличие от AudioWorklet. `playRecordedAudio()` планирует события
-  по часам AudioContext с `AUDIO_LOOKAHEAD`; `AUDIO_LEAD_MS`/`AUDIO_TAIL_MS`
-  оставляют по секунде воздуха, `AUDIO_FLUSH_MS` выпускает уже запланированные
-  живые удары до захвата. `audioPcmToWav()` — чистая функция RIFF/WAVE, её
-  проверяет smoke. Имена `.mid`, `.wav` и `.webm` строятся из одной базы
-  `recordingFileName()` (тоническое трезвучие комбо).
+  по часам AudioContext с `AUDIO_LOOKAHEAD`; ролик и WAV стартуют с первой
+  сыгранной ноты, `AUDIO_TAIL_MS` даёт запас на затухание, а `audioPcmTrim()`
+  срезает цифровую тишину по краям уже записанного PCM. `AUDIO_FLUSH_MS`
+  выпускает уже запланированные живые удары до захвата. `audioPcmToWav()` —
+  чистая функция RIFF/WAVE, её проверяет smoke. Имена `.mid`, `.wav` и `.webm`
+  строятся из одной базы `recordingFileName()` (тоническое трезвучие комбо).
 - **Видео.** `startVideoExport(rec)` в `js/video.js` собирает вертикальный
   `video/webm` 720×1280 (9:16) из потока canvas и `audioCaptureStream()`. Вся
   разметка нарисована в логической сетке 1080×1920 и уменьшается общим
@@ -670,10 +675,12 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
   `videoMarkTonic()` зовёт `flashTonicReturn()` из `js/game.js`, хотя
   `chordEvent()` в режиме replay не начисляет очки. Живой `Groove` выключен.
   Перед захватом рендер ждёт `VIDEO_FLUSH_MS` (220 мс), чтобы уже запланированные
-  живым грувом удары успели прозвучать вне ролика. Пустые края записи
-  обрезаются по первому и последнему событию: `VIDEO_LEAD_MS` (0) ставит первую
-  ноту в кадр 0, `VIDEO_TAIL_MS` (250 мс) оставляет короткий музыкальный хвост,
-  затем идёт финальная карточка `VIDEO_ENDCARD_MS` (1,2 с). Заголовок кадра
+  живым грувом удары успели прозвучать вне ролика. Окно ролика задаёт мелодия:
+  `recordingExportTimeline()` отбрасывает фоновые удары до первой ноты и после
+  последней, поэтому бездействие игрока не растягивает файл. `VIDEO_LEAD_MS` (0)
+  ставит первую ноту в кадр 0, `VIDEO_TAIL_MS` (250 мс) оставляет короткий
+  музыкальный хвост, затем идёт финальная карточка `VIDEO_ENDCARD_MS` (1,2 с).
+  Заголовок кадра
   и первая строка `videoCaption()` — тоническое трезвучие комбо
   (`Ля-До-Ми` / `A-C-E`), а не
   служебное имя авто-записи «Станция 13 · эталон»; у старых записей аккорд
@@ -937,10 +944,11 @@ Translate через `translate.js` (тот же приём, что в сосе�
   headless-прогоне.
 - Запись, аудио и видео: `station-auto-record-midi` проверяет автодорожку, SMF и
   общую базу имён `.mid`/`.wav`/`.webm`, `record-drums-video` — отдельный `drums`,
-  `recordingTimeline()`, отсутствие ударных в MIDI, `audioDuration()`,
-  `audioPcmToWav()` (RIFF/WAVE, 16-bit, stereo), предупреждение старого формата,
-  кадр 720×1280 (9:16), тоническую вспышку в replay, обрезку хвостовой тишины,
-  `videoCaption()` и наличие
+  `recordingTimeline()`, `recordingContentSpan()`/`recordingExportTimeline()`,
+  отсутствие ударных в MIDI, `audioDuration()`, `audioPcmToWav()` (RIFF/WAVE,
+  16-bit, stereo), `audioPcmTrim()`, предупреждение старого формата,
+  кадр 720×1280 (9:16), тоническую вспышку в replay, обрезку фонового грува и
+  хвостовой тишины, `videoCaption()` и наличие
   `#recAudio` / `#researchAskAudio` / `#audioExport` / `#recVideo` / `#recCaption`
   / `#videoExport`. Шаг `suno-handoff` проверяет `sunoPrompt()` на английский
   текст без `undefined` (тональность, BPM, размер, тембр, барабаны), безопасные
