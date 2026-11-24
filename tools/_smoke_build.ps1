@@ -1181,7 +1181,7 @@ $post = @'
       if (H.audioSupported() && $('recAudio').disabled) {
         throw new Error('the audio button is disabled with a ready recording');
       }
-      if (!(H.videoDuration(rec) >= 2400)) throw new Error('video duration is too short');
+      if (!(H.videoDuration(rec) >= 1400)) throw new Error('video duration is too short');
       var spec = H.videoSize();
       if (!spec || spec.width !== 720 || spec.height !== 1280) {
         throw new Error('video frame is not 720x1280');
@@ -1197,8 +1197,8 @@ $post = @'
       if (!baseProbe || baseProbe.width !== 720 || baseProbe.height !== 1280) {
         throw new Error('the static video frame is not 720x1280');
       }
-      // Ролик начинается за секунду до первого события и заканчивается через
-      // секунду после последнего: заминки записи не растягивают видео.
+      // Ролик стартует с первого события и после короткого хвоста показывает
+      // финальную карточку: заминки записи не растягивают видео.
       var trimmed = H.videoDuration({
         events: [
           { type: 'note', t: 5000, midi: 60 },
@@ -1206,14 +1206,14 @@ $post = @'
         ],
         drums: [], duration: 60000
       });
-      if (trimmed < 23000 || trimmed > 24000) {
-        throw new Error('leading/trailing silence was not trimmed: ' + trimmed);
+      if (trimmed < 21200 || trimmed > 21700) {
+        throw new Error('the video did not trim the recording edges: ' + trimmed);
       }
       var single = H.videoDuration({
         events: [{ type: 'note', t: 60000, midi: 60 }], drums: [], duration: 60000
       });
-      if (single < 3000 || single > 4000) {
-        throw new Error('one-event video must keep only one second around it: ' + single);
+      if (single < 1400 || single > 1500) {
+        throw new Error('one-event video must keep only a short tail: ' + single);
       }
       var caption = H.videoCaption(rec);
       if (!caption || caption.indexOf('https://godspace.github.io/HARMONIA/') === -1) {
@@ -1240,8 +1240,8 @@ $post = @'
 
   step('video-media-clock', function () {
     // Звук и картинка должны идти от одного mediaT0: первый визуальный тик
-    // случается только после секунды входа, ровно на t первого события, и не
-    // повторяется на следующем кадре. Отдельных setTimeout у видео больше нет.
+    // срабатывает в кадре 0, ровно на t первого события, и не повторяется
+    // на следующем кадре. Отдельных setTimeout у видео больше нет.
     var calls = [];
     var savedPlay = playRecordedVisual;
     try {
@@ -1255,24 +1255,24 @@ $post = @'
         firstEventAt: 0, visualIdx: 0, rec: {}
       };
       videoStepVisual(v, 0);
-      if (calls.length) throw new Error('a visual event fired before the lead-in');
-      videoStepVisual(v, 999);
-      if (calls.length) throw new Error('a visual event fired before its timestamp');
-      videoStepVisual(v, 1000);
       if (calls.length !== 1 || calls[0] !== 0) {
-        throw new Error('the first visual event did not fire at the lead-in');
+        throw new Error('the first visual event did not fire at frame 0');
       }
-      videoStepVisual(v, 1500);
+      videoStepVisual(v, 99);
+      if (calls.length !== 1) throw new Error('a visual event fired before its timestamp');
+      videoStepVisual(v, 499);
+      if (calls.length !== 1) throw new Error('the chord visual fired too early');
+      videoStepVisual(v, 500);
       if (calls.length !== 2 || calls[1] !== 500) {
         throw new Error('the chord visual did not follow the media clock: ' + calls.join(','));
       }
-      videoStepVisual(v, 1500);
+      videoStepVisual(v, 500);
       if (calls.length !== 2) throw new Error('a visual event fired twice');
       var trimmed = {
         timeline: [{ type: 'note', t: 5000 }],
         firstEventAt: 5000, visualIdx: 0, rec: {}
       };
-      videoStepVisual(trimmed, 1000);
+      videoStepVisual(trimmed, 0);
       if (calls.length !== 3 || calls[2] !== 5000) {
         throw new Error('the trimmed timeline lost its first event');
       }
@@ -1295,13 +1295,13 @@ $post = @'
           ],
           firstEventAt: 0, visualIdx: 0, tonicSteps: 0, rec: {}
         };
-        videoStepVisual(harmonic, 1000);
+        videoStepVisual(harmonic, 0);
         if (tonicHits !== 0) throw new Error('tonic flashed without a return');
-        videoStepVisual(harmonic, 1200);
+        videoStepVisual(harmonic, 200);
         if (tonicHits !== 1) {
           throw new Error('the tonic return flash did not follow the media clock');
         }
-        videoStepVisual(harmonic, 1400);
+        videoStepVisual(harmonic, 400);
         if (tonicHits !== 1) throw new Error('the tonic flash repeated without tension');
       } finally {
         flashTonicReturn = savedFlash;

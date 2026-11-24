@@ -20,19 +20,17 @@ const VIDEO_FPS = 30;
 const VIDEO_FRAME_MS = 1000 / VIDEO_FPS;
 const VIDEO_BITRATE = 3000000;
 // Запись станции начинается с момента входа в комбо, но первые ноты могут
-// прозвучать через несколько секунд. Ролик начинается не с нуля записи, а с
-// первого события и оставляет ровно секунду тишины перед ним — так зритель
-// успевает понять кадр, а случайная заминка перед игрой не растягивает видео.
-const VIDEO_LEAD_MS = 1000;
+// прозвучать через несколько секунд. Ролик не повторяет эту заминку: первое
+// событие звучит в кадре 0, без секунды тишины на входе.
+const VIDEO_LEAD_MS = 0;
 // 220 мс ожидания перед захватом выпускают уже запланированные живым грувом
 // удары, чтобы они не попали в ролик поверх записанных.
 const VIDEO_FLUSH_MS = 220;
-// После последнего события хвост ноты звучит без наложений, затем идёт
-// финальная карточка со ссылкой. Хвостовая тишина самой записи обрезается:
-// для короткого соцсетевого ролика она только уменьшает досматриваемость.
-// Секунда после последнего события — такой же зазор, как и в начале.
-const VIDEO_TAIL_MS = 1000;
-const VIDEO_ENDCARD_MS = 1600;
+// После последнего события нужен только короткий музыкальный хвост: длинная
+// пауза перед финальной карточкой уменьшает досматриваемость. Карточка
+// появляется сразу после последнего удара, пока нота ещё звенит.
+const VIDEO_TAIL_MS = 250;
+const VIDEO_ENDCARD_MS = 1200;
 const VIDEO_MIN_MS = VIDEO_LEAD_MS + VIDEO_TAIL_MS + VIDEO_ENDCARD_MS;
 const VIDEO_LOOKAHEAD = 0.35;
 const VIDEO_URL = 'godspace.github.io/HARMONIA';
@@ -94,8 +92,8 @@ function videoDuration(rec) {
   const last = timeline.length ? Math.max(0, Number(timeline[timeline.length - 1].t) || 0) : 0;
   // Длительность считается по первому и последнему событию, а не по времени
   // старта/остановки записи: заминки до первой ноты и после последней не нужны.
-  // VIDEO_LEAD_MS/VIDEO_TAIL_MS оставляют по секунде воздуха, VIDEO_ENDCARD_MS —
-  // финальную карточку со ссылкой.
+  // VIDEO_LEAD_MS не добавляет воздуха, VIDEO_TAIL_MS оставляет короткий
+  // музыкальный хвост, VIDEO_ENDCARD_MS — финальную карточку со ссылкой.
   const span = Math.max(0, last - first);
   const wanted = Math.max(VIDEO_MIN_MS,
     VIDEO_LEAD_MS + span + VIDEO_TAIL_MS + VIDEO_ENDCARD_MS);
@@ -708,8 +706,8 @@ function videoPaintProgress(ctx, v, elapsed) {
 // не после копирования уже готового sprite-слоя.
 function videoStepVisual(v, elapsed) {
   if (!v || !v.timeline || !v.timeline.length) return;
-  // До первого события contentMs отрицательный: сравниваем с абсолютным t
-  // дорожки, а не обрезаем его нулём, иначе первая нота вспыхнула бы в кадре 0.
+  // contentMs переводит часы ролика в абсолютное t дорожки. Без входного
+  // зазора первое событие срабатывает уже в кадре 0.
   const at = (elapsed - VIDEO_LEAD_MS) + (Number(v.firstEventAt) || 0);
   while (v.visualIdx < v.timeline.length) {
     const ev = v.timeline[v.visualIdx];
@@ -792,8 +790,8 @@ function paintVideoFrame() {
   // Динамика рисуется в логических координатах 1080×1920.
   ctx.setTransform(VIDEO_SCALE, 0, 0, VIDEO_SCALE, 0, 0);
   videoPaintStage(ctx);
-  // До первого события подпись остаётся «—»: секунда входа не показывает
-  // аккорд раньше, чем он прозвучит.
+  // Подпись не опережает события: при зазоре входа 0 первая нота видна
+  // уже в кадре 0.
   videoPaintNow(ctx, v, elapsed - VIDEO_LEAD_MS);
   videoPaintProgress(ctx, v, Math.min(v.duration, elapsed));
   // Финальная карточка проявляется за 350 мс; к концу ролика она непрозрачна.
@@ -1016,7 +1014,7 @@ async function startVideoExport(target) {
       updateVideoOverlay(v);
       paintRecorder();
     }, 250);
-    // v.duration уже включает секунду входа, хвост и финальную карточку.
+    // v.duration уже включает короткий хвост и финальную карточку.
     v.endTimer = setTimeout(() => {
       if (videoJob !== v || v.canceled) return;
       stopVideoRecorder(v, true);
