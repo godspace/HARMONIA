@@ -46,7 +46,9 @@
   `xhtml:link` в `sitemap.xml`. Вход — ссылка «EN» в топбаре (`#enLink`,
   внутри `.brand-group` рядом с названием, чтобы полоса не переносилась).
   Smoke-тест собирает и её (`en/smoke.html`): шаги `lang`, `head`, `hreflang`,
-  `social`, `json-ld`, `content`, `no-scripts`, `console-errors`.
+  `social`, `json-ld`, `content`, `no-scripts`, `console-errors`. Якоря
+  `#suno` и `#space` объясняют отправку записи в Suno и роль пробела; шаг
+  `content` проверяет, что оба раздела на месте.
 - **Русский обзор проекта — `ru/index.html`** (`/ru/`): та же история, что на
   английской странице, но в исходном языке. Свой `canonical`, Open Graph и
   JSON-LD (`WebApplication` + `FAQPage`), в `sitemap.xml` — отдельная запись без

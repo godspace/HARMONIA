@@ -4,8 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>HARMONIA — free online harmony simulator and chord trainer</title>
-  <meta name="description" content="Practise harmony in the browser: 24 major and minor combos on the circle of fifths, chord functions, smart melody notes, MIDI keyboard support and melody recording. Free, no sign-up.">
-  <meta name="keywords" content="harmony simulator, chord trainer, circle of fifths trainer, music theory practice, chord progression game, improvisation practice, MIDI chord trainer, online music trainer">
+  <meta name="description" content="Practise harmony in the browser: 24 major and minor combos on the circle of fifths, chord functions, smart melody notes, MIDI, melody recording and a two-click WAV hand-off to Suno. Learn what Space does. Free, no sign-up.">
+  <meta name="keywords" content="harmony simulator, chord trainer, circle of fifths trainer, music theory practice, chord progression game, improvisation practice, MIDI chord trainer, online music trainer, record melody, Suno, upload to Suno, Suno prompt, WAV export, Space key">
   <meta name="author" content="godspace">
   <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">
   <meta name="theme-color" content="#0b0d15">
@@ -23,7 +23,7 @@
   <meta property="og:locale" content="en_US">
   <meta property="og:locale:alternate" content="ru_RU">
   <meta property="og:title" content="HARMONIA — free online harmony simulator and chord trainer">
-  <meta property="og:description" content="24 major and minor combos on the circle of fifths, chord functions under the left hand, smart melody notes under the right one, MIDI and melody recording — right in the browser.">
+  <meta property="og:description" content="24 major and minor combos on the circle of fifths, chord functions under the left hand, smart melody notes under the right one, MIDI, melody recording and a two-click WAV hand-off to Suno. Plus what the Space key does.">
   <meta property="og:url" content="https://godspace.github.io/HARMONIA/en/">
   <meta property="og:image" content="https://godspace.github.io/HARMONIA/docs/screenshot.png">
   <meta property="og:image:type" content="image/png">
@@ -32,7 +32,7 @@
   <meta property="og:image:alt" content="HARMONIA — the simulator stage with seven degree balls, chord pad and settings panel">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="HARMONIA — free online harmony simulator and chord trainer">
-  <meta name="twitter:description" content="24 major and minor combos on the circle of fifths, chord functions, smart melody notes, MIDI and melody recording — free, no sign-up.">
+  <meta name="twitter:description" content="24 major and minor combos on the circle of fifths, chord functions, smart melody notes, MIDI, melody recording and a two-click WAV hand-off to Suno — free, no sign-up.">
   <meta name="twitter:image" content="https://godspace.github.io/HARMONIA/docs/screenshot.png">
   <meta name="twitter:image:alt" content="HARMONIA — the simulator stage with seven degree balls, chord pad and settings panel">
 
@@ -67,6 +67,10 @@
         <a class="cta ghost" href="https://github.com/godspace/HARMONIA">Source on GitHub</a>
       </p>
       <p class="note">Free, no sign-up, no installation. Computer keyboard works out of the box.</p>
+      <p class="quick-links">
+        <a href="#suno">Recording → Suno: how to upload</a>
+        <a href="#space">What Space does</a>
+      </p>
 
       <figure class="shot">
         <img src="../docs/screenshot-en.png" width="1600" height="1000"
@@ -120,6 +124,26 @@
         current key (C major, F♯ minor…) sits right under the
         score, so the stage never hides which combo you are playing.
       </p>
+
+      <div class="callout" id="space">
+        <h3>What Space is for</h3>
+        <p><kbd>Space</kbd> is the <b>start</b> and <b>next-combo</b> key — not pause
+          and not the pedal.</p>
+        <ul>
+          <li><b>On the start screen:</b> press the ten highlighted keys, then
+            <kbd>Enter</kbd> to start the drums, then <kbd>Space</kbd> to begin the
+            session.</li>
+          <li><b>In the game:</b> after <b>300 points</b>, Space and the button under
+            the chord cards move to the next combo: major → the minor of the same pair,
+            minor → the major of the next pair. The new combo starts from zero.</li>
+          <li><b>Below 300 points</b> Space does not switch combos: the hint next to the
+            score shows how many points are left. To change combo earlier, use
+            <kbd>↑</kbd>/<kbd>↓</kbd> or <kbd>Backspace</kbd>.</li>
+        </ul>
+        <p>Pause is <kbd>Esc</kbd>, drums are <kbd>Enter</kbd>, and the pedal is on by
+          default. So “Space does nothing” usually means the session has not started yet
+          or the combo has not reached 300 points.</p>
+      </div>
     </section>
 
     <section id="features">
@@ -149,6 +173,11 @@
           <h3>Record and listen back</h3>
           <p>Chords and notes are recorded with timing and stored in the browser. Count-in of zero,
             one or two bars, and a loop toggle for playback.</p>
+        </div>
+        <div class="card">
+          <h3>Send a recording to Suno</h3>
+          <p>“🎛 Suno” downloads a WAV and copies an English prompt, while “↗ Suno” opens the
+            service for a manual upload. <a href="#suno">Step-by-step</a>.</p>
         </div>
         <div class="card">
           <h3>Play a 16-bar form</h3>
@@ -262,6 +291,42 @@
       </p>
     </section>
 
+    <section id="suno">
+      <h2>Recording → Suno: how to send your phrase</h2>
+      <p>
+        HARMONIA never uploads a recording and never asks for an API key. It prepares
+        two things for Suno: a <b>WAV of the melody you played</b> and an <b>English
+        prompt</b> that already contains the key, tempo, meter, timbre and drum setting.
+        HARMONIA has no access to your Suno account, so the upload stays manual: you
+        can see exactly which file and which text go into the service.
+      </p>
+      <div class="callout">
+        <h3>Two clicks in HARMONIA + one upload in Suno</h3>
+        <ol class="steps">
+          <li><b>Record a phrase.</b> Press “Record”, play chords and melody, stop the
+            recording and select the take in the recording panel.</li>
+          <li><b>Press “🎛 Suno”.</b> HARMONIA copies the prompt and starts rendering a
+            WAV. The button itself shows progress: <code>🎧 Suno WAV</code>.</li>
+          <li><b>Wait for the file.</b> The browser downloads the WAV and the button turns
+            into <b>“↗ Suno”</b>. The prompt is copied automatically — usually it is
+            already on your clipboard.</li>
+          <li><b>Press “↗ Suno”.</b> <code>suno.com/create</code> opens and the prompt is
+            copied again, in case you copied something else in the meantime.</li>
+          <li><b>Upload the WAV to Suno</b> as an audio attachment and paste the prompt
+            into the description field. Suno then uses the WAV as the basis for a new
+            version.</li>
+        </ol>
+      </div>
+      <p class="note">
+        Why two clicks: the WAV is rendered in real time, and a browser blocks the Suno
+        window if it is opened after a delay. The second click is both permission for the
+        new tab and a fresh copy of the prompt. Keep the tab focused while it renders:
+        Web Audio may throttle in the background. A recording is capped at three minutes;
+        Suno's free plan has its own limits and download rules — check them in your
+        account.
+      </p>
+    </section>
+
     <section id="languages">
       <h2>Interface language</h2>
       <p>
@@ -313,6 +378,19 @@
           visit statistics.</p>
       </details>
       <details>
+        <summary>How do I send a recording to Suno?</summary>
+        <p>Record a phrase, select it in the recording panel and press “🎛 Suno”. HARMONIA downloads
+          a WAV and copies an English prompt. When the render finishes, press “↗ Suno”:
+          suno.com/create opens, where you upload the WAV and paste the prompt. HARMONIA does not
+          upload the file or need an API key.</p>
+      </details>
+      <details>
+        <summary>What is Space for?</summary>
+        <p>Space is the start and next-combo key. On the start screen it begins the session after
+          ten keys and Enter (drums). In the game, after 300 points it moves to the next combo;
+          below 300 points it does nothing. Pause is Esc, drums are Enter.</p>
+      </details>
+      <details>
         <summary>Is it a course or a game?</summary>
         <p>Closer to a trainer you can play. There are no lessons to read: the point system rewards
           functional harmony, so the habits that produce cadences are the ones that produce points.</p>
@@ -351,7 +429,7 @@
         "@id": "https://godspace.github.io/HARMONIA/en/#app",
         "name": "HARMONIA",
         "url": "https://godspace.github.io/HARMONIA/en/",
-        "description": "Free browser harmony simulator: 24 major and minor combos on the circle of fifths, chord functions, smart melody notes, MIDI keyboard support and melody recording.",
+        "description": "Free browser harmony simulator: 24 major and minor combos on the circle of fifths, chord functions, smart melody notes, MIDI keyboard support, melody recording and a two-click WAV hand-off to Suno.",
         "applicationCategory": "MusicApplication",
         "operatingSystem": "Any",
         "browserRequirements": "Requires JavaScript and Web Audio; Web MIDI input needs Chrome or Edge",
@@ -392,6 +470,16 @@
             "@type": "Question",
             "name": "Where are my recordings stored?",
             "acceptedAnswer": { "@type": "Answer", "text": "In your browser. Saved melodies live in localStorage and never leave your device. The only outside requests are the optional Google Translate widget and anonymous Yandex Metrika visit statistics." }
+          },
+          {
+            "@type": "Question",
+            "name": "How do I send a recording to Suno?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Record a phrase, select it in the recording panel and press “🎛 Suno”. HARMONIA downloads a WAV and copies an English prompt. When the render finishes, press “↗ Suno”: suno.com/create opens, where you upload the WAV and paste the prompt. HARMONIA does not upload the file or need an API key." }
+          },
+          {
+            "@type": "Question",
+            "name": "What is Space for?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Space is the start and next-combo key. On the start screen it begins the session after ten keys and Enter (drums). In the game, after 300 points it moves to the next combo; below 300 points it does nothing. Pause is Esc, drums are Enter." }
           },
           {
             "@type": "Question",

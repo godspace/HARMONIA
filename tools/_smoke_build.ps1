@@ -2204,6 +2204,9 @@ $enPost = @'
     if (document.querySelectorAll('main section').length < 5) {
       throw new Error('too few sections: the page is not a real landing');
     }
+    // Оба сценария должны остаться на странице: запись → WAV → Suno и роль пробела.
+    if (!document.getElementById('suno')) throw new Error('the Suno section is missing');
+    if (!document.getElementById('space')) throw new Error('the Space explainer is missing');
     var cta = document.querySelector('a.cta[href="../index.html?lang=en"]');
     if (!cta) throw new Error('the CTA must open the simulator with ?lang=en');
     var ru = document.querySelector('a[href="../"][hreflang="ru"]');
@@ -2339,6 +2342,9 @@ $ruPost = @'
     if (document.querySelectorAll('.faq details').length < 5) {
       throw new Error('the FAQ is too short');
     }
+    // Русский обзор повторяет оба сценария: Suno и объяснение пробела.
+    if (!document.getElementById('suno')) throw new Error('the Suno section is missing');
+    if (!document.getElementById('space')) throw new Error('the Space explainer is missing');
   });
 
   step('json-ld', function () {
