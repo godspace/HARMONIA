@@ -2037,8 +2037,41 @@ $post = @'
     if (!askRec || askRec.id !== askSeg.recordingId || !askRec.auto) {
       throw new Error('the linked auto-recording cannot be found');
     }
+    // Панель записи: выбранная дорожка + её связанный визит в одном JSON.
+    var recList = $('recList');
+    var recJsonBtn = $('recJson');
+    if (!recList || !recJsonBtn) throw new Error('the recording JSON UI is missing');
+    recList.value = askRec.id;
+    recList.dispatchEvent(new Event('change', { bubbles: true }));
+    if (recJsonBtn.disabled) {
+      throw new Error('the recording JSON button is disabled with a ready recording');
+    }
+    var recJson = R.exportRecordingData(askRec, [askSeg]);
+    if (recJson.exportScope !== 'recording' || !recJson.recording ||
+        recJson.recording.id !== askRec.id) {
+      throw new Error('the recording JSON lost its recording');
+    }
+    if (!Array.isArray(recJson.segments) || recJson.segments.length !== 1 ||
+        recJson.segments[0].id !== askSeg.id) {
+      throw new Error('the recording JSON lost its linked visit');
+    }
+    if (recJson.recordingMissing) {
+      throw new Error('a linked recording was marked missing');
+    }
+    var recJsonName = R.recordingJsonName(askRec);
+    if (!recJsonName || recJsonName.slice(-5) !== '.json') {
+      throw new Error('the recording JSON filename is wrong: ' + recJsonName);
+    }
+    if (R.exportRecordingData(askRec, []).segments.length !== 0) {
+      throw new Error('manual recordings must keep an empty segments array');
+    }
     var videoBtn = $('researchAskVideo');
     if (!videoBtn) throw new Error('the rating card has no video button');
+    var jsonBtn = $('researchAskJson');
+    if (!jsonBtn) throw new Error('the rating card has no JSON button');
+    if (jsonBtn.disabled) {
+      throw new Error('the rating card JSON button is disabled with a visit');
+    }
     var audioBtn = $('researchAskAudio');
     if (!audioBtn) throw new Error('the rating card has no audio button');
     if (H.audioSupported() && audioBtn.disabled) {
@@ -2071,11 +2104,43 @@ $post = @'
     if (H.audioSupported() && audioBtn.disabled) {
       throw new Error('the audio button became disabled after the rating');
     }
+    if (jsonBtn.disabled) {
+      throw new Error('the JSON button became disabled after the rating');
+    }
     var data = R.exportData();
     var seg = data.segments[data.segments.length - 1];
     if (!seg) throw new Error('the visit was not saved');
     if (!seg.rating || seg.rating.score !== 5) {
       throw new Error('the rating was not stored: ' + JSON.stringify(seg.rating));
+    }
+    // Файл одного визита — тот же сегмент и его автозапись, но без всей истории.
+    var visitJson = R.exportVisitData(seg, askRec);
+    if (visitJson.exportScope !== 'visit') {
+      throw new Error('the visit JSON has the wrong scope: ' + visitJson.exportScope);
+    }
+    if (!Array.isArray(visitJson.segments) || visitJson.segments.length !== 1 ||
+        visitJson.segments[0].id !== seg.id) {
+      throw new Error('the visit JSON must contain exactly the rated visit');
+    }
+    if (!visitJson.segments[0].rating || visitJson.segments[0].rating.score !== 5) {
+      throw new Error('the visit JSON lost the rating');
+    }
+    if (visitJson.segments[0].events.length !== seg.events.length) {
+      throw new Error('the visit JSON lost events');
+    }
+    if (!visitJson.recording || visitJson.recording.id !== askRec.id) {
+      throw new Error('the visit JSON lost the linked recording');
+    }
+    if (visitJson.recordingMissing) {
+      throw new Error('the visit JSON marked its recording as missing');
+    }
+    var visitName = R.visitFileName(seg);
+    if (!/^harmonia-combo-\d{2}-[a-z0-9-]+-\d{8}-\d{6}\.json$/.test(visitName)) {
+      throw new Error('the visit JSON filename is wrong: ' + visitName);
+    }
+    var missingJson = R.exportVisitData(seg, null);
+    if (!missingJson.recordingMissing || missingJson.recording !== null) {
+      throw new Error('a lost recording was not marked missing');
     }
     $('researchAskSkip').click();
     if (ask.classList.contains('show')) throw new Error('Done did not close the rated card');
@@ -2107,6 +2172,14 @@ $post = @'
     if (!chordEvents.length || !chordEvents[0].phase ||
         !Array.isArray(chordEvents[0].window)) {
       throw new Error('the chord event lost its plot snapshot');
+    }
+    if (chordEvents[0].source !== 'keys') {
+      throw new Error('the chord event lost its source: ' + chordEvents[0].source);
+    }
+    var noteEvents = seg.events.filter(function (e) { return e.type === 'note'; });
+    if (!noteEvents.length || noteEvents[0].source !== 'keys') {
+      throw new Error('the note event lost its source: ' +
+        (noteEvents.length ? noteEvents[0].source : 'no notes'));
     }
     if (!seg.combo || !seg.station || !seg.context) {
       throw new Error('the visit lost its context');

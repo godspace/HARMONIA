@@ -196,6 +196,11 @@ var I18N = (function () {
       'Download the selected recording as a MIDI file',
     'Скачать выбранную запись как WAV-файл':
       'Download the selected recording as a WAV file',
+    'Скачать выбранную запись и связанный визит в JSON':
+      'Download the selected recording and its linked visit as JSON',
+    'JSON записи сохранён': 'Recording JSON saved',
+    'Запись не выбрана': 'No recording selected',
+    'В записи нет событий': 'The recording has no events',
     'Скачать выбранную запись как видео (WebM)':
       'Download the selected recording as a video (WebM)',
     'Скачать выбранную запись как вертикальное видео 9:16 (WebM)':
@@ -210,6 +215,13 @@ var I18N = (function () {
     'Сохранить это комбо как вертикальное видео 9:16 (WebM)':
       'Save this combo as a vertical 9:16 video (WebM)',
     'Сохранить это комбо как WAV-файл': 'Save this combo as a WAV file',
+    'Скачать этот визит: ноты, аккорды, оценку и автозапись в JSON':
+      'Download this visit: notes, chords, rating and auto-recording as JSON',
+    'В этом комбо ещё нет данных для JSON':
+      'This combo has no data for JSON yet',
+    'JSON комбо сохранён': 'Combo JSON saved',
+    'JSON сохранён': 'JSON saved',
+    'JSON не удалось сохранить': 'Could not save JSON',
     'Запись этого комбо не сохранилась — включите автозапись станции.':
       'This combo’s recording was not saved — turn on station auto-record.',
     'Запись этого комбо не сохранилась': 'This combo’s recording was not saved',
@@ -307,6 +319,7 @@ var I18N = (function () {
       'Ask for a rating after a Space transition to a new combo',
     'Скачать JSON': 'Download JSON',
     'Скачать оценки и историю игры в JSON': 'Download ratings and play history as JSON',
+    'В этом комбо ещё нет данных': 'This combo has no data yet',
     'Очистить': 'Clear',
     'Ещё раз — очистить': 'Click again to clear',
     'Удалить все сохранённые оценки': 'Delete all saved ratings',
@@ -319,8 +332,8 @@ var I18N = (function () {
     'Что понравилось или что не так?': 'What felt right or what felt wrong?',
     'Комментарий к комбо': 'Comment on the combo',
     'J I O P [ — оценка · Space / Esc — пропустить': 'J I O P [ — rate · Space / Esc — skip',
-    'Можно сохранить видео, аудио или нажать «Готово»':
-      'Save the video or audio, or press “Done”',
+    'Можно сохранить видео, аудио, JSON или нажать «Готово»':
+      'Save the video, audio or JSON, or press “Done”',
     'Пропустить': 'Skip',
     'Готово': 'Done',
     'Оценка сохранена': 'Rating saved',

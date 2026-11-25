@@ -446,7 +446,7 @@ var Research = (function () {
     seg.events.push(ev);
     return true;
   }
-  function onChord(h, vel) {
+  function onChord(h, vel, source) {
     if (!settings.enabled || !seg || !h || !h.pcs) return;
     const now = performance.now();
     const plotState = state.stationPlot || {};
@@ -467,6 +467,9 @@ var Research = (function () {
       plot: plotState.archetype || '',
       phase,
       fromPhase,
+      // Источник важен для анализа: экранная клавиатура/пэд и распознанный
+      // с пианино аккорд звучат по-разному, хотя попадают в один визит.
+      source: source === 'midi' ? 'midi' : 'keys',
       motif: style && style.motif ? style.motif : '',
       window: P.smartHand && state.adaptive && state.adaptive.window
         ? state.adaptive.window.slice() : [],
@@ -481,6 +484,9 @@ var Research = (function () {
       vel: vel == null ? 0.8 : Math.round(clamp(vel, 0.05, 1) * 100) / 100,
       pan: Math.round((pan == null ? 0 : clamp(pan, -1, 1)) * 100) / 100,
       phase: state.stationPlot ? state.stationPlot.phase : '',
+      // Midi.noteOn зовёт onNote(..., false): это нота, которую игрок сыграл
+      // на пианино. triggerBall с withChord=true — экранная клавиатура.
+      source: withChord === false ? 'midi' : 'keys',
       withChord: withChord !== false
     })) seg.counts.notes += 1;
   }
@@ -490,7 +496,7 @@ var Research = (function () {
   // карточка не закрывается: игрок успевает скачать видео этого комбо и
   // закрыть её кнопкой «Готово»/Space/Esc.
   const ASK_HINT = 'J I O P [ — оценка · Space / Esc — пропустить';
-  const ASK_HINT_RATED = 'Можно сохранить видео, аудио или нажать «Готово»';
+  const ASK_HINT_RATED = 'Можно сохранить видео, аудио, JSON или нажать «Готово»';
   function askMeta(s) {
     const sec = Math.max(1, Math.round((s.playMs || 0) / 1000));
     const key = P.notation === 'letters' ? s.combo.keyNameLatin : s.combo.keyName;
@@ -537,11 +543,12 @@ var Research = (function () {
     return typeof recordingById === 'function'
       ? recordingById(askSeg.recordingId) : null;
   }
-  // Кнопки видео и аудио живут рядом с оценкой, но не мешают ей: пока экспорт
-  // идёт, карточка остаётся открытой, а её таймер стоит (holdAsk).
+  // Кнопки экспорта живут рядом с оценкой, но не мешают ей: пока видео или WAV
+  // собираются, карточка остаётся открытой, а её таймер стоит (holdAsk).
   function paintAskButtons() {
     paintAskVideo();
     paintAskAudio();
+    paintAskJson();
     paintAskSuno();
   }
   // Suno — тот же WAV, но с английским промптом и переходом на suno.com/create.
@@ -588,6 +595,71 @@ var Research = (function () {
     } else {
       btn.title = 'Сохранить это комбо как WAV-файл';
     }
+  }
+  // JSON есть всегда, когда у визита есть события: автозапись — приятный
+  // бонус, а не условие экспорта. Поэтому кнопка не зависит от recordingId.
+  function paintAskJson() {
+    const btn = $('researchAskJson');
+    if (!btn) return;
+    const ready = !!askSeg && Array.isArray(askSeg.events) && askSeg.events.length > 0;
+    btn.disabled = !ready;
+    btn.textContent = '⬇ JSON';
+    btn.title = ready
+      ? 'Скачать этот визит: ноты, аккорды, оценку и автозапись в JSON'
+      : 'В этом комбо ещё нет данных для JSON';
+  }
+  function exportAskJson() {
+    const s = askSeg;
+    if (!s || !Array.isArray(s.events) || !s.events.length) {
+      toast('В этом комбо ещё нет данных');
+      paintAskButtons();
+      return '';
+    }
+    const rec = askRecording();
+    // Комментарий, уже набранный в карточке, должен попасть в файл так же, как
+    // он попал бы в localStorage при «Готово». До оценки он идёт черновиком.
+    let opts = null;
+    if (s.rating) {
+      s.rating.comment = readComment();
+    } else {
+      const draft = readComment();
+      if (draft) opts = { commentDraft: draft };
+    }
+    const name = visitFileName(s);
+    return saveJsonFile(name, exportVisitData(s, rec, opts), 'JSON комбо сохранён · ' + name);
+  }
+  // Связанные визиты выбранной записи: закрытые сегменты плюс открытая карточка,
+  // если она относится к той же дорожке. Так ручная запись без визита остаётся
+  // валидным файлом с пустым segments.
+  function linkedSegmentsFor(rec) {
+    const id = rec && rec.id;
+    if (!id) return [];
+    const out = segments.filter(s => s && s.recordingId === id);
+    if (askSeg && askSeg.recordingId === id && !out.some(s => s.id === askSeg.id)) {
+      out.push(askSeg);
+    }
+    return out;
+  }
+  function exportSelectedJson() {
+    const rec = typeof selectedRecording === 'function' ? selectedRecording() : null;
+    if (!rec) {
+      toast('Запись не выбрана');
+      return '';
+    }
+    const hasEvents = Array.isArray(rec.events) && rec.events.length > 0;
+    const hasDrums = Array.isArray(rec.drums) && rec.drums.length > 0;
+    if (!hasEvents && !hasDrums) {
+      toast('В записи нет событий');
+      return '';
+    }
+    if (exportBusy() || state.recording || state.recordingCountIn ||
+        state.playingRecording) {
+      toast('Дождитесь окончания записи или экспорта.');
+      return '';
+    }
+    const name = recordingJsonName(rec);
+    return saveJsonFile(name, exportRecordingData(rec, linkedSegmentsFor(rec)),
+      'JSON записи сохранён · ' + name);
   }
   function exportAskVideo() {
     const rec = askRecording();
@@ -821,7 +893,12 @@ var Research = (function () {
     });
     return out;
   }
-  function exportData() {
+  function cloneJson(value) {
+    return value == null ? value : JSON.parse(JSON.stringify(value));
+  }
+  // Общая часть всех JSON-файлов: таблицы, по которым звучала история. Через
+  // месяц данные можно разобрать, даже если STATION_STYLES успели поменять.
+  function exportBase() {
     const styles = typeof STATION_STYLES !== 'undefined' ? STATION_STYLES : [];
     const touch = typeof STATION_TOUCH !== 'undefined' ? STATION_TOUCH : {};
     const plots = typeof STATION_PLOT_ARCHETYPES !== 'undefined' ? STATION_PLOT_ARCHETYPES : {};
@@ -833,17 +910,48 @@ var Research = (function () {
       app: 'HARMONIA',
       exportedAt: new Date().toISOString(),
       settings: { enabled: !!settings.enabled, ask: !!settings.ask, version: SETTINGS_VERSION },
-      stationStyles: styles.map(s => ({ ...s })),
-      stationTouch: JSON.parse(JSON.stringify(touch)),
-      stationGestures: JSON.parse(JSON.stringify(gestures)),
-      stationPlotGestures: JSON.parse(JSON.stringify(plotGestures)),
+      stationStyles: cloneJson(styles),
+      stationTouch: cloneJson(touch),
+      stationGestures: cloneJson(gestures),
+      stationPlotGestures: cloneJson(plotGestures),
       // Таблицы сюжета — рядом с характерами: старые сегменты можно разобрать,
       // даже если архетипы или их привязка к станциям успели измениться.
-      stationPlots: JSON.parse(JSON.stringify(plots)),
-      stationPlotByStyle: { ...plotByStyle },
-      combos: comboCatalogue(),
-      segments: segments.map(s => JSON.parse(JSON.stringify(s)))
+      stationPlots: cloneJson(plots),
+      stationPlotByStyle: cloneJson(plotByStyle),
+      combos: comboCatalogue()
     };
+  }
+  function exportData() {
+    return Object.assign(exportBase(), {
+      segments: segments.map(cloneJson)
+    });
+  }
+  // Файл одного визита: карточка оценки скачивает именно его, не дожидаясь,
+  // пока в localStorage накопится вся история. recordingMissing помогает
+  // отличить «автозапись отключена» от «автозапись потерялась».
+  function exportVisitData(s, rec, opts) {
+    const visit = s && typeof s === 'object' ? cloneJson(s) : null;
+    const out = exportBase();
+    out.exportScope = 'visit';
+    out.segments = visit ? [visit] : [];
+    out.recording = rec ? cloneJson(rec) : null;
+    out.recordingMissing = !!(visit && visit.recordingId &&
+      (!rec || rec.id !== visit.recordingId));
+    if (opts && opts.commentDraft) {
+      out.commentDraft = String(opts.commentDraft)
+        .replace(/\s+/g, ' ').trim().slice(0, COMMENT_MAX);
+    }
+    return out;
+  }
+  // Файл записи: ручная запись может быть не связана ни с одним визитом,
+  // поэтому segments — честный массив (иногда пустой), а не выдуманный сегмент.
+  function exportRecordingData(rec, linked) {
+    const out = exportBase();
+    out.exportScope = 'recording';
+    out.segments = Array.isArray(linked) ? linked.filter(Boolean).map(cloneJson) : [];
+    out.recording = rec ? cloneJson(rec) : null;
+    out.recordingMissing = false;
+    return out;
   }
   function stamp() {
     const d = new Date();
@@ -851,10 +959,27 @@ var Research = (function () {
     return d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '-' +
       p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds());
   }
-  function download() {
-    const name = 'harmonia-research-' + stamp() + '.json';
-    const text = JSON.stringify(exportData(), null, 2);
+  function slugPart(value, fallback) {
+    const text = String(value == null ? '' : value).toLowerCase()
+      .replace(/♭/g, 'b').replace(/♯/g, 'sharp')
+      .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    return text.slice(0, 24) || fallback;
+  }
+  function visitFileName(s) {
+    const c = (s && s.combo) || {};
+    const id = c.id == null ? 'combo' : String(c.id).padStart(2, '0');
+    return 'harmonia-combo-' + slugPart(id, 'combo') + '-' +
+      slugPart(c.keyNameLatin || c.keyName, 'key') + '-' + stamp() + '.json';
+  }
+  function recordingJsonName(rec) {
+    // Общая база с MIDI/WAV/видео: «D major · … .json».
+    return typeof recordingFileName === 'function'
+      ? recordingFileName(rec, 'json')
+      : 'harmonia-recording-' + stamp() + '.json';
+  }
+  function saveJsonFile(name, payload, okMessage) {
     try {
+      const text = JSON.stringify(payload, null, 2);
       const blob = new Blob([text], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -865,13 +990,18 @@ var Research = (function () {
       a.click();
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 1500);
-      toast('Файл исследования сохранён · ' + name, 'good');
+      toast(okMessage || 'JSON сохранён', 'good');
       return name;
     } catch (e) {
       // Очень старый браузер без Blob: данные всё равно остаются в localStorage.
-      if (typeof console !== 'undefined') console.warn('research: download failed', e);
+      if (typeof console !== 'undefined') console.warn('research: json download failed', e);
+      toast('JSON не удалось сохранить');
       return '';
     }
+  }
+  function download() {
+    const name = 'harmonia-research-' + stamp() + '.json';
+    return saveJsonFile(name, exportData(), 'Файл исследования сохранён · ' + name);
   }
 
   // ===== Запуск =====
@@ -915,6 +1045,8 @@ var Research = (function () {
       if (videoBtn) videoBtn.addEventListener('click', exportAskVideo);
       const audioBtn = $('researchAskAudio');
       if (audioBtn) audioBtn.addEventListener('click', exportAskAudio);
+      const jsonBtn = $('researchAskJson');
+      if (jsonBtn) jsonBtn.addEventListener('click', exportAskJson);
       const sunoBtn = $('researchAskSuno');
       if (sunoBtn) sunoBtn.addEventListener('click', exportAskSuno);
     }
@@ -931,6 +1063,9 @@ var Research = (function () {
     if (exportBtn) exportBtn.addEventListener('click', download);
     const clearBtn = $('researchClear');
     if (clearBtn) clearBtn.addEventListener('click', clearClick);
+    // Панель записи: тот же JSON, но для выбранной дорожки и связанных визитов.
+    const recJson = $('recJson');
+    if (recJson) recJson.addEventListener('click', exportSelectedJson);
     // Фокус окна: таймер карточки не должен тикать, пока игрок отошёл.
     window.addEventListener('blur', stopTimer);
     window.addEventListener('focus', armTimer);
@@ -960,9 +1095,10 @@ var Research = (function () {
     onSessionStart, exitHint, enterCombo, leaveCombo, linkRecording, onChord, onNote,
     // Карточка
     offerLast, gateKey, rate, skip, askRecording, exportAskVideo, exportAskAudio,
-    exportAskSuno, holdAsk, refreshAsk: paintAskButtons,
+    exportAskJson, exportAskSuno, holdAsk, refreshAsk: paintAskButtons,
     // Данные
-    status, totals, exportData, download, paint,
+    status, totals, exportData, exportVisitData, exportRecordingData, download,
+    exportSelectedJson, visitFileName, recordingJsonName, paint,
     // Лимиты пригодятся инструменту анализа и тестам
     limits: { askMs: ASK_MS, commentMax: COMMENT_MAX, maxSegments: MAX_SEGMENTS,
       maxEvents: MAX_EVENTS, maxBytes: MAX_BYTES }

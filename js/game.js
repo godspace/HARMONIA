@@ -478,7 +478,7 @@ function chordEvent(h, vel, source) {
     // Исследование пишет и аккорд, распознанный с MIDI: игрок его слышит,
     // значит он часть визита. Запись при этом по-прежнему не дублирует
     // распознанный с пианино аккорд.
-    if (typeof Research !== 'undefined') Research.onChord(h, vel);
+    if (typeof Research !== 'undefined') Research.onChord(h, vel, source);
     if (typeof Composition !== 'undefined') Composition.onChord(h);
   }
   const c = combo(), now = performance.now();

@@ -255,6 +255,7 @@ function paintRecorder() {
   const btn = $('recBtn'), play = $('playBtn'), del = $('recDel');
   const list = $('recList'), status = $('recStatus');
   const midi = $('recMidi'), video = $('recVideo'), audio = $('recAudio');
+  const json = $('recJson');
   const caption = $('recCaption'), autoBtn = $('recAuto');
   const suno = $('recSuno');
   if (!btn || !play || !del || !list || !status) return;
@@ -284,11 +285,19 @@ function paintRecorder() {
   btn.setAttribute('aria-pressed', String(busy));
   btn.classList.toggle('live', busy);
   play.textContent = state.playingRecording ? '■ Стоп' : '▶ Прослушать';
-  const hasSelected = !!selectedRecording();
+  const selected = selectedRecording();
+  const hasSelected = !!selected;
+  // JSON полезен только при наличии событий: запись из одного заголовка
+  // (старый формат или пустая дорожка) ничего не расскажет.
+  const hasMaterial = hasSelected && (
+    (Array.isArray(selected.events) && selected.events.length > 0) ||
+    (Array.isArray(selected.drums) && selected.drums.length > 0)
+  );
   play.disabled = busy || (!hasSelected && !state.playingRecording);
   del.disabled = busy || state.playingRecording || !hasSelected;
   list.disabled = busy || state.playingRecording;
   if (midi) midi.disabled = busy || state.playingRecording || !hasSelected;
+  if (json) json.disabled = busy || state.playingRecording || !hasMaterial;
   if (video) video.disabled = busy || state.playingRecording || !hasSelected;
   if (audio) audio.disabled = busy || state.playingRecording || !hasSelected;
   if (suno) suno.disabled = busy || state.playingRecording || !hasSelected;

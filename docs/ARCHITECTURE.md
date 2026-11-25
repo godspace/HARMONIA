@@ -48,7 +48,7 @@
 | `video` | рендер записи в WebM | `startVideoExport(rec)`, `cancelVideoExport`, `videoExportStatus`, `videoSupported`, `videoFileName`, `videoDuration`, `videoSize`, `videoCaption`, `copyVideoCaption`, `videoLegacyWarning`, `videoMediaElapsed`, `videoStepVisual`, `videoMarkTonic`, `videoSyncVisual`, `videoFrameStep`, `paintVideoFrame` |
 | `audio-export` | сохранение записи в WAV | `startAudioExport(rec, {purpose, onDone})`, `cancelAudioExport`, `audioExportStatus` (`id`, `purpose`), `audioSupported`, `audioFileName`, `audioDuration`, `audioPcmToWav`, `#recAudio`/`#researchAskAudio`/`#audioExport` |
 | `suno` | мостик к Suno без API: английский промпт + WAV | `SUNO_CREATE_URL`, `sunoPrompt`, `sunoStart`, `sunoOpen`, `sunoCopyText`, `sunoPaint`, `sunoState`, кнопки `#recSuno`/`#researchAskSuno` |
-| `research` | оценки комбо и поведение (по умолчанию включены) | `Research` (`enable`, `disable`, `setAsk`, `status`, `exportData`, `download`, `gateKey`, `linkRecording`, `askRecording`, `exportAskVideo`, `exportAskAudio`, `exportAskSuno`, `holdAsk`, `onChord/Note`, `enterCombo/leaveCombo`), `CFG.research` |
+| `research` | оценки комбо и поведение (по умолчанию включены) | `Research` (`enable`, `disable`, `setAsk`, `status`, `exportData`, `exportVisitData`, `exportRecordingData`, `download`, `exportAskJson`, `exportSelectedJson`, `visitFileName`, `recordingJsonName`, `gateKey`, `linkRecording`, `askRecording`, `exportAskVideo`, `exportAskAudio`, `exportAskSuno`, `holdAsk`, `onChord/Note`, `enterCombo/leaveCombo`), `CFG.research`, кнопки `#researchAskJson`/`#recJson` |
 | `ui-panel` | настройки | `bindRange`, `bindSelect`, `bindToggle`, `syncAll`, `togglePedal` |
 | `ui-drawers` | выдвижные панели | `drawers`, `drawerOpen`, `drawerIntro`, `setDrawer`, `toggleDrawer`, `setDrawerIntro`, `initDrawers` |
 | `ui-compose` | HUD/панель формы и результат | `buildFormHud`, `updateFormHUD`, `resetFormHud`, `setFormEnabled`, `showFormResult`, `initCompose` |
@@ -410,10 +410,12 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
   уход со страницы; возврат из bfcache открывает новый сегмент). Подсказка не
   перезаписывается: `advanceCombo`
   успевает поставить `space` раньше, чем `nextCombo()` поставит `next`.
-- **События.** `chordEvent()` зовёт `Research.onChord()` в ветке `!replay`
-  (включая распознанный с MIDI аккорд), `triggerBall()` — `onNote()` только при
-  `withAudio !== false`, `Midi.noteOn()` — для всех MIDI-нот, включая хроматику
-  вне лада. Прослушивание записи (`state.replay`) не пишется, как и у recorder.
+- **События.** `chordEvent()` зовёт `Research.onChord(h, vel, source)` в ветке
+  `!replay` (включая распознанный с MIDI аккорд), `triggerBall()` — `onNote()`
+  только при `withAudio !== false`, `Midi.noteOn()` — для всех MIDI-нот, включая
+  хроматику вне лада. Каждое событие получает `source: 'keys' | 'midi'`:
+  это различает экранную клавиатуру/пэд и распознанное пианино, не меняя звук и
+  счёт. Прослушивание записи (`state.replay`) не пишется, как и у recorder.
 - **Карточка.** Открывается **только** в `advanceCombo()` после нового рендера
   комбо и только при `enabled && ask`. Ручные переходы закрывают сегмент молча.
   `gateKey()` в `input.js` перехватывает `J I O P [` (5…1), `Space`/`Esc`
@@ -427,21 +429,34 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
   после оценки не затирает её пропуском.
 - **Кнопки.** Сегмент хранит `recordingId` фоновой авто-записи этого визита
   (`autoRecordStart()` отдаёт id, `linkRecording()` кладёт его в сегмент).
+  **⬇ JSON** (`exportAskJson`) доступна, как только у визита есть события, и
+  пишет один сегмент + `recording` (`exportScope: 'visit'`); автозапись для неё
+  необязательна, а `recordingMissing` честно отмечает потерянную дорожку.
   Кнопки **⬇ Аудио** и **⬇ Видео** резолвят запись через `recordingById()` и
   зовут `startAudioExport(rec)` / `startVideoExport(rec)`, поэтому выбор в панели
   не важен. `holdAsk(true)` останавливает автопропуск на время экспорта,
   `holdAsk(false)` возвращает его; если авто-запись пустая или выключена,
-  кнопки disabled и объясняют причину.
+  аудио/видео disabled и объясняют причину.
 - **Данные.** `harmonia.research.v1` — массив сегментов, `harmonia.research.settings`
   — `{version: 2, enabled, ask}`. Настройки без `version` один раз мигрируют на
   `enabled: true`; после этого явный выбор (включая `?research=0`) сохраняется.
   Лимиты — `CFG.research`: 400 посещений, 4000 событий на
   визит, ~3.5 МБ JSON; при переполнении уходят самые старые, запись обёрнута в
   `try/catch`. Комментарий — свободный текст (не переводится), ≤160 символов.
-- **Выгрузка.** `exportData()` кладёт в файл не только сегменты, но и снимок
-  `STATION_STYLES`, `STATION_TOUCH`, `STATION_PLOT_ARCHETYPES`, привязку
-  `STATION_PLOT_BY_STYLE` и библиотеку комбо (`COMBOS`/`ORDER`), поэтому старые
+- **Выгрузка.** `exportBase()` — общий каталог: `STATION_STYLES`, `STATION_TOUCH`,
+  `STATION_GESTURES`, `STATION_PLOT_ARCHETYPES`, привязка
+  `STATION_PLOT_BY_STYLE` и библиотека комбо (`COMBOS`/`ORDER`), поэтому старые
   ответы разбираются даже после смены характеров и сюжетов станций.
+  `exportData()` добавляет всю историю в `segments`. `exportVisitData(seg, rec)`
+  ставит `exportScope: 'visit'`, оставляет ровно один сегмент и кладёт его
+  запись в `recording`; `exportRecordingData(rec, linked)` ставит
+  `exportScope: 'recording'`, кладёт запись и все визиты с её `recordingId`.
+  В обоих точечных файлах `segments` — всегда массив (у ручной записи без
+  визита пустой), а `recordingMissing` отличает потерянную автозапись от
+  выключенной. Имена: `harmonia-combo-01-c-major-YYYYMMDD-HHMMSS.json` и общее
+  имя записи с `.json` (`recordingJsonName`). Панель записи зовёт
+  `exportSelectedJson()`; её кнопка disabled, пока у выбранной записи нет ни
+  `events`, ни `drums`.
 - **Разбор.** `tools/research.py` (stdlib) склеивает выгрузки, убирает дубли по
   `id`, считает отклик/среднюю/распределение, станции и комбо с `n ≥ --min-n`,
   время в комбо у высоких/низких оценок, причины выхода, темы комментариев и
@@ -638,6 +653,10 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
   note-on/note-off для теста; note-off на том же тике ставится раньше note-on.
   `exportSelectedMidi()` скачивает выбранную запись как `.mid`. Дорожка `drums`
   в MIDI не попадает: у неё нет высоты, а формат записи остаётся прежним.
+  **⬇ JSON** (`exportSelectedJson()` в `research.js`) сохраняет выбранную запись
+  целиком (`events` + `drums`), её `combo/station/plot/gesture/form` и все
+  связанные визиты исследования. Кнопка включается при наличии `events` или
+  `drums` и выключается на время записи, прослушивания и экспорта.
 - **Аудио.** `startAudioExport(rec)` в `js/audio-export.js` собирает WAV 16-bit
   PCM без внешних библиотек. Захват идёт с `audioCaptureStream()` (после
   компрессора и до `monitorGain`, поэтому mute не делает файл немым), а
@@ -873,6 +892,7 @@ Translate через `translate.js` (тот же приём, что в сосе�
 | Экран результата | `showFormResult()` / `hideFormResult()` в `ui-compose.js` |
 | Формат записи / лимиты | `recorder.js`: `REC_*`, `recordEvent`, `recordDrumAt`, `playRecordedEvent` |
 | Экспорт WAV | `audio.js` (`audioCaptureStream`) + `audio-export.js` (`startAudioExport`, `audioPcmToWav`), `#recAudio`/`#researchAskAudio`/`#audioExport` |
+| JSON визита/записи | `research.js` (`exportVisitData`, `exportRecordingData`, `exportAskJson`, `exportSelectedJson`), `#researchAskJson`/`#recJson` |
 | Мостик к Suno | `suno.js`: `SUNO_CREATE_URL`, `sunoPrompt`, `sunoStart`, `sunoOpen`, `sunoPaint`; `audio-export.js` (`purpose:'suno'`, `onDone`), `#recSuno`/`#researchAskSuno` |
 | Рендер видео | `video.js`: `VIDEO_*`, `startVideoExport(rec)`, `paintVideoFrame`, `videoCaption`, `#recVideo`/`#recCaption`/`#researchAskVideo`/`#videoExport` |
 | Вопрос/шкала исследования | `RATE_KEYS` и разметка `#researchAsk` (`research.js`, `index.html`), `rate()`/`skip()` |
@@ -962,8 +982,11 @@ Translate через `translate.js` (тот же приём, что в сосе�
   `status().rated`; `Esc` пишет `skipped`; `HARMONIA.research.exportData()` отдаёт
   сегменты с `STATION_STYLES` и библиотекой комбо; `nextCombo()` карточку не
   открывает, replay не пишется. Шаг `research-rating` держит всё это (включая
-  `version: 2`, счёт при «Сессии заново» и `pagehide`) и очищает `localStorage`
-  в конце.
+  `version: 2`, счёт при «Сессии заново» и `pagehide`), проверяет
+  `exportVisitData`/`exportRecordingData` (`exportScope`, один сегмент,
+  `segments: []` у ручной записи, `recordingMissing`, имена файлов), новые
+  кнопки `#researchAskJson`/`#recJson`, `source` событий и очищает
+  `localStorage` в конце.
 - `python tools/research.py --self-test` — проверка расчёта на 12 синтетических
   визитах (средняя 3.90, станции 4.75/4.33/2.33, `--min-n=4` оставляет одну).
   `python tools/research.py FILE.json --md -` печатает отчёт, `--csv` — строки.
