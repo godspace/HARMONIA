@@ -35,7 +35,7 @@
 | `station` | характер станции: подача гармонии по паре комбо + реактивный сюжет + жест | `STATION_STYLES`, `STATION_NEUTRAL`, `STATION_TOUCH`, `STATION_GESTURES`, `STATION_PLOT_GESTURES`, `STATION_PLOT_PHASES`, `STATION_PLOT_ARCHETYPES`, `STATION_PLOT_BY_STYLE`, `stationStyleAt/For/ById`, `stationRegister`, `stationPadVoices`, `stationBassOffset`, `stationShape`, `stationGesture`, `stationGestureDelays`, `stationVoiceDelays`, `stationPlotPhase/ForChord/Archetype/Style/StyleForChord/WindowBias/Text/Advance/Reset`, `setStationStyle`, `setStationPlot`, `setStationGesture` |
 | `harmony` | аккорды комбо и весь лад | `HARMONY`, `PALETTE_SLOTS`, `INPUT`, `harmonicChords()`, `diatonicPalette()`, `handNoteBalls()`, `smartNoteWindow()`, `smartChordDegrees()`, `smartTargetDegree()`, `smartHarmonyForNote()`, `chordOnDegree()`, `classifyTriad()`, `describeTriad()`, `noteRole()` |
 | `state` | изменяемое состояние сессии | `state`, `state.adaptive`, `combo()`, `rootMidi()`, `playable()` |
-| `audio` | синтез и тракт | `initAudio`, `bell`, `noteChordPlan`, `noteChord`, `scheduleNoteChord`, `cancelPendingNoteChord`, `echoNote`, `pianoPlan`, `pianoNote`, `pianoRelease`, `pianoPedalUp`, `pianoAllOff`, `audioLatencyMs`, `holdStart/Stop`, `bass`, `drumHit`, `drumPlan`, `DRUM_TIMBRES`, `PIANO_TIMBRE`, `audioCaptureStream`, `releaseAudioCapture` |
+| `audio` | синтез и тракт | `initAudio`, `makeLimiterCurve`, `bell`, `noteChordPlan`, `noteChord`, `scheduleNoteChord`, `cancelPendingNoteChord`, `echoNote`, `pianoPlan`, `pianoNote`, `pianoRelease`, `pianoPedalUp`, `pianoAllOff`, `audioLatencyMs`, `holdStart/Stop`, `bass`, `drumHit`, `drumPlan`, `DRUM_TIMBRES`, `PIANO_TIMBRE`, `audioCaptureStream`, `releaseAudioCapture` |
 | `transport` | часы необязательной формы | `Transport.start/update/pause/resume/stop`, `beatsPerBar`, `countInBeats`, `setBpm`, `setMetronome` |
 | `groove` | необязательный грув (барабаны) | `Groove` (`on`, `preview`, `setOn`, `startPreview`, `setPattern`, `setBpm`, `update`, `setPaused`, `paint`, `statusText`, `_clockSource`, `bpm`, `meter`), `toggleGroove`, `groovePattern`, `grooveSteps`, `groovePlan`, `GROOVE_LANES` |
 | `composition` | драматургия и очки пьесы | `Composition.start/stop/restart`, `sectionForBar`, `targetForBar`, `onBeat`, `onNote`, `onChord`, `finishPiece` |
@@ -553,13 +553,16 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
 
 ## Звук
 
-`initAudio()` строит `master → компрессор → monitorGain → destination` и параллельный
-посыл в свёрточный реверб (`wetGain` ← `P.reverb`). `monitorGain` — только
-прослушивание: mute гасит его, а не `master`. Для рендера видео
-`audioCaptureStream()` на время подключает `MediaStreamAudioDestinationNode`
-прямо к компрессору, поэтому выключенный звук не делает ролик немым; анализатор
-(спектр, RMS, центр масс) стоит после `monitorGain` и показывает то, что слышит
-игрок. Перед `master` стоят три шины громкости:
+`initAudio()` строит `master → мягкий лимитер → monitorGain → destination` и
+параллельный посыл в свёрточный реверб (`wetGain` ← `P.reverb`). Вместо
+`DynamicsCompressor` стоит `WaveShaperNode` с кривой `makeLimiterCurve()`: у
+компрессора фиксированный look-ahead (около 6 мс), который задерживает весь
+выход, а у soft-limiter латентности нет. `monitorGain` — только прослушивание:
+mute гасит его, а не `master`. Для рендера видео `audioCaptureStream()` на время
+подключает `MediaStreamAudioDestinationNode` прямо к лимитеру, поэтому
+выключенный звук не делает ролик немым; анализатор (спектр, RMS, центр масс)
+стоит после `monitorGain` и показывает то, что слышит игрок. Перед `master`
+стоят три шины громкости:
 `noteGain` (`P.noteVol`, по умолчанию 0.25), `chordGain` (`P.chordVol`, 1) и
 `drumGain` (`P.drumVol`, 0.20).
 `routeVoice()` отправляет сухой сигнал в нужную шину, а реверб-посыл масштабирует
@@ -575,10 +578,12 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
   (`CFG.pedalFadeMs` = 1.4 с, плато 35 %), а число одновременных хвостов ограничено
   `CFG.pedalMaxVoices`, поэтому старые голоса не наслаиваются в «кашу».
 - `echoNote(midi, vel, hold)` — нота с MIDI: своя высота, панорама по питчу
-  (`(midi−60)/48`), `latencyHint: 'interactive'` у AudioContext. Вызывается только
-  когда `state.echo`, иначе пианино звучит само. Внутри — `pianoNote()`:
-  аддитивные партиалы `pianoPlan()` (негармоничность, до 10 обертонов, тембр и
-  громкость от velocity), молоточковый шум и отдельный gain отпускания.
+  (`(midi−60)/48`), `latencyHint` из `CFG.audioLatencyHint` (4 мс). Вызывается
+  только когда `state.echo`, иначе пианино звучит само. Внутри — `pianoNote()`:
+  аддитивные партиалы `pianoPlan()` (негармоничность, до 12 обертонов, треугольная
+  основа, суб-октава корпуса и расстроенная пара струн у первых трёх обертонов),
+  молоточковый шум и отдельный gain отпускания. Тембр и громкость зависят от
+  velocity, реверб-посыл — как у колокола ноты (`PIANO_TIMBRE.wet` = 0.42).
   `note-off` вызывает `pianoRelease()`: без педали голос гаснет сразу, под CC64
   помечается `pedaled` и ждёт подъёма педали; `pianoAllOff()` закрывает голоса
   на паузе, смене комбо и выключении «Ноутбука».
@@ -613,8 +618,10 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
 из стартовой пробы (`introPreview`), `beginFromOverlay`, кнопок и первого note-on.
 `Midi.refresh()` дополнительно прогревает тракт при подключении устройства, а
 первый pointer/keydown (`unlockAudioOnGesture()` в `js/input.js`) будит контекст,
-если MIDI-сессия стартовала без клика по странице. `audioLatencyMs()` в консоли
-показывает сумму `baseLatency` и `outputLatency` для проверки задержки.
+если MIDI-сессия стартовала без клика по странице. `latencyHint` задан числом
+`CFG.audioLatencyHint` (4 мс), а мягкий лимитер не имеет look-ahead.
+`audioLatencyMs()` в консоли показывает сумму `baseLatency` и `outputLatency`
+для проверки задержки; это оценка браузера, а не обещание конкретного железа.
 
 ## Характер станции
 
@@ -754,7 +761,7 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
   `drums` и выключается на время записи, прослушивания и экспорта.
 - **Аудио.** `startAudioExport(rec)` в `js/audio-export.js` собирает WAV 16-bit
   PCM без внешних библиотек. Захват идёт с `audioCaptureStream()` (после
-  компрессора и до `monitorGain`, поэтому mute не делает файл немым), а
+  лимитера и до `monitorGain`, поэтому mute не делает файл немым), а
   `ScriptProcessorNode` складывает PCM-чанки в `Int16Array`; это совместимо с
   `file://`, в отличие от AudioWorklet. `playRecordedAudio()` планирует события
   по часам AudioContext с `AUDIO_LOOKAHEAD`; ролик и WAV стартуют с первой

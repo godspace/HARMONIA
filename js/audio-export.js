@@ -3,7 +3,7 @@
    Suno и другие сервисы не принимают MIDI, поэтому рядом с видео нужен звуковой
    файл. Запись хранит события, а не семплы: WAV собирается тем же синтезатором
    по recordingTimeline(), как прослушивание и ролик. Захват идёт с
-   audioCaptureStream() (после компрессора, до mute): ScriptProcessorNode пишет
+   audioCaptureStream() (после лимитера, до mute): ScriptProcessorNode пишет
    PCM в память, audioPcmTrim() срезает тишину по краям, затем audioPcmToWav()
    добавляет RIFF/WAVE-заголовок. Всё работает на file:// и GitHub Pages,
    зависимостей нет. */

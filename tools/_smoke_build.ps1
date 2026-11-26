@@ -971,6 +971,29 @@ $post = @'
     if (!(hard.peak > soft.peak)) throw new Error('velocity does not raise the piano peak');
     if (!(hard.cutoff > soft.cutoff)) throw new Error('velocity does not open the piano tone');
     if (hard.partials.length < 4) throw new Error('piano needs a few overtones: ' + hard.partials.length);
+    // «Взрослый» голос: суб-октава корпуса и расстроенная пара струн. Без них
+    // сумма чистых синусов снова звучит как игрушечное пианино.
+    if (!(hard.body > 0)) throw new Error('piano body resonance is missing');
+    if (!(hard.unisonCents > 0)) throw new Error('piano unison detune is missing');
+    if (!hard.partials.some(function (p) { return p[0] < 0.75; })) {
+      throw new Error('piano body partial is missing');
+    }
+    if (!hard.partials.some(function (p) { return p[3] > 0; })) {
+      throw new Error('piano detuned string is missing');
+    }
+    function planCentroid(plan) {
+      var num = 0, den = 0;
+      plan.partials.forEach(function (p) { num += p[0] * p[1]; den += p[1]; });
+      return den > 0 ? num / den : 0;
+    }
+    if (!(planCentroid(hard) > planCentroid(soft))) {
+      throw new Error('velocity does not raise the piano brightness');
+    }
+    if (!(hard.partials.length >= 8)) throw new Error('piano overtone stack is too thin');
+    if (!(hard.wet >= 0.35)) throw new Error('piano reverb send is too dry');
+    if (!(HARMONIA.CFG.audioLatencyHint > 0 && HARMONIA.CFG.audioLatencyHint <= 0.01)) {
+      throw new Error('audio latency hint must request a small buffer');
+    }
     var low = HARMONIA.pianoPlan(21, 0.8), high = HARMONIA.pianoPlan(108, 0.8);
     if (!(low.decay > high.decay)) throw new Error('low piano keys must ring longer');
     for (var m = 0; m <= 127; m++) {
@@ -981,7 +1004,7 @@ $post = @'
     }
     // Граф голоса тоже должен собираться: не только план, но и release.
     var voice = HARMONIA.echoNote(60, 0.8);
-    if (!voice || !voice.gain || !voice.oscs.length) {
+    if (!voice || !voice.gain || voice.oscs.length < 8) {
       throw new Error('piano voice graph was not created');
     }
     if (!HARMONIA.pianoRelease(60, false)) throw new Error('piano note-off did not release the voice');

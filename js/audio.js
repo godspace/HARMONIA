@@ -3,7 +3,7 @@
    Все модули делят глобальную область — имена функций/констант уникальны. */
 
 // ===== Аудио: только музыкальные голоса =====
-// Один тракт: голос → (пан) → шина нот/аккордов → master → компрессор → выход,
+// Один тракт: голос → (пан) → шина нот/аккордов → master → лимитер → выход,
 // плюс посыл в реверб. Тембры разделены: аккорд — мягкая подложка, нота орбиты —
 // звонкий колокол.
 // Одиночная нота при этом не одинока: noteChord() кладёт под неё диатоническое
@@ -13,8 +13,8 @@ let audioCtx = null, master = null, convolver = null, wetGain = null;
 // должны бороться за один ползунок. Шины стоят до master и после голосов.
 let noteGain = null, chordGain = null, drumGain = null;
 // monitorGain — только прослушивание: mute гасит его, а запись видео берёт
-// сигнал до него с компрессора. Так выключенный звук не делает ролик немым.
-let monitorGain = null, compressorNode = null, captureDest = null;
+// сигнал до него с лимитера. Так выключенный звук не делает ролик немым.
+let monitorGain = null, limiterNode = null, captureDest = null;
 // Активные «хвосты» под педалью: при выключении педали их можно погасить сразу.
 let pedalVoices = [];
 // Живые фортепианные голоса MIDI: note → голос. Карта нужна для note-off и
@@ -46,15 +46,20 @@ const BELL_TIMBRES = {
 // раздельными огибающими партиалов даёт фортепианную атаку и хвост. Velocity
 // меняет три вещи одновременно — громкость, яркость среза и долю верхних
 // партиалов; поэтому тихая игра не просто тише, а мягче и темнее.
+// Чтобы голос не звучал «игрушечным» набором синусов, у первых обертонов есть
+// чуть расстроенная пара струн, а низ подпирает суб-октавное тело корпуса.
 const PIANO_TIMBRE = {
-  peak: 0.58,        // общий пик до шины нот (P.noteVol применяется дальше)
-  partials: 10,      // выше 17 кГц партиалы не создаются
-  inharmonicity: 0.00022,
-  wet: 0.20,
-  decayLow: 3.9,     // A0: длинная струна
-  decayHigh: 0.78,   // C8: короткая
-  cutoffLow: 560,
-  cutoffHigh: 6800
+  peak: 0.62,        // общий пик до шины нот (P.noteVol применяется дальше)
+  partials: 12,      // выше 17 кГц партиалы не создаются
+  inharmonicity: 0.00016,
+  wet: 0.42,         // как у колокола ноты: сухой сигнал и реверб в балансе
+  decayLow: 4.4,     // A0: длинная струна
+  decayHigh: 0.92,   // C8: короткая
+  cutoffLow: 460,
+  cutoffHigh: 7600,
+  body: 0.18,        // суб-октава корпуса, гаснет в верхнем регистре
+  unisonCents: 3.4,  // расстройка пары струн: медленные биения вместо «пластика»
+  hammer: 0.15
 };
 // Чистый план голоса без AudioNode: smoke-проверка может пройти все 88 клавиш
 // и убедиться, что сила нажатия меняет громкость и тембр, а не только число.
@@ -72,10 +77,12 @@ function pianoPlan(midi, vel) {
     (PIANO_TIMBRE.decayHigh - PIANO_TIMBRE.decayLow) * key;
   const tone = typeof P !== 'undefined' && P.tone ? P.tone : 1;
   // Сила нажатия открывает фильтр; верхний регистр и так ярче нижнего.
-  const cutoff = clamp(Math.max(freq * 1.6, (PIANO_TIMBRE.cutoffLow +
-    PIANO_TIMBRE.cutoffHigh * Math.pow(v, 1.35)) * (0.78 + 0.42 * key) * tone),
-    420, 16000);
-  const inharm = PIANO_TIMBRE.inharmonicity * (0.65 + key);
+  // Частота ноты участвует отдельно: даже тихая высокая нота не должна
+  // превращаться в глухой «стук».
+  const cutoff = clamp(Math.max(freq * 2.2, (PIANO_TIMBRE.cutoffLow +
+    PIANO_TIMBRE.cutoffHigh * Math.pow(v, 1.25)) * (0.80 + 0.40 * key) * tone),
+    440, 17000);
+  const inharm = PIANO_TIMBRE.inharmonicity * (0.55 + key);
   const partials = [];
   for (let n = 1; n <= PIANO_TIMBRE.partials; n++) {
     // Струна не идеальна: верхние обертоны чуть выше точных кратных.
@@ -83,18 +90,41 @@ function pianoPlan(midi, vel) {
     if (freq * ratio >= 17000) break;
     // Верхние партиалы сильнее проявляются при жёстком ударе и гаснут раньше.
     // После нормировки это меняет именно баланс, а не только общую громкость.
-    const highLift = n === 1 ? 0 : 0.55 * (v - 0.45);
-    const gain = Math.pow(n, -1.12) * (0.62 + 0.38 * v) * (1 + highLift);
-    const decayMul = 1 / (1 + 0.34 * (n - 1));
-    partials.push([ratio, gain, decayMul]);
+    const highLift = n === 1 ? 0 : 0.78 * (v - 0.42);
+    const gain = Math.pow(n, -1.18) * (0.56 + 0.44 * v) * (1 + highLift);
+    const decayMul = 1 / (1 + 0.28 * (n - 1));
+    // [отношение к основной, доля, множитель хвоста, detune в центах,
+    // тип осциллятора, сдвиг панорамы]. Тип 'triangle' у основы даёт телу
+    // мягкие нечётные гармоники; остальные — синусы, как у струн.
+    partials.push([ratio, gain, decayMul, 0, n === 1 ? 'triangle' : 'sine', 0]);
+    // Пара струн чуть расстроена: без неё сумма чистых синусов звучит
+    // статично и «по-детски». Биения слышны на первых трёх обертонах.
+    if (n <= 3) {
+      partials.push([
+        ratio,
+        gain * (0.34 - 0.07 * (n - 1)),
+        decayMul * 0.985,
+        PIANO_TIMBRE.unisonCents,
+        'sine',
+        0.05 + 0.035 * n
+      ]);
+    }
   }
+  // Суб-октава — не вторая нота, а резонанс корпуса: внизу она добавляет
+  // тепла, в верхнем регистре почти исчезает и не мешает высоте.
+  const bodyGain = PIANO_TIMBRE.body * (1 - 0.65 * key) * (0.55 + 0.45 * v);
+  partials.push([0.5, bodyGain, 0.82, 0, 'sine', -0.04]);
   const total = partials.reduce((sum, p) => sum + p[1], 0) || 1;
   partials.forEach(p => { p[1] = p[1] / total; });
+  const body = partials.find(p => p[0] < 0.75);
   return {
     note, freq, vel: v, pan,
-    peak: PIANO_TIMBRE.peak * (0.25 + 0.75 * Math.pow(v, 1.35)),
-    attack: 0.003 + 0.004 * (1 - v),
-    decay, cutoff, partials
+    peak: PIANO_TIMBRE.peak * (0.14 + 0.86 * Math.pow(v, 1.3)),
+    attack: 0.0015 + 0.0035 * (1 - v),
+    decay, cutoff, partials,
+    wet: PIANO_TIMBRE.wet,
+    body: body ? body[1] : 0,
+    unisonCents: PIANO_TIMBRE.unisonCents
   };
 }
 function makeImpulse(ctx, seconds, decay) {
@@ -132,11 +162,34 @@ function applyVoiceVolumes() {
   if (chordGain) chordGain.gain.setTargetAtTime(voiceVolume('chord'), t, 0.04);
   if (drumGain) drumGain.gain.setTargetAtTime(voiceVolume('drum'), t, 0.04);
 }
+// Мягкий лимитер вместо DynamicsCompressor: у компрессора фиксированный
+// look-ahead (около 6 мс), который задерживает весь выход, включая сухой сигнал.
+// Кривая ниже прозрачна до 0.82 и плавно ограничивает пики; латентности у
+// WaveShaperNode нет. Ограничение не раздувает тихие ноты — оно только страхует
+// мастер от клиппинга при плотных аккордах и педали.
+function makeLimiterCurve() {
+  const n = 4096, curve = new Float32Array(n), knee = 0.82;
+  for (let i = 0; i < n; i++) {
+    const x = (i / (n - 1)) * 2 - 1;
+    const a = Math.abs(x);
+    const y = a <= knee ? a : knee + (1 - knee) * Math.tanh((a - knee) / (1 - knee));
+    curve[i] = x < 0 ? -y : y;
+  }
+  return curve;
+}
 function initAudio() {
   if (audioCtx) { if (audioCtx.state === 'suspended') audioCtx.resume(); return; }
-  // latencyHint: интерактивный режим — MIDI-нота должна звучать в момент нажатия,
-  // а не после буфера плавного воспроизведения.
-  audioCtx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
+  // latencyHint числом, а не 'interactive': браузер просит минимальный буфер
+  // (CFG.audioLatencyHint = 4 мс). Значение остаётся подсказкой — если железо
+  // не тянет, браузер сам выберет безопасный размер, но не наоборот.
+  const hint = CFG && CFG.audioLatencyHint != null ? CFG.audioLatencyHint : 0.004;
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  try {
+    audioCtx = new Ctx({ latencyHint: hint });
+  } catch (e) {
+    // Старый Safari может не понять числовой hint — контекст важнее подсказки.
+    audioCtx = new Ctx();
+  }
   master = audioCtx.createGain();
   master.gain.value = 0.9;
   noteGain = audioCtx.createGain();
@@ -148,14 +201,14 @@ function initAudio() {
   noteGain.connect(master);
   chordGain.connect(master);
   drumGain.connect(master);
-  compressorNode = audioCtx.createDynamicsCompressor();
-  compressorNode.threshold.value = -14; compressorNode.knee.value = 18; compressorNode.ratio.value = 3;
-  compressorNode.attack.value = 0.004; compressorNode.release.value = 0.18;
-  master.connect(compressorNode);
+  limiterNode = audioCtx.createWaveShaper();
+  limiterNode.curve = makeLimiterCurve();
+  limiterNode.oversample = 'none';
+  master.connect(limiterNode);
   // Мониторинг отделён от записи: mute закрывает только выход в колонки.
   monitorGain = audioCtx.createGain();
   monitorGain.gain.value = state.muted ? 0 : 1;
-  compressorNode.connect(monitorGain);
+  limiterNode.connect(monitorGain);
   monitorGain.connect(audioCtx.destination);
   // Ответвление в анализатор: на выход не влияет, только читает сигнал.
   analyser = audioCtx.createAnalyser();
@@ -172,14 +225,14 @@ function initAudio() {
   if (!noiseBuffer) noiseBuffer = makeNoiseBuffer(audioCtx);
   if (audioCtx.state === 'suspended') audioCtx.resume();
 }
-// Поток для записи ролика: сигнал берётся после компрессора, но до monitorGain,
+// Поток для записи ролика: сигнал берётся после лимитера, но до monitorGain,
 // поэтому mute и громкость колонок не влияют на дорожку видео. Узел создаётся
 // только на время экспорта: постоянная копия тракта не нужна.
 function audioCaptureStream() {
   if (!audioCtx) return null;
   if (!captureDest) {
     captureDest = audioCtx.createMediaStreamDestination();
-    (compressorNode || master).connect(captureDest);
+    (limiterNode || master).connect(captureDest);
   }
   return captureDest.stream;
 }
@@ -492,52 +545,77 @@ function pianoNote(midi, vel, pan, when, hold) {
   const lp = audioCtx.createBiquadFilter();
   lp.type = 'lowpass'; lp.Q.value = 0.35;
   lp.frequency.setValueAtTime(plan.cutoff, t);
-  // Фильтр темнеет вместе с хвостом: верхние партиалы уходят первыми.
+  // Фильтр темнеет вместе с хвостом, но не закрывается в «точку»: у рояля
+  // после атаки остаётся воздух, иначе звук снова становится игрушечным.
   lp.frequency.exponentialRampToValueAtTime(
-    Math.max(420, plan.cutoff * 0.32), t + plan.decay * 1.15);
+    Math.max(420, plan.cutoff * 0.45), t + Math.max(0.2, plan.decay * 1.05));
   lp.connect(sum);
   const oscs = [];
   let endAt = t;
-  plan.partials.forEach(([ratio, gain, decayMul]) => {
+  plan.partials.forEach(([ratio, gain, decayMul, detune, type, spread]) => {
     const osc = audioCtx.createOscillator(), env = audioCtx.createGain();
     const level = Math.max(0.0002, plan.peak * gain);
-    const attack = plan.attack * (ratio > 3 ? 0.82 : 1);
+    const attack = plan.attack * (ratio > 3 ? 0.85 : 1);
     const body = plan.decay * decayMul;
-    const stopAt = t + attack + body + 0.12;
+    const stopAt = t + attack + body + 0.14;
     endAt = Math.max(endAt, stopAt);
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(plan.freq * ratio, t);
+    osc.type = type || 'sine';
+    const tone = plan.freq * ratio;
+    // У основы — очень короткий подъём высоты на атаке: струна «садится»
+    // после удара, а не начинается идеально ровной синусоидой.
+    if (!detune && ratio > 0.9 && ratio < 1.02) {
+      osc.frequency.setValueAtTime(tone * 1.0015, t);
+      osc.frequency.exponentialRampToValueAtTime(tone, t + 0.03);
+    } else {
+      osc.frequency.setValueAtTime(tone, t);
+    }
+    if (detune) osc.detune.setValueAtTime(detune, t);
     env.gain.setValueAtTime(0.0001, t);
     env.gain.exponentialRampToValueAtTime(level, t + attack);
-    // Две стадии, как у струны: быстрый спад после удара и длинный хвост.
+    // Три стадии, как у струны: быстрый спад после удара, тело и длинный хвост.
+    // 58 % на первой стадии вместо прежних 26 % убирает «пластиковый» щелчок.
     env.gain.exponentialRampToValueAtTime(
-      Math.max(0.0002, level * 0.26), t + attack + body * 0.22);
+      Math.max(0.0002, level * (ratio < 2 ? 0.58 : ratio < 5 ? 0.42 : 0.28)),
+      t + attack + body * 0.18);
+    env.gain.exponentialRampToValueAtTime(
+      Math.max(0.0002, level * (ratio < 2 ? 0.16 : 0.08)),
+      t + attack + body * 0.66);
     env.gain.exponentialRampToValueAtTime(0.0001, t + attack + body);
-    osc.connect(env); env.connect(lp);
+    let tailNode = env;
+    // Лёгкая ширина: расстроенная пара струн и корпус уходят в сторону от
+    // основной ноты. Это не сдвигает высоту, только раскрывает голос.
+    if (spread && audioCtx.createStereoPanner) {
+      const pn = audioCtx.createStereoPanner();
+      pn.pan.value = spread;
+      env.connect(pn); tailNode = pn;
+    }
+    tailNode.connect(lp);
     osc.start(t); osc.stop(stopAt);
     oscs.push(osc);
   });
   // Молоток: короткий шумовой щелчок, тем ярче и громче, чем сильнее удар.
+  // Полоса зависит от высоты ноты: у баса удар глуше, у верха — звонче.
   const noise = noiseSource();
   if (noise) {
     const band = audioCtx.createBiquadFilter(), env = audioCtx.createGain();
     band.type = 'bandpass';
     band.frequency.setValueAtTime(
-      clamp(900 + 4600 * plan.vel, 700, 12000), t);
-    band.Q.value = 0.75;
-    const level = Math.max(0.0002, plan.peak * 0.12 * Math.pow(plan.vel, 1.2));
+      clamp(plan.freq * 1.8 + 700 + 3200 * plan.vel, 600, 11000), t);
+    band.Q.value = 0.72;
+    const level = Math.max(0.0002,
+      plan.peak * PIANO_TIMBRE.hammer * Math.pow(plan.vel, 1.2));
     env.gain.setValueAtTime(0.0001, t);
     env.gain.exponentialRampToValueAtTime(level, t + 0.0025);
-    env.gain.exponentialRampToValueAtTime(0.0001, t + 0.045);
+    env.gain.exponentialRampToValueAtTime(0.0001, t + 0.055);
     noise.connect(band); band.connect(env); env.connect(sum);
-    noise.start(t); noise.stop(t + 0.06);
+    noise.start(t); noise.stop(t + 0.07);
   }
   // Отдельный выход отпускания: note-off не обрывает хвост щелчком, а гасит его.
   const out = audioCtx.createGain();
   out.gain.value = 1;
   sum.connect(out);
   const p = pan == null ? plan.pan : clamp(pan, -0.8, 0.8);
-  routeVoice(out, p, PIANO_TIMBRE.wet, noteGain, voiceVolume('note'));
+  routeVoice(out, p, plan.wet, noteGain, voiceVolume('note'));
   const voice = {
     note: plan.note, gain: out, oscs,
     stopAt: endAt, pedaled: false, released: false
