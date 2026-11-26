@@ -260,7 +260,7 @@ $post = @'
     // Текста на старте минимум: заголовок и одна строка инструкции со счётчиком.
     // Длинное описание умного режима, список горячих клавиш, дорожка точек и
     // кнопка «старт» убраны: их не читают, а место принадлежит клавиатуре.
-    if (document.querySelectorAll('#startOverlay p').length !== 1) {
+    if (document.querySelectorAll('#startOverlay > p').length !== 1) {
       throw new Error('intro screen must keep a single instruction line');
     }
     if (document.querySelector('#startOverlay .intro-copy, #startOverlay #startBtn, #startOverlay #introDots')) {
@@ -2262,6 +2262,39 @@ $post = @'
     R.clear();
   });
 
+  step('chord-now', function () {
+    // Карточка, совпавшая с реально звучащим аккордом, получает бейдж «сейчас»;
+    // после смены комбо маркер снимается. Заодно проверяем отдельный span для
+    // альтерации: в G-dur на карточках есть F♯, и он не должен сливаться.
+    var H = HARMONIA;
+    H.setMode('major');
+    H.loadCombo(0, false);
+    var tonic = H.diatonicPalette()[0];
+    var tonicKey = tonic.pcs.slice().sort(function (a, b) { return a - b; }).join(',');
+    H.chordEvent(tonic, 0.8, 'keys');
+    H.updateHUD();
+    var nowCard = document.querySelector('#chordPad .chord-card.now');
+    if (!nowCard || nowCard.dataset.pcsKey !== tonicKey) {
+      throw new Error('the sounding tonic is not marked as current');
+    }
+    if (!nowCard.querySelector('.cc-now')) {
+      throw new Error('the current chord badge is missing');
+    }
+    if (nowCard.getAttribute('aria-current') !== 'true') {
+      throw new Error('the current chord is not exposed to screen readers');
+    }
+    H.loadCombo(1, false);
+    H.updateHUD();
+    var acc = document.querySelector('#chordPad .note-acc');
+    if (!acc || !/[♯♭]/.test(acc.textContent)) {
+      throw new Error('the accidental is not rendered as its own sign');
+    }
+    if (document.querySelector('#chordPad .chord-card.now')) {
+      throw new Error('the current-chord marker survived a combo change');
+    }
+    H.loadCombo(0, false);
+  });
+
   step('research-rating', function () {
     // Исследование включено по умолчанию: проверяем это, затем выключаем и
     // очищаем, чтобы проверить запись посещений, карточку оценки и отсутствие
@@ -2560,26 +2593,62 @@ $post = @'
     if ($('researchAsk').classList.contains('show')) throw new Error('the rating card stayed open');
   });
 
-  step('midi-auto-start', function () {
-    // Последний шаг: подменяем только имя устройства, чтобы проверить сам путь
-    // «MIDI подключён → знакомство не нужно → beginFromOverlay». Реальный Web MIDI
-    // в headless-прогоне не нужен, поэтому тест не зависит от железа.
-    var oldDev = HARMONIA.Midi.devName;
-    HARMONIA.Midi.devName = 'Smoke MIDI';
-    HARMONIA.state.started = false;
-    HARMONIA.state.running = false;
+  step('midi-intro', function () {
+    // Последний шаг: подменяем только имя устройства, чтобы проверить путь
+    // «MIDI подключён → знакомство с обозначениями → три аккорда → сессия».
+    // Реальный Web MIDI в headless-прогоне не нужен.
+    var H = HARMONIA;
+    var oldDev = H.Midi.devName;
+    H.Midi.devName = 'Smoke MIDI';
+    H.state.started = false;
+    H.state.running = false;
+    H.state.paused = false;
     $('startOverlay').style.display = '';
+    H.setMode('major');
+    H.loadCombo(0, false);
     try {
-      if (!HARMONIA.Midi.hasDevice()) throw new Error('hasDevice lost the active input');
-      if (!HARMONIA.Midi.skipKeyboardIntro()) throw new Error('MIDI did not skip the keyboard intro');
-      if (!HARMONIA.state.started || !HARMONIA.state.running) {
-        throw new Error('MIDI skip did not start the session');
+      if (!H.Midi.hasDevice()) throw new Error('hasDevice lost the active input');
+      if (!H.Midi.skipKeyboardIntro()) throw new Error('MIDI did not open its introduction');
+      if (H.state.started) throw new Error('MIDI introduction started the session too early');
+      if (!$('startOverlay').classList.contains('midi') || $('midiCoach').hidden) {
+        throw new Error('the MIDI introduction is not visible');
       }
-      if ($('startOverlay').style.display !== 'none') {
-        throw new Error('the keyboard intro stayed on screen after MIDI start');
+      var st = H.MidiIntro.state();
+      if (!st.active || st.targets.length !== 3) {
+        throw new Error('the MIDI introduction must offer three chords');
+      }
+      if (st.targets.map(function (t) { return t.degree; }).join(',') !== 'I,IV,V') {
+        throw new Error('wrong start chords: ' + st.targets.map(function (t) { return t.degree; }));
+      }
+      // Две ноты ещё не трезвучие: цель не должна закрыться раньше времени.
+      var first = st.targets[0];
+      H.Midi.noteOn(60 + first.pcs[0], 0.8);
+      H.Midi.noteOn(60 + first.pcs[1], 0.8);
+      if (H.MidiIntro.state().targets[0].done) {
+        throw new Error('two notes completed a three-note target');
+      }
+      H.Midi.noteOn(60 + first.pcs[2], 0.8);
+      first.pcs.forEach(function (pc) { H.Midi.noteOff(60 + pc); });
+      if (!H.MidiIntro.state().targets[0].done) {
+        throw new Error('the first target chord was not recognised');
+      }
+      // Остальные два аккорда — тем же путём, в любой октаве.
+      st.targets.slice(1).forEach(function (t) {
+        t.pcs.forEach(function (pc) { H.Midi.noteOn(72 + pc, 0.8); });
+        t.pcs.forEach(function (pc) { H.Midi.noteOff(72 + pc); });
+      });
+      if (!H.MidiIntro.completed) throw new Error('three chords did not complete the introduction');
+      if ($('miStart').disabled) throw new Error('the Start button stayed disabled');
+      $('miStart').click();
+      if (!H.state.started || !H.state.running) {
+        throw new Error('the MIDI introduction did not enter the simulator');
+      }
+      if ($('startOverlay').style.display !== 'none' || $('startOverlay').classList.contains('midi')) {
+        throw new Error('the MIDI introduction stayed on screen after start');
       }
     } finally {
-      HARMONIA.Midi.devName = oldDev;
+      H.Midi.devName = oldDev;
+      H.MidiIntro.close();
     }
   });
 

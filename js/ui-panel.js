@@ -121,6 +121,8 @@ function refreshNotation() {
   if (typeof buildComboStrip === 'function') buildComboStrip();
   if (typeof fillComboSelect === 'function') fillComboSelect();
   if (typeof buildChordPad === 'function') buildChordPad();
+  // Стартовый MIDI-экран тоже показывает ноты в текущей нотации.
+  if (typeof MidiIntro !== 'undefined' && typeof MidiIntro.refresh === 'function') MidiIntro.refresh();
   // Итог пьесы тоже показывает ноты (диапазон мелодии): перерисовываем его,
   // чтобы в нём не осталась прежняя нотация. Показ/скрытие — не его дело.
   if (typeof renderFormResult === 'function') renderFormResult();

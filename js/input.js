@@ -46,6 +46,21 @@ window.addEventListener('keydown', (e) => {
   // Карточка оценки комбо (js/research.js) забирает J I O P [ / Space / Esc,
   // пока открыта; в поле комментария те же клавиши остаются обычными буквами.
   if (typeof Research !== 'undefined' && Research.gateKey(e)) return;
+  // MIDI-знакомство живёт на том же оверлее, но не считает клавиши пробой.
+  // Space входит только после трёх аккордов, Esc — явный пропуск.
+  if (!state.started && typeof MidiIntro !== 'undefined' && MidiIntro.active) {
+    if (e.code === 'Space' && MidiIntro.completed) {
+      MidiIntro.enter();
+      e.preventDefault();
+      return;
+    }
+    if (e.code === 'Escape') {
+      MidiIntro.skip();
+      e.preventDefault();
+      return;
+    }
+    return;
+  }
   // Стартовый экран: пока сессия не начата, десять игровых клавиш — это проба
   // пальцев, а пробел — подтверждение старта после неё. Тот же жест в игре
   // открывает новое комбо, поэтому реакция закрепляется ещё до первой ноты.
@@ -168,6 +183,8 @@ function beginFromOverlay() {
   // Единственная точка входа в сессию из стартового окна. Её же зовут MIDI-нота,
   // запись и пьеса, поэтому окно закрывается и там, где клик по кнопке не нужен.
   if (state.started) return;
+  // Любой путь старта (MIDI-знакомство, запись, пьеса) закрывает и его тоже.
+  if (typeof MidiIntro !== 'undefined') MidiIntro.close();
   clearIntroTimer();
   hideKeyTip();
   initAudio();
@@ -345,6 +362,7 @@ function introDrumsReady() {
 // показывает подсказку на Enter — так игрок понимает, чего не хватает.
 function introStart() {
   if (state.started || intro.starting) return false;
+  if (typeof MidiIntro !== 'undefined' && MidiIntro.active) return false;
   if (!intro.ready) {
     if (intro.done) showKeyTip(introKeyEl('Enter'), 2800);
     return false;

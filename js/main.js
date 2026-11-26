@@ -21,7 +21,7 @@ Translate.mount();
 fitStage();
 // Публичный отладочный API: консоль, автотесты, будущие харнессы.
 window.HARMONIA = {
-  state, P, DEFAULTS, CFG, COMBOS, ORDER, INPUT, Midi, Translate, I18N, VIZ, viz, Heard,
+  state, P, DEFAULTS, CFG, COMBOS, ORDER, INPUT, Midi, MidiIntro, Translate, I18N, VIZ, viz, Heard,
   Transport, Groove, Composition, setFormEnabled, updateFormHUD,
   // Исследование оценок: включено по умолчанию; ?research=0 или панель выключают.
   research: Research,

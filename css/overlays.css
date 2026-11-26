@@ -192,6 +192,172 @@
   font-size: clamp(7px, 0.7vw, 9px); line-height: 1.1;
   color: #7e88a6; text-transform: uppercase; letter-spacing: 0.3px; white-space: nowrap;
 }
+/* ===== MIDI-знакомство =====
+   Тот же #startOverlay, но вместо схемы компьютерных клавиш — расшифровка
+   обозначений и три целевых аккорда. Экран остаётся вне #game-container:
+   fitStage() не должен масштабировать текст и мини-клавиатуры. */
+#startOverlay.midi .intro-lead,
+#startOverlay.midi .intro-keyboard,
+#startOverlay.midi .kb-tip { display: none; }
+.midi-coach {
+  flex: 1 1 auto; width: 100%; max-width: 1080px; min-height: 0;
+  display: flex; flex-direction: column; justify-content: center;
+  gap: clamp(8px, 1.3vh, 14px); margin: 0 auto;
+}
+.midi-coach[hidden] { display: none; }
+.mi-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 14px; text-align: left;
+}
+.mi-head-copy { min-width: 0; }
+.mi-kicker {
+  display: flex; align-items: center; gap: 6px;
+  font-size: clamp(8px, 0.95vw, 11px); font-weight: 800; letter-spacing: 1px;
+  text-transform: uppercase; color: #8b95b3;
+}
+.mi-dot {
+  width: 7px; height: 7px; flex: none; border-radius: 50%;
+  background: #74cc3d; box-shadow: 0 0 8px rgba(116, 204, 61, 0.7);
+}
+.mi-device {
+  max-width: 34vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: #d0d7ee; letter-spacing: 0.2px; text-transform: none;
+}
+.mi-head h2 {
+  margin: 3px 0 2px; font-size: clamp(18px, 2.3vw, 29px);
+  color: #ffd166; letter-spacing: 0.2px;
+}
+#miLead {
+  max-width: 660px; margin: 0; font-size: clamp(11px, 1.25vw, 14px);
+  line-height: 1.42; color: #c2cae0;
+}
+.mi-progress {
+  flex: none; min-width: 76px; padding: 8px 11px; border-radius: 10px;
+  font-size: clamp(15px, 1.8vw, 21px); font-weight: 900; line-height: 1;
+  color: #6bdfff; text-align: center; font-variant-numeric: tabular-nums;
+  background: rgba(107, 223, 255, 0.08);
+  border: 1px solid rgba(107, 223, 255, 0.26);
+}
+.mi-progress.ready {
+  color: #10131d; background: #74cc3d; border-color: #a8f47a;
+  box-shadow: 0 0 14px rgba(116, 204, 61, 0.4);
+}
+.mi-grid {
+  display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+  gap: clamp(8px, 1.4vw, 16px); text-align: left;
+}
+.mi-panel {
+  min-width: 0; padding: clamp(9px, 1.2vw, 14px);
+  border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.12);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.025));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+.mi-panel h3 {
+  margin: 0 0 8px; font-size: clamp(10px, 1.1vw, 12px); font-weight: 800;
+  letter-spacing: 1px; text-transform: uppercase; color: #9aa4c2;
+}
+.mi-legend-row { display: flex; flex-wrap: wrap; gap: 6px 8px; }
+.mi-legend-item {
+  display: inline-flex; align-items: center; gap: 5px; padding: 3px 6px;
+  border-radius: 6px; background: rgba(255, 255, 255, 0.045);
+  font-size: clamp(8px, 0.85vw, 10px); font-weight: 700; color: #b9c2da;
+  white-space: nowrap;
+}
+.mi-legend-item .cc-note { font-size: clamp(12px, 1.35vw, 15px); font-weight: 900; }
+.mi-legend-copy {
+  margin: 8px 0; font-size: clamp(9px, 0.95vw, 11px); line-height: 1.45;
+  color: #9aa4c2;
+}
+.mi-symbols {
+  display: flex; flex-wrap: wrap; gap: 5px 12px;
+  font-size: clamp(9px, 0.95vw, 11px); line-height: 1.35; color: #c2cae0;
+}
+.mi-symbols span { display: inline-flex; align-items: center; gap: 4px; }
+.mi-pill {
+  padding: 1px 5px; border-radius: 3px; font-size: 8px; font-weight: 900;
+  color: #10131d; background: #6bdfff; white-space: nowrap;
+}
+.mi-next-mark { color: #74cc3d; font-size: 15px; line-height: 1; }
+.mi-home-mark { color: #ffd166; font-size: 14px; line-height: 1; }
+.mi-targets { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
+.mi-target {
+  position: relative; min-width: 0; padding: 7px 6px 6px;
+  border-radius: 9px; border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(9, 12, 20, 0.58);
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+.mi-target.next {
+  border-color: rgba(107, 223, 255, 0.68);
+  box-shadow: inset 0 2px 0 #6bdfff;
+}
+.mi-target.heard {
+  border-color: rgba(255, 209, 102, 0.8);
+  box-shadow: 0 0 13px rgba(255, 209, 102, 0.24), inset 0 2px 0 #ffd166;
+}
+.mi-target.done {
+  border-color: rgba(116, 204, 61, 0.64);
+  background: rgba(23, 43, 19, 0.7);
+}
+.mi-target-head { display: flex; align-items: center; gap: 4px; min-height: 17px; }
+.mi-target-deg { font-size: clamp(14px, 1.55vw, 18px); font-weight: 900; color: #ffd166; line-height: 1; }
+.mi-target-hint {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 8px; font-weight: 800; letter-spacing: 0.35px; text-transform: uppercase;
+  color: #8b95b3;
+}
+.mi-target-check { margin-left: auto; font-size: 13px; font-weight: 900; color: #74cc3d; opacity: 0; }
+.mi-target.done .mi-target-check { opacity: 1; }
+.mi-target-name {
+  margin: 5px 0 4px; overflow: hidden; text-overflow: ellipsis;
+  font-size: clamp(9px, 0.95vw, 11px); font-weight: 800; white-space: nowrap;
+}
+.mi-target-kb { display: flex; justify-content: center; overflow: hidden; }
+.mi-target-kb .km-board { width: 100%; max-width: 104px; }
+.mi-hint { margin: 7px 0 0; font-size: 9px; line-height: 1.35; color: #7e88a6; }
+.mi-live {
+  min-height: 30px; display: flex; align-items: center; justify-content: center;
+  padding: 5px 10px; border-radius: 8px; text-align: center;
+  font-size: clamp(10px, 1.05vw, 12px); font-weight: 700; color: #9aa4c2;
+  background: rgba(107, 223, 255, 0.055); border: 1px solid rgba(107, 223, 255, 0.16);
+}
+.mi-live.live {
+  color: #e8eeff; border-color: rgba(107, 223, 255, 0.42);
+  background: rgba(107, 223, 255, 0.1);
+}
+.mi-live b { color: #6bdfff; }
+.mi-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+.mi-skip, .mi-start {
+  padding: 8px 16px; font-family: inherit; font-size: 12px; font-weight: 800;
+  border-radius: 8px; cursor: pointer; transition: transform 0.15s, background 0.15s;
+}
+.mi-skip {
+  color: #b9c2da; background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+.mi-skip:hover { background: rgba(255, 255, 255, 0.12); }
+.mi-skip[hidden] { display: none; }
+.mi-start {
+  color: #10131d; background: linear-gradient(90deg, #ffe08a, #ffd166);
+  border: 1px solid #ffe3a1; box-shadow: 0 6px 20px rgba(255, 209, 102, 0.28);
+}
+.mi-start:hover:not(:disabled) { transform: translateY(-1px); }
+.mi-start:disabled {
+  opacity: 0.4; cursor: default; box-shadow: none; transform: none;
+}
+@media (max-width: 760px) {
+  #startOverlay.midi { justify-content: flex-start; }
+  .mi-grid { grid-template-columns: 1fr; }
+  .mi-targets { grid-template-columns: 1fr; }
+  .mi-target-kb .km-board { max-width: 124px; }
+  .mi-head { gap: 8px; }
+  .mi-device { max-width: 44vw; }
+  .mi-actions { justify-content: stretch; }
+  .mi-skip, .mi-start { flex: 1 1 auto; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mi-target, .mi-start, .mi-skip { transition: none; }
+}
+
 /* Подсказка клавиши (#kbTip): один пузырёк на всё окно, позицию считает
    showKeyTip() по прямоугольнику клавиши. Висит над клавишей, мышь не
    перехватывает и на телефоне не мешает нажимать. */

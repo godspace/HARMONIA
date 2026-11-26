@@ -89,11 +89,12 @@ const Midi = {
     if (!state.echo) return;
     try { initAudio(); } catch (e) { /* браузер ждёт пользовательский жест */ }
   },
-  // Знакомство с компьютерными клавишами нужно только тем, у кого их нет под
-  // рукой. Подключённая MIDI-клавиатура — уже готовый инструмент, поэтому
-  // стартовый экран не показываем, а входим в сессию тем же beginFromOverlay().
+  // Подключённая MIDI-клавиатура отменяет пробу компьютерных клавиш, но не
+  // саму игру: человек сначала проходит короткое знакомство с обозначениями
+  // и тремя аккордами (MidiIntro), а уже оттуда входит в сессию.
   skipKeyboardIntro() {
     if (state.started || !this.devName) return false;
+    if (typeof MidiIntro !== 'undefined' && MidiIntro.open()) return true;
     if (typeof beginFromOverlay !== 'function') return false;
     beginFromOverlay();
     return true;
@@ -141,7 +142,8 @@ const Midi = {
     if (dev) {
       this.resolveEcho(dev);
       this.warmAudio();
-      this.skipKeyboardIntro();
+      if (typeof MidiIntro !== 'undefined') MidiIntro.open();
+      else this.skipKeyboardIntro();
       setMidiStatus('online', 'MIDI: ' + this.devName);
       $('midiHint').textContent = 'Играйте: трезвучие становится аккордом, ноты — голосами. Педаль (CC64) держит звук, паника — CC120/CC123.';
     } else {
@@ -149,6 +151,7 @@ const Midi = {
       // а фортепианные голоса — звучать без клавиатуры.
       Heard.clear();
       if (typeof pianoAllOff === 'function') pianoAllOff();
+      if (typeof MidiIntro !== 'undefined') MidiIntro.deviceLost();
       this.lastNote = '';
       setMidiStatus('idle', this.inputs.length ? 'MIDI: вход не выбран' : 'MIDI не обнаружена');
       $('midiHint').textContent = 'Подключите клавиатуру — она подхватится автоматически.';
@@ -204,6 +207,9 @@ const Midi = {
     }
   },
   pedal(on) {
+    // На знакомстве педаль не нужна: три аккорда проверяются по зажатым нотам,
+    // а хвосты после входа всё равно сбросит startSession().
+    if (!state.started && typeof MidiIntro !== 'undefined' && MidiIntro.active) return;
     Heard.setSustain(on);
     // Подъём педали должен быть слышен сразу: фортепианные голоса и хвосты
     // автотрезвучий не ждут естественного затухания.
@@ -213,6 +219,12 @@ const Midi = {
   // Любая нажатая нота — это нота: своя высота, своя громкость, участие в
   // распознавании. Никакой таблицы «эта клавиша = этот аккорд» больше нет.
   noteOn(note, vel) {
+    // До старта MIDI-нота принадлежит знакомству: она звучит и учит брать
+    // аккорды, но не попадает в счёт, запись или исследование.
+    if (!state.started && typeof MidiIntro !== 'undefined' && MidiIntro.active) {
+      MidiIntro.noteOn(note, vel);
+      return;
+    }
     if (!state.started) beginFromOverlay();
     if (!playable()) return;
     const v = clamp(vel == null ? 0.8 : vel, 0.05, 1);
@@ -252,6 +264,10 @@ const Midi = {
     this.flashNote(note);
   },
   noteOff(note) {
+    if (!state.started && typeof MidiIntro !== 'undefined' && MidiIntro.active) {
+      MidiIntro.noteOff(note);
+      return;
+    }
     const pc = ((note % 12) + 12) % 12;
     // Педаль решает судьбу голоса: под ней отпущенная клавиша продолжает
     // звучать до CC64=0, без неё гаснет сразу после отпускания.
@@ -267,6 +283,7 @@ const Midi = {
     if (typeof scheduleAdaptiveApply === 'function') scheduleAdaptiveApply();
   },
   panic() {
+    if (typeof MidiIntro !== 'undefined' && MidiIntro.active) MidiIntro.panic();
     Heard.clear();
     if (typeof cancelPendingNoteChord === 'function') cancelPendingNoteChord();
     if (typeof pianoAllOff === 'function') pianoAllOff();

@@ -43,7 +43,8 @@
 | `viz` | геометрия и картинка режима | `VIZ`, `VIZ_ORDER`, `viz()`, `setViz`, `vizDebug` |
 | `game` | правила и счёт | `chordEvent`, `playChordAudio`, `playHarmonic`, `triggerBall`, `pressCode`, `setMode`, `advanceCombo`, `requestAdaptiveAnchor`, `setAdaptiveAnchor`, `resetAdaptive` |
 | `listen` | слух приложения | `Heard` (`notes`, `latched`, `sustain`, `recognize()`) |
-| `ui-hud` | отображение состояния | `updateHUD`, `updateHomeIndicator`, `renderPalette`, `renderHint`, `updateHeardChip`, `paintSoundChip`, `renderKeyMap` |
+| `ui-hud` | отображение состояния | `updateHUD`, `updateHomeIndicator`, `renderPalette`, `renderHint`, `updateHeardChip`, `paintSoundChip`, `renderKeyMap`, `noteLabelHtml`, `paintNowChordCards` |
+| `midi-intro` | стартовое знакомство для MIDI: легенда и три аккорда | `MidiIntro` (`open`, `close`, `enter`, `skip`, `deviceLost`, `noteOn/off`, `panic`, `refresh`, `state`), `#midiCoach` |
 | `recorder` | запись, автозапись станции, прослушивание, MIDI и общие имена файлов | `recordChord/Note`, `recordDrum/recordDrumAt`, `recordingTimeline`, `startRecording`, `stopRecording`, `autoRecordStart/Finalize/Status`, `setAutoRecord`, `playSelected`, `deleteSelectedRecording`, `recordingById`, `recordingTonic/Title/FileName`, `buildMidiFile`, `midiRecordingEvents`, `exportSelectedMidi` |
 | `video` | рендер записи в WebM | `startVideoExport(rec)`, `cancelVideoExport`, `videoExportStatus`, `videoSupported`, `videoFileName`, `videoDuration`, `videoSize`, `videoCaption`, `copyVideoCaption`, `videoLegacyWarning`, `videoMediaElapsed`, `videoStepVisual`, `videoMarkTonic`, `videoSyncVisual`, `videoFrameStep`, `paintVideoFrame` |
 | `audio-export` | сохранение записи в WAV | `startAudioExport(rec, {purpose, onDone})`, `cancelAudioExport`, `audioExportStatus` (`id`, `purpose`), `audioSupported`, `audioFileName`, `audioDuration`, `audioPcmToWav`, `#recAudio`/`#researchAskAudio`/`#audioExport` |
@@ -138,9 +139,13 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
   сцену, иначе клавиши на телефоне сжимались бы до нечитаемых.
   MIDI-нота, запись и пьеса тоже входят через `beginFromOverlay()` — это
   единственная точка старта сессии. Подключённая MIDI-клавиатура отменяет саму
-  пробу: `Midi.refresh()` прогревает аудио и сразу зовёт `beginFromOverlay()`,
-  поэтому человек с инструментом не проходит знакомство с компьютерными
-  клавишами. `startSession()` при этом снимает режим пробы
+  пробу компьютерных клавиш, но не знакомство: `Midi.refresh()` прогревает
+  аудио и зовёт `MidiIntro.open()`. Экран `#midiCoach` объясняет цвета нот и
+  бейдж «сейчас», затем ждёт три аккорда `I–IV–V` (в миноре `i–iv–V`). Ноты до
+  старта идут в `MidiIntro.noteOn/off`, а не в `Heard`, запись или счёт; после
+  третьего аккорда кнопка **Начать** (или Space) вызывает
+  `beginFromOverlay()`. Пропуск и возврат к компьютерной клавиатуре — явные
+  кнопки, `Esc` тоже пропускает. `startSession()` снимает режим пробы
   (`setDrawerIntro(false)`): панели остаются свёрнутыми, а у краёв сцены
   появляются табы — игрок сразу играет и открывает меню только по необходимости.
 - `drawers` (`ui-drawers.js`) — единственный источник правды о выдвижных панелях:
@@ -209,6 +214,14 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
   `syncChordPadLabels()`, поэтому пьеса, тренажёр и смена комбо обновляют рисунок
   вместе с карточками. Это наблюдатель: `aria-hidden`, `pointer-events:none`, ни
   звука, ни очков, ни фокуса.
+- `#chordPad .chord-card.now` — аккорд, который звучит прямо сейчас. Источник
+  `currentSoundingChord()`: сначала `state.heard.triad` (MIDI/педаль), иначе
+  свежий `state.harmony.lastTriad` за `CFG.nowChordMs` (1.2 с). Маркер ставит
+  `paintNowChordCards()` из `paintChordPad()` и `updateHeardChip()`, поэтому
+  note-on/off сразу переставляет или снимает его. На карточке появляется
+  бейдж **сейчас** вместо клавиши Q/W/E/R/F и `aria-current="true"`;
+  `noteLabelHtml()` собирает `♯/♭` в отдельный `.note-acc`, чтобы знак
+  наследовал цвет роли и не терялся на тёмном фоне.
 - Нотация подписей — `P.notation` (`sol` | `letters`). Данные и звук её не
   знают: `util.js` держит `letterNoteName()`/`noteLabel()`/`chordLabel()`/
   `keyNameOf()`/`sharpLabel()`, а `data.js` считает `keyNameLatin` при разборе
@@ -1036,7 +1049,10 @@ Translate через `translate.js` (тот же приём, что в сосе�
   `.hit`, окно получает `.drums` и просит `Enter`; пробел в этот момент сессию не
   открывает, `Enter` включает барабаны в режиме `preview`, и только затем
   появляется `.ready` с подсвеченным `Space` и подсказкой `.ip-after`, а сессия
-  стартует после пробела (`.fade`, затем `CFG.introFadeMs`). Шаги `default-sound`,
+  стартует после пробела (`.fade`, затем `CFG.introFadeMs`). Шаг `chord-now`
+  проверяет бейдж **сейчас** на звучащей карточке, `aria-current` и отдельный
+  `.note-acc` для `♯/♭`, а `midi-intro` — три цели `I,IV,V`, распознавание
+  только полного трезвучия и вход в сессию после третьего аккорда. Шаги `default-sound`,
   `melody-layout`,
   `space-combo-advance`, `smart-hand-window`, `smart-resume-window`,
   `diminished-anchor`, `smart-form-target`, `adaptive-defer` и

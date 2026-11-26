@@ -590,6 +590,44 @@
             </div>
       </div>
     </div>
+    <!-- MIDI-знакомство: вместо пробы компьютерных клавиш человек с инструментом
+         видит расшифровку игровых обозначений и три аккорда, которые нужно взять
+         для входа. Экран слушает те же MIDI-ноты, что и игра, но ничего не
+         засчитывает и не пишет в сессию до кнопки «Начать». -->
+    <section class="midi-coach" id="midiCoach" hidden aria-labelledby="miTitle">
+      <div class="mi-head">
+        <div class="mi-head-copy">
+          <div class="mi-kicker"><span class="mi-dot" aria-hidden="true"></span>MIDI · <span class="mi-device" id="miDevice">—</span></div>
+          <h2 id="miTitle">Сначала — три аккорда</h2>
+          <p id="miLead">Сыграйте тонику, субдоминанту и доминанту в любой октаве. Экран объяснит цвета и значки, которые встретятся в игре.</p>
+        </div>
+        <div class="mi-progress" id="miProgress" aria-live="polite">0 / 3</div>
+      </div>
+      <div class="mi-grid">
+        <section class="mi-panel mi-legend" aria-labelledby="miLegendTitle">
+          <h3 id="miLegendTitle">Как читать подсказки</h3>
+          <div class="mi-legend-row" id="miLegendNotes" aria-label="Цвета ролей нот"></div>
+          <p class="mi-legend-copy">Корень — золотой, тоны аккорда — зелёные, мягкая краска — янтарная, трение — розовое, ноты вне лада — прохладные. Знак ♯ или ♭ стоит рядом с нотой и не теряется.</p>
+          <div class="mi-symbols">
+            <span><b class="mi-pill">сейчас</b> — взятый аккорд на карточке</span>
+            <span><b class="mi-next-mark">→</b> — следующий ход</span>
+            <span><b class="mi-home-mark">↩</b> — возврат в тонику</span>
+          </div>
+        </section>
+        <section class="mi-panel mi-targets-panel" aria-labelledby="miTargetsTitle">
+          <h3 id="miTargetsTitle">Три аккорда для старта</h3>
+          <div class="mi-targets" id="miTargets"></div>
+          <p class="mi-hint" id="miHint">Если аккорд не тот, ничего не сломается: просто попробуйте снова.</p>
+        </section>
+      </div>
+      <div class="mi-live" id="miLive" role="status" aria-live="polite"><span class="mi-live-label">Слышу:</span> —</div>
+      <div class="mi-actions">
+        <button class="mi-skip" id="miFallback" type="button" hidden>Играть с компьютерной клавиатуры</button>
+        <button class="mi-skip" id="miSkip" type="button">Пропустить знакомство</button>
+        <button class="mi-start" id="miStart" type="button" disabled>Начать</button>
+      </div>
+    </section>
+
     <!-- Пузырёк подсказки: один на окно, позицию считает showKeyTip() по
          прямоугольнику клавиши. Мышь он не перехватывает. -->
     <div class="kb-tip" id="kbTip" role="tooltip" aria-hidden="true"></div>
@@ -624,6 +662,7 @@
   <script src="js/suno.js"></script>
   <script src="js/research.js"></script>
   <script src="js/guide.js"></script>
+  <script src="js/midi-intro.js"></script>
   <script src="js/ui-panel.js"></script>
   <script src="js/ui-drawers.js"></script>
   <script src="js/ui-compose.js"></script>

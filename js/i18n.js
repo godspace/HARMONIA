@@ -514,6 +514,30 @@ var I18N = (function () {
     'лад / комбо': 'mode / combo',
     'Пробел — начать игру; в игре — новое комбо после 300 очков':
       'Space — start the game; in play — a new combo after 300 points',
+    // MIDI-знакомство: расшифровка обозначений и три аккорда до старта.
+    'Сначала — три аккорда': 'First, three chords',
+    'Сыграйте тонику, субдоминанту и доминанту в любой октаве. Экран объяснит цвета и значки, которые встретятся в игре.':
+      'Play the tonic, subdominant and dominant in any octave. This screen explains the colours and symbols you will see in the game.',
+    'Как читать подсказки': 'How to read the cues',
+    'Цвета ролей нот': 'Note role colours',
+    'Корень — золотой, тоны аккорда — зелёные, мягкая краска — янтарная, трение — розовое, ноты вне лада — прохладные. Знак ♯ или ♭ стоит рядом с нотой и не теряется.':
+      'The root is gold, chord tones are green, a soft colour is amber, tension is rose, and notes outside the key are cool blue. The ♯ or ♭ sign sits next to its note and stays visible.',
+    'Три аккорда для старта': 'Three chords to start',
+    'Если аккорд не тот, ничего не сломается: просто попробуйте снова.':
+      'A wrong chord breaks nothing: just try again.',
+    'Пропустить знакомство': 'Skip the introduction',
+    'Играть с компьютерной клавиатуры': 'Play on the computer keyboard',
+    'Начать': 'Start',
+    'сейчас': 'now',
+    '— взятый аккорд на карточке': '— the chord currently playing',
+    '— следующий ход': '— the suggested next move',
+    '— возврат в тонику': '— a return to the tonic',
+    'корень': 'root',
+    'Все три аккорда взяты — входим в симулятор…':
+      'All three chords are in — entering the simulator…',
+    'MIDI отключена': 'MIDI disconnected',
+    'MIDI отключена — подключите клавиатуру снова.':
+      'MIDI disconnected — reconnect the keyboard.',
     'Стрелки: лад и комбо': 'Arrows: mode and combo',
     '↑ — следующее комбо': '↑ — next combo',
     '← — мажор': '← — major',
@@ -608,6 +632,7 @@ var I18N = (function () {
     'Играйте трезвучие — приложение назовёт функцию':
       'Play a triad — the app will name its function',
     'Слышу:': 'Hearing:',
+    'Слышу: —': 'Hearing: —',
     'Плавно:': 'Smooth:',
     'тянет': 'pulls',
     'Правая рука': 'Right hand',

@@ -147,6 +147,7 @@ canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
   font-variant-numeric: tabular-nums; white-space: nowrap;
   transition: color 0.18s, background 0.18s, border-color 0.18s, box-shadow 0.18s;
 }
+.cs-cell .note-acc { font-size: 1.02em; font-weight: 900; }
 /* Вошёл в комбо — ячейка светлеет: маршрут виден ещё до первого аккорда. */
 .cs-cell.seen {
   color: #bfe9ff; background: rgba(107, 223, 255, 0.14);
@@ -291,6 +292,7 @@ canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
   color: #e2e8f8; line-height: 1;
 }
 .key-badge .t { font-weight: 700; font-size: 10.5px; color: #d0d7ee; }
+#noteRow .key-badge .note-acc { font-size: 1.08em; color: #eef3ff; }
 #chordPad { display: flex; justify-content: center; gap: 6px; }
 .chord-card {
   position: relative; width: 120px; height: 46px; flex: none;
@@ -308,19 +310,41 @@ canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
   font-size: 9px; font-weight: 800; letter-spacing: 0.7px; padding: 1px 4px;
   border-radius: 3px; color: #9aa4c2; background: rgba(255, 255, 255, 0.07);
 }
-.chord-card .cc-name { font-size: 10.5px; font-weight: 700; white-space: nowrap; letter-spacing: 0.1px; }
+/* Бейдж «сейчас» занимает место клавиши Q/W/E/R/F только у звучащей карточки:
+   так текущий аккорд виден словами, а не одним свечением рамки. */
+.chord-card .cc-now {
+  display: none; align-items: center; justify-content: center;
+  padding: 1px 4px; border-radius: 3px;
+  font-size: 8.5px; font-weight: 900; line-height: 1.1; letter-spacing: 0;
+  color: #10131d; background: #6bdfff; box-shadow: 0 0 8px rgba(107, 223, 255, 0.5);
+  white-space: nowrap;
+}
+.chord-card.now .cc-key { display: none; }
+.chord-card.now .cc-now { display: inline-flex; }
+.chord-card .cc-name {
+  font-size: 11px; font-weight: 800; white-space: nowrap; letter-spacing: 0.1px;
+  color: #eef3ff;
+}
 /* Ноты внутри названия — отдельные span: зелёный/золотой показывают, какие
-   из них устойчивы как бас под текущим аккордом, жёлтый — мягкая краска,
-   приглушённый — трение или нота вне лада. */
-.chord-card .cc-note { transition: color 0.12s, opacity 0.12s, text-shadow 0.12s; }
-.chord-card .cc-note.bn-root { color: #ffd166; text-shadow: 0 0 7px rgba(255, 209, 102, 0.42); }
-.chord-card .cc-note.bn-tone { color: #74cc3d; text-shadow: 0 0 6px rgba(116, 204, 61, 0.32); }
-.chord-card .cc-note.bn-color { color: #f0b45a; }
-.chord-card .cc-note.bn-clash { color: #8d7b86; opacity: 0.72; }
-.chord-card .cc-note.bn-outside { color: #76809c; opacity: 0.55; }
-.chord-card .cc-note.bn-live {
+   из них устойчивы как бас под текущим аккордом, янтарный — мягкая краска,
+   розовый — трение, прохладный — нота вне лада. Цвета светлее прежних:
+   на тёмной карточке серый текст и маленькие ♯/♭ терялись. */
+.cc-note { transition: color 0.12s, opacity 0.12s, text-shadow 0.12s; }
+.cc-note.bn-root { color: #ffd166; text-shadow: 0 0 7px rgba(255, 209, 102, 0.55); }
+.cc-note.bn-tone { color: #93e85e; text-shadow: 0 0 7px rgba(116, 204, 61, 0.46); }
+.cc-note.bn-color { color: #ffc266; text-shadow: 0 0 6px rgba(240, 180, 90, 0.38); }
+.cc-note.bn-clash { color: #f2a4b6; opacity: 0.96; text-shadow: 0 0 6px rgba(242, 164, 182, 0.36); }
+.cc-note.bn-outside { color: #b9c7ea; opacity: 0.94; text-shadow: 0 0 5px rgba(185, 199, 234, 0.24); }
+.cc-note.bn-live {
   text-decoration: underline; text-decoration-thickness: 1.5px;
-  text-underline-offset: 2px;
+  text-underline-offset: 2px; text-decoration-color: #ffffff;
+}
+/* Альтерация — отдельный, более крупный знак: на 10–11 px ♯ и ♭ почти
+   растворялись в соседних буквах. */
+.note-acc {
+  font-size: 1.12em; font-weight: 900; line-height: 0.8;
+  vertical-align: 0.02em; letter-spacing: 0;
+  text-shadow: 0 0 5px currentColor;
 }
 /* Нижняя полоска — корень карточки как бас: золотая у корня, зелёная у
    терции/квинты, янтарная у мягкой краски. Она не спорит с верхней полоской
@@ -343,6 +367,21 @@ canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
 .chord-card.next .cc-deg, .chord-card.next .cc-key { color: #6bdfff; }
 .chord-card.tonic.next { border-color: rgba(255, 209, 102, 0.75); box-shadow: inset 0 2px 0 #ffd166; }
 .chord-card.tonic.next .cc-deg, .chord-card.tonic.next .cc-key { color: #ffd166; }
+/* Звучащий сейчас аккорд: светлая рамка + голубой бейдж «сейчас». Это не
+   «следующий» и не «пройденный» шаг, поэтому слой живёт отдельно. */
+.chord-card.now {
+  border-color: #bfe9ff;
+  background: rgba(20, 46, 60, 0.9);
+  box-shadow: 0 0 17px rgba(107, 223, 255, 0.34), inset 0 2px 0 #6bdfff;
+}
+.chord-card.now .cc-deg { color: #d8f6ff; }
+.chord-card.tonic.now {
+  border-color: #ffe3a1;
+  background: rgba(54, 43, 18, 0.92);
+  box-shadow: 0 0 17px rgba(255, 209, 102, 0.34), inset 0 2px 0 #ffd166;
+}
+.chord-card.tonic.now .cc-now { background: #ffd166; box-shadow: 0 0 8px rgba(255, 209, 102, 0.55); }
+.chord-card.now.done::after { display: none; }
 /* Следующий аккорд — отдельный зелёный слой, который не отменяет голубую
    полоску шага комбо и золотую тонику: рамка остаётся видна в любом сочетании. */
 .chord-card.guide-next {

@@ -11,6 +11,18 @@ function escHtml(s) {
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
 }
+// Название ноты с отдельным span для альтерации: «соль♯» больше не теряет
+// знак на тёмной карточке, а ♯/♭ наследует цвет роли и получает свечение.
+// Функция принимает и русское имя из CSV, и готовую подпись из scaleNoteNames().
+function noteLabelHtml(name, capitalize) {
+  const labelled = noteLabel(name);
+  const raw = String(labelled == null ? '' : labelled);
+  const text = capitalize ? cap(raw) : raw;
+  const m = /^([\s\S]*?)([♯♭♮#bx]+)$/.exec(text);
+  if (!m) return escHtml(text);
+  const acc = m[2].replace(/x/g, '♯♯').replace(/#/g, '♯').replace(/b/g, '♭');
+  return escHtml(m[1]) + `<span class="note-acc">${escHtml(acc)}</span>`;
+}
 // Каждая нота — отдельный span: js/guide.js красит его по роли для баса,
 // не перестраивая карточку и не теряя pointer-события.
 function chordNotesHtml(h) {
@@ -19,8 +31,8 @@ function chordNotesHtml(h) {
   const pcs = Array.isArray(h.pcs) ? h.pcs : [];
   if (!names.length) return escHtml(h.name || '');
   return names.map((name, i) =>
-    `<span class="cc-note" data-pc="${pcs[i] == null ? '' : pcs[i]}">` +
-      `${escHtml(cap(noteLabel(name)))}</span>`
+    `<span class="cc-note notranslate" translate="no" data-pc="${pcs[i] == null ? '' : pcs[i]}">` +
+      `${noteLabelHtml(name, true)}</span>`
   ).join('-');
 }
 function chordPcsKey(h) {
@@ -97,6 +109,41 @@ function renderKeyMap(list) {
   }).join('');
 }
 
+// ===== «Сейчас» на карточках аккордов =====
+// Карточка показывает не только свой аккорд, но и тот, который реально звучит:
+// MIDI-трезвучие важнее последнего клика, а после отпускания маркер ещё немного
+// живёт, чтобы его успели заметить. Это наблюдатель: звук и счёт не меняются.
+let nowChordTimer = null;
+function currentSoundingChord() {
+  const pcs = state.heard && Array.isArray(state.heard.pcs) ? state.heard.pcs : [];
+  // Пока звучат новые MIDI-ноты, старый аккорд не должен висеть «текущим»:
+  // маркер появляется только когда распознано новое трезвучие.
+  if (pcs.length) return state.heard.triad || null;
+  const act = state.harmony.lastTriad;
+  if (!act || !Array.isArray(act.pcs) || !act.pcs.length) return null;
+  const age = performance.now() - (state.harmony.lastAt || 0);
+  return age <= (CFG.nowChordMs || 1200) ? act : null;
+}
+function paintNowChordCards() {
+  if (!chordCards.length) return;
+  if (nowChordTimer) { clearTimeout(nowChordTimer); nowChordTimer = null; }
+  const now = currentSoundingChord();
+  const key = now ? harmonyPcsKey(now) : '';
+  chordCards.forEach(card => {
+    const on = !!key && card.dataset.pcsKey === key;
+    card.classList.toggle('now', on);
+    if (on) card.setAttribute('aria-current', 'true');
+    else card.removeAttribute('aria-current');
+  });
+  // После отпускания lastTriad ещё «свежий» — ставим таймер, чтобы бейдж
+  // исчез сам, даже если игрок больше ничего не нажимает.
+  const lastAt = state.harmony.lastAt || 0;
+  if (lastAt) {
+    const left = (CFG.nowChordMs || 1200) - (performance.now() - lastAt);
+    if (left > 0) nowChordTimer = setTimeout(paintNowChordCards, left + 40);
+  }
+}
+
 function buildChordPad() {
   const pad = $('chordPad');
   const list = harmonicChords();
@@ -106,7 +153,7 @@ function buildChordPad() {
     return `<button class="chord-card${h.tonic ? ' tonic' : ''}" data-code="${h.code}" ` +
       `data-deg="${h.degree.toLowerCase()}" data-root-pc="${h.rootPc == null ? '' : h.rootPc}" ` +
       `data-pcs-key="${pcsKey}" data-base-title="${escHtml(title)}" title="${escHtml(title)}">` +
-      `<span class="cc-head"><span class="cc-deg">${h.degree}</span><span class="cc-key">${KEY_CAP[h.code]}</span></span>` +
+      `<span class="cc-head"><span class="cc-deg">${h.degree}</span><span class="cc-key">${KEY_CAP[h.code]}</span><span class="cc-now">сейчас</span></span>` +
       `<span class="cc-name">${chordNotesHtml(h)}</span>` +
     `</button>`;
   }).join('');
@@ -169,6 +216,7 @@ function paintChordPad() {
   });
   // Цвета нот и «следующий аккорд» живут на тех же карточках.
   if (typeof Guide !== 'undefined' && typeof Guide.paint === 'function') Guide.paint();
+  paintNowChordCards();
 }
 function flashTonicCard() {
   const card = chordCards.find(el => el.classList.contains('tonic'));
@@ -336,7 +384,8 @@ function updateNoteBadges() {
     const ballIdx = hand[i];
     const b = ballIdx == null ? null : balls[ballIdx];
     const degree = ballIdx == null || !palette[ballIdx] ? '' : palette[ballIdx].degree;
-    el.innerHTML = `<span class="k">${NOTE_CAP[code] || ''}</span><span class="t">${b ? b.name : '—'}</span>`;
+    el.innerHTML = `<span class="k">${NOTE_CAP[code] || ''}</span>` +
+      `<span class="t">${b ? noteLabelHtml(b.name) : '—'}</span>`;
     el.title = b
       ? `Правая рука: ${degree ? degree + ' · ' : ''}${b.name}${noteOctSuffix()}` +
         (anchor ? ' · окно от ' + anchor.degree : '')
@@ -420,8 +469,8 @@ function buildComboStrip() {
     const host = $(mode === 'major' ? 'csMajor' : 'csMinor');
     if (!host) return;
     host.innerHTML = ORDER[mode].map((id, i) => {
-      const label = cap(noteLabel(COMBOS[id].chords[0][0]));
-      return `<span class="cs-cell" data-mode="${mode}" data-idx="${i}">${label}</span>`;
+      const label = noteLabelHtml(COMBOS[id].chords[0][0], true);
+      return `<span class="cs-cell notranslate" translate="no" data-mode="${mode}" data-idx="${i}">${label}</span>`;
     }).join('');
   });
   comboCells = Array.from(strip.querySelectorAll('.cs-cell'));
@@ -523,6 +572,9 @@ function fillComboSelect() {
 // «Слышу» — что приложение слышит прямо сейчас: ноты, аккорд и функция.
 // Пока это честное отражение MIDI, а не догадка по нажатой клавише.
 function updateHeardChip() {
+  // «Сейчас» живёт на карточках, даже если отдельного чипа «Слышу» в разметке
+  // нет: MIDI note-on/off должен сразу снимать или переставлять этот маркер.
+  paintNowChordCards();
   const el = $('heardVal');
   if (!el) return;
   const pcs = state.heard.pcs || [];
@@ -533,9 +585,10 @@ function updateHeardChip() {
     el.textContent = 'Слышу: —';
   } else {
     const names = scaleNoteNames();
-    const list = pcs.slice(0, 4).map(pc => names[pc] || sharpLabel(pc)).join('-') +
+    const list = pcs.slice(0, 4).map(pc =>
+      noteLabelHtml(names[pc] || sharpLabel(pc), true)).join('-') +
       (pcs.length > 4 ? ' …' : '');
-    el.innerHTML = 'Слышу: <b>' + list + '</b>' +
+    el.innerHTML = 'Слышу: <b class="notranslate" translate="no">' + list + '</b>' +
       (t ? ' → <em>' + t.degree + '</em> · ' + t.hint : '');
   }
   // Зажатые MIDI-ноты могут изменить «ход, который продолжает фразу»:
