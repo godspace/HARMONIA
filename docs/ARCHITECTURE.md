@@ -22,7 +22,7 @@
                                                 │
                  transport ── composition ── ui-compose
                      └── groove (необязательный слой: барабаны; composition о нём не знает)
-                        game ── listen ── ui-hud ── recorder ── video ── audio-export ── research ── ui-panel ── ui-drawers ── input
+                        game ── listen ── ui-hud ── recorder ── video ── audio-export ── research ── guide ── ui-panel ── ui-drawers ── input
                           │        │          │
                         midi ──────┴── render ─┴── main
 ```
@@ -48,7 +48,8 @@
 | `video` | рендер записи в WebM | `startVideoExport(rec)`, `cancelVideoExport`, `videoExportStatus`, `videoSupported`, `videoFileName`, `videoDuration`, `videoSize`, `videoCaption`, `copyVideoCaption`, `videoLegacyWarning`, `videoMediaElapsed`, `videoStepVisual`, `videoMarkTonic`, `videoSyncVisual`, `videoFrameStep`, `paintVideoFrame` |
 | `audio-export` | сохранение записи в WAV | `startAudioExport(rec, {purpose, onDone})`, `cancelAudioExport`, `audioExportStatus` (`id`, `purpose`), `audioSupported`, `audioFileName`, `audioDuration`, `audioPcmToWav`, `#recAudio`/`#researchAskAudio`/`#audioExport` |
 | `suno` | мостик к Suno без API: английский промпт + WAV | `SUNO_CREATE_URL`, `sunoPrompt`, `sunoStart`, `sunoOpen`, `sunoCopyText`, `sunoPaint`, `sunoState`, кнопки `#recSuno`/`#researchAskSuno` |
-| `research` | оценки комбо и поведение (по умолчанию включены) | `Research` (`enable`, `disable`, `setAsk`, `status`, `exportData`, `exportVisitData`, `exportRecordingData`, `download`, `exportAskJson`, `exportSelectedJson`, `visitFileName`, `recordingJsonName`, `gateKey`, `linkRecording`, `askRecording`, `exportAskVideo`, `exportAskAudio`, `exportAskSuno`, `holdAsk`, `onChord/Note`, `enterCombo/leaveCombo`), `CFG.research`, кнопки `#researchAskJson`/`#recJson` |
+| `research` | оценки комбо и поведение (по умолчанию включены) | `Research` (`enable`, `disable`, `setAsk`, `status`, `exportData`, `exportVisitData`, `exportRecordingData`, `download`, `exportAskJson`, `exportSelectedJson`, `visitFileName`, `recordingJsonName`, `gateKey`, `linkRecording`, `askRecording`, `exportAskVideo`, `exportAskAudio`, `exportAskSuno`, `holdAsk`, `onChord/Note`, `enterCombo/leaveCombo`, `logHint`, `referenceProfile`, `dataVersion`), `CFG.research`, кнопки `#researchAskJson`/`#recJson` |
+| `guide` | компас «куда дальше»: 2–3 хода, объяснимые без LLM | `Guide` (`request`, `markStuck`, `pick`, `onChord`, `paint`, `state`), `#guideLine`, `#guideMoves`, `#guideHintBtn`, `#guideStuck`, `CFG.guide` |
 | `ui-panel` | настройки | `bindRange`, `bindSelect`, `bindToggle`, `syncAll`, `togglePedal` |
 | `ui-drawers` | выдвижные панели | `drawers`, `drawerOpen`, `drawerIntro`, `setDrawer`, `toggleDrawer`, `setDrawerIntro`, `initDrawers` |
 | `ui-compose` | HUD/панель формы и результат | `buildFormHud`, `updateFormHUD`, `resetFormHud`, `setFormEnabled`, `showFormResult`, `initCompose` |
@@ -75,6 +76,7 @@ INPUT.noteIndex(code) ──► pressCode ──► handNoteBalls() ──► tr
         │
         ├── recordChord / recordNote → recordEvent (ручная дорожка + авто-дорожка станции; replay не пишется)
         ├── Research.onChord / onNote (только при включённом сборе; replay не пишется)
+        ├── Guide.onChord (сравнивает сыгранный аккорд с показанными подсказками)
         ├── Composition.onChord / onNote (только form.enabled + form.running + phase 'playing')
         ▼
 state (visited, chordIndex, harmony, heard, explored, adaptive, score, energy, replay, form)
@@ -416,6 +418,27 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
   хроматику вне лада. Каждое событие получает `source: 'keys' | 'midi'`:
   это различает экранную клавиатуру/пэд и распознанное пианино, не меняя звук и
   счёт. Прослушивание записи (`state.replay`) не пишется, как и у recorder.
+- **P0a: время, runs, отпечаток.** `timing` хранит `firstEventAt`, `lastEventAt`,
+  `lastNoteAt`, `activePlayMs` (только промежутки ≤ `CFG.research.activeGapMs`,
+  то есть без долгих остановок), `tailMs`, `playMs`, `recordingDurationMs`,
+  `recordingCoverage`, `recordingTruncated`, `notesPerSec` и
+  `chordChangesPerSec`. `counts` получает `chordChanges` и `longestChordRun`
+  (мс), а `runs[]` — агрегат каждого непрерывного аккорда: `durationMs`, `notes`,
+  `chordHits`, `noteDensity`, `scoreDelta`, `endedBy`. Те же поля есть у
+  chord-события (`runId`, `runIndex`, `chordChanged`, `sinceChangeMs`,
+  `runNotes`, `runChordHits`, `runNoteDensity`, `runScoreDelta`, `runEndedBy`).
+  `fingerprint` (гистограммы pitch class/октав, velocity/pan, `chordSeq` до 64
+  ступеней и переходы) считается **до** проверки `MAX_EVENTS`, поэтому
+  `overflow: true` не лишает визит компактного поведения. `counts.notes/chords`
+  теперь честные музыкальные итоги, а `events[]` может быть усечён лимитом.
+- **Подсказки и эталоны.** `Research.logHint(type, data)` пишет `hintRequested`,
+  `stuckMarked`, `hintShown`, `hintPicked`, `hintIgnored` в `hints`
+  (`requested/stuck/shown/picked/ignored`) и отдельным событием `type: 'hint'`.
+  Компасом управляет `Guide`, но данные остаются наблюдательскими: без
+  `enabled` хуки выходят сразу, звук и счёт не меняются. `referenceProfile()`
+  строит профиль только из оценок 4–5 и явных эталонов; при одном эталоне в
+  другой тональности это `hypothesis`, при трёх и более — перенос ступеней,
+  абсолютные pitch class используются только в той же тональности.
 - **Карточка.** Открывается **только** в `advanceCombo()` после нового рендера
   комбо и только при `enabled && ask`. Ручные переходы закрывают сегмент молча.
   `gateKey()` в `input.js` перехватывает `J I O P [` (5…1), `Space`/`Esc`
@@ -460,13 +483,50 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
 - **Разбор.** `tools/research.py` (stdlib) склеивает выгрузки, убирает дубли по
   `id`, считает отклик/среднюю/распределение, станции и комбо с `n ≥ --min-n`,
   время в комбо у высоких/низких оценок, причины выхода, темы комментариев и
-  раздел «Сюжет станции» (доля «дома», фазы, переходы).
+  раздел «Сюжет станции» (доля «дома», фазы, переходы). Поведение делится на
+  `flow`, `productive_struggle`, `stuck`, `local_stuck`, `short` и `unrated`:
+  долгий run сам по себе не считается затыком, а локальный затык внутри
+  визита 4–5 не смешивается с общим застреванием. Отдельные разделы —
+  эталонные тональности/ступени/переходы и события компаса.
   `--md` печатает отчёт, `--csv` пишет строки по посещениям (UTF-8 с BOM),
-  `--self-test` проверяет расчёт на синтетических 12 визитах.
+  `--self-test` проверяет расчёт на синтетических 12 визитах, включая
+  пять flow, два local_stuck, два stuck и один продуктивный поиск.
 - **Инварианты.** Без `enabled` все хуки выходят сразу; `Research` никогда не
   зовёт `addScore`, не меняет `state.harmony` и не вмешивается в `playable()`.
   Поэтому исследование можно включать и выключать посреди игры: звук и счёт от
   этого не зависят, меняется только наличие карточки.
+
+## Компас «куда дальше»: P0b
+
+`js/guide.js` — отдельный слой поверх `state.harmony.lastTriad`, а не генератор
+мелодии. Под аккордами живёт свёрнутая строка `#guideLine`; `H` (или кнопка
+**Не знаю, что дальше**) раскрывает 2–3 кнопки `#guideMoves`. Клик по кнопке
+играет тот же аккорд, что и карточка/пэд (`playHarmonic`, иначе
+`playChordAudio` + `chordEvent`); без клика компас ничего не озвучивает.
+
+- **Слоты.** `Держать тепло` ищет общие тоны, плагальность и медианту в
+  «тёплых» ступенях (`I ii iii IV vi` в мажоре, `i III iv VI` в миноре) и не
+  предлагает V→I как «правильный» ход. `Развить` ценит `ii/IV→V`, `V→I`,
+  вводный тон и функцию; `Контраст` — медианту, ход на терцию и borrow/chroma
+  (`iv`, `♭VII` в мажоре; `IV`, `♭II` в миноре). Все ходы уникальны по
+  `pcsKey`, текущий аккорд исключается.
+- **Сигналы.** `harmonyTransitionBeauty().raw`, `harmonyCommonTones`,
+  `harmonyRootStep`, `harmonyFunction`, недавние повторы из `state.harmony.moves`,
+  зажатые MIDI-ноты (`Heard.heldPcs()`), `Research.referenceProfile()` и — в
+  пьесе — `Composition.targetForBar()`. Цель такта имеет приоритет: она
+  закрепляется за слотом `Развить`, а остальные слоты предлагают альтернативы.
+- **Эталонный профиль.** `Research.referenceProfile()` возвращает
+  `transfer: 'same-key' | 'degree' | 'hypothesis'`, нормализованные `degrees`,
+  `transitions` и (только для той же тональности) `pitchClasses`. При одном
+  эталоне в другой тональности это `hypothesis` и подпись «гипотеза · E major»;
+  после `CFG.guide.transferRefs = 3` ступени переносятся между тональностями.
+  `Guide` кэширует профиль по `Research.dataVersion()`.
+- **Наблюдения.** Requests/picks/ignored пишутся через `Research.logHint` в
+  `hints` и события `hint`; `hintShown` фиксирует, что именно было показано.
+  В `tools/research.py` это раздел **Компас «куда дальше»** и колонки
+  `hints_requested/picked/ignored`. Smoke-шаг `guide-compass` проверяет, что
+  Hold не равен V, H пишет события, клик даёт `hintPicked`, а цель такта ii
+  в пьесе действительно ведёт компас.
 
 ## Звук
 

@@ -182,8 +182,11 @@ $post = @'
     }
     if ($('scalePrompt')) throw new Error('old scale prompt modal is still in the DOM');
     if (!$('spaceNext')) throw new Error('Space transition button is missing');
-    if ($('chordPad').nextElementSibling !== $('spaceNext')) {
-      throw new Error('Space button is not directly under the chord chips');
+    if ($('chordPad').nextElementSibling !== $('guideLine')) {
+      throw new Error('the guide line is not directly under the chord chips');
+    }
+    if ($('guideLine').nextElementSibling !== $('spaceNext')) {
+      throw new Error('Space button is not directly under the guide line');
     }
   });
 
@@ -1985,6 +1988,81 @@ $post = @'
       H.stationPlotReset();
       H.loadCombo(0, false);
     }
+  });
+
+  step('guide-compass', function () {
+    // Компас: 2–3 объяснимых хода, «Держать тепло» не сводится к V→I,
+    // H пишет hintRequested/hintShown, клик — hintPicked, а цель такта
+    // в пьесе имеет приоритет.
+    var H = HARMONIA, G = H.Guide, R = H.research;
+    if (!G) throw new Error('Guide API is missing');
+    if (!R) throw new Error('research API is missing');
+    R.enable();
+    R.clear();
+    if (H.state.form.enabled) H.setFormEnabled(false);
+    if (!H.state.running) H.beginFromOverlay();
+    if (H.state.paused) $('mResume').click();
+    H.setMode('major');
+    H.loadCombo(0, false);
+    var tonic = H.diatonicPalette()[0];
+    H.chordEvent(tonic, 0.8, 'keys');
+    if (!G.request()) throw new Error('H did not request the compass');
+    var st = G.state();
+    if (!st.open) throw new Error('the compass did not open');
+    if (st.moves.length < 2 || st.moves.length > 3) {
+      throw new Error('the compass must show 2–3 moves, got ' + st.moves.length);
+    }
+    var hold = st.moves.filter(function (m) { return m.role === 'hold'; })[0];
+    if (!hold) throw new Error('the compass has no Hold move');
+    if (hold.degree === 'V') throw new Error('Hold must not default to V→I');
+    if (['IV', 'ii', 'vi', 'iii'].indexOf(hold.degree) === -1) {
+      throw new Error('Hold did not keep the warm field: ' + hold.degree);
+    }
+    // События подсказок живут в визите; закрываем его, чтобы exportData видел данные.
+    R.leaveCombo('guide');
+    var data = R.exportData();
+    var seg = data.segments[data.segments.length - 1];
+    if (!seg || !seg.hints || seg.hints.requested < 1 || seg.hints.shown < 1) {
+      throw new Error('hint events were not recorded: ' + JSON.stringify(seg && seg.hints));
+    }
+    // Клик по подсказке играет тот же аккорд и пишет hintPicked.
+    H.loadCombo(0, false);
+    H.chordEvent(tonic, 0.8, 'keys');
+    G.request();
+    st = G.state();
+    var picked = st.moves[0];
+    if (!picked) throw new Error('the compass lost its moves');
+    if (!G.pick(0)) throw new Error('clicking a hint did not play the chord');
+    R.leaveCombo('guide');
+    data = R.exportData();
+    seg = data.segments[data.segments.length - 1];
+    if (!seg || !seg.hints || seg.hints.picked < 1) {
+      throw new Error('hintPicked was not recorded');
+    }
+    // В пьесе цель такта важнее свободного ранжирования.
+    H.loadCombo(0, false);
+    H.chordEvent(tonic, 0.8, 'keys');
+    var saved = {
+      enabled: H.state.form.enabled, running: H.state.form.running,
+      phase: H.state.form.phase, bar: H.state.form.bar
+    };
+    H.state.form.enabled = true;
+    H.state.form.running = true;
+    H.state.form.phase = 'playing';
+    H.state.form.bar = 8;
+    H.updateHUD();
+    G.request();
+    var targetMove = G.state().moves.filter(function (m) { return m.target; })[0];
+    if (!targetMove || targetMove.degree !== 'ii') {
+      throw new Error('the piece target did not lead the compass: ' +
+        (targetMove && targetMove.degree));
+    }
+    H.state.form.enabled = saved.enabled;
+    H.state.form.running = saved.running;
+    H.state.form.phase = saved.phase;
+    H.state.form.bar = saved.bar;
+    H.updateHUD();
+    R.clear();
   });
 
   step('research-rating', function () {

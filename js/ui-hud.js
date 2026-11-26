@@ -319,6 +319,8 @@ function updateHUD() {
   $('comboNext').classList.toggle('pulse', cycleDone && state.running && !state.paused);
   $('pNextCombo').classList.toggle('pulse', cycleDone && state.running && !state.paused);
   paintChordPad();
+  // Компас живёт под аккордами и пересчитывается от того же состояния.
+  if (typeof Guide !== 'undefined' && typeof Guide.paint === 'function') Guide.paint();
   paintWheel();
   paintComboStrip();
   if (typeof updateFormHUD === 'function') updateFormHUD();
@@ -459,12 +461,18 @@ function updateHeardChip() {
   const t = state.heard.triad;
   el.classList.toggle('live', pcs.length > 0);
   el.classList.toggle('pedal', !!state.heard.sustain);
-  if (!pcs.length) { el.textContent = 'Слышу: —'; return; }
-  const names = scaleNoteNames();
-  const list = pcs.slice(0, 4).map(pc => names[pc] || sharpLabel(pc)).join('-') +
-    (pcs.length > 4 ? ' …' : '');
-  el.innerHTML = 'Слышу: <b>' + list + '</b>' +
-    (t ? ' → <em>' + t.degree + '</em> · ' + t.hint : '');
+  if (!pcs.length) {
+    el.textContent = 'Слышу: —';
+  } else {
+    const names = scaleNoteNames();
+    const list = pcs.slice(0, 4).map(pc => names[pc] || sharpLabel(pc)).join('-') +
+      (pcs.length > 4 ? ' …' : '');
+    el.innerHTML = 'Слышу: <b>' + list + '</b>' +
+      (t ? ' → <em>' + t.degree + '</em> · ' + t.hint : '');
+  }
+  // Зажатые MIDI-ноты могут изменить «ход, который продолжает фразу»:
+  // компас перерисовывается, даже если аккорд не менялся.
+  if (typeof Guide !== 'undefined' && typeof Guide.paint === 'function') Guide.paint();
 }
 // Палитра лада: семь ступеней и счётчик охвата. Сыгранная ступень гаснет как
 // «изученная» — это и есть свободная импровизация без чек-листа комбо.

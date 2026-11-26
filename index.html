@@ -225,6 +225,21 @@
       <div id="keyZone">
         <div id="noteRow" role="group" aria-label="Ноты правой руки — ступени лада"></div>
         <div id="chordPad" role="group" aria-label="Гармоничные аккорды комбо"></div>
+        <!-- Компас «куда дальше» (js/guide.js): 2–3 хода, а не автопилот.
+             Свёрнут в одну строку; H или «Не знаю, что дальше» раскрывают его.
+             Кнопки не играют сами: аккорд звучит только после клика. -->
+        <div id="guideLine" class="guide-line" aria-live="polite">
+          <div class="guide-head">
+            <button id="guideHintBtn" class="guide-kicker" type="button" data-guide-act="hint"
+                    aria-expanded="false" title="H — показать 2–3 продолжения текущего аккорда">
+              <kbd>H</kbd><span>Куда дальше</span>
+            </button>
+            <span id="guideRef" class="guide-ref" hidden></span>
+            <button id="guideStuck" class="guide-stuck" type="button" data-guide-act="stuck"
+                    title="Пометить, что не знаете, куда дальше, и открыть компас">Не знаю, что дальше</button>
+          </div>
+          <div id="guideMoves" class="guide-moves"></div>
+        </div>
         <button id="spaceNext" type="button" disabled aria-label="Пробел — новое комбо после 300 очков">
           <span class="sn-key">Space</span>
           <span class="sn-label" id="spaceNextText">новое комбо</span>
@@ -497,7 +512,7 @@
 
 <div id="status-row">
   <div id="midi-status"><span class="dot"></span><span id="midiText">Web MIDI: проверка…</span></div>
-  <div class="hints"><kbd>Q</kbd> <kbd>W</kbd> <kbd>E</kbd> <kbd>R</kbd> <kbd>F</kbd> = аккорды · <span id="noteHints"><kbd>J</kbd> <kbd>I</kbd> <kbd>O</kbd> <kbd>P</kbd> <kbd>[</kbd></span> = ноты · <kbd>−</kbd><kbd>=</kbd> = октава · <kbd>←</kbd><kbd>→</kbd> = лад · <kbd>↑</kbd><kbd>↓</kbd> = комбо · <kbd>Backspace</kbd> = комбо · <kbd>Enter</kbd> = барабаны · <kbd>Space</kbd> = новое комбо после 300 · <kbd>1</kbd>–<kbd>3</kbd> = визуализация · <kbd>Esc</kbd> = пауза · MIDI: трезвучие = аккорд</div>
+  <div class="hints"><kbd>Q</kbd> <kbd>W</kbd> <kbd>E</kbd> <kbd>R</kbd> <kbd>F</kbd> = аккорды · <span id="noteHints"><kbd>J</kbd> <kbd>I</kbd> <kbd>O</kbd> <kbd>P</kbd> <kbd>[</kbd></span> = ноты · <kbd>−</kbd><kbd>=</kbd> = октава · <kbd>←</kbd><kbd>→</kbd> = лад · <kbd>↑</kbd><kbd>↓</kbd> = комбо · <kbd>Backspace</kbd> = комбо · <kbd>Enter</kbd> = барабаны · <kbd>Space</kbd> = новое комбо после 300 · <kbd>H</kbd> = куда дальше · <kbd>1</kbd>–<kbd>3</kbd> = визуализация · <kbd>Esc</kbd> = пауза · MIDI: трезвучие = аккорд</div>
 </div>
 
   <!-- Стартовый экран: проба пальцев. Текста ровно две строки — название и
@@ -617,6 +632,7 @@
   <script src="js/audio-export.js"></script>
   <script src="js/suno.js"></script>
   <script src="js/research.js"></script>
+  <script src="js/guide.js"></script>
   <script src="js/ui-panel.js"></script>
   <script src="js/ui-drawers.js"></script>
   <script src="js/ui-compose.js"></script>

@@ -38,15 +38,31 @@ var Research = (function () {
   const MAX_SEGMENTS = CFG_R.maxSegments || 400;
   const MAX_EVENTS = CFG_R.maxEvents || 4000;
   const MAX_BYTES = CFG_R.maxBytes || 3500000;
-  // Клавиши оценки: J — «отлично», [ — «плохо». Это те же игровые клавиши,
+  // Пауза внутри игры, после которой время перестаёт считаться «активным».
+  // playMs — весь визит от первой ноты, activePlayMs — только те промежутки,
+  // где игрок действительно играл: долгие остановки не раздувают плотность.
+  const ACTIVE_GAP_MS = CFG_R.activeGapMs || 5000;
+  // Сколько эталонных визитов нужно, чтобы переносить профиль на другие
+  // тональности по ступеням (до этого — только та же тональность/гипотеза).
+  const REF_TRANSFER_REFS = (typeof CFG !== 'undefined' && CFG.guide &&
+    CFG.guide.transferRefs) || 3;
+  // Клавиши оценки: J — «отлично», [ — «плохо». Это же игровые клавиши,
   // поэтому карточка перехватывает их только пока открыта.
   const RATE_KEYS = { KeyJ: 5, KeyI: 4, KeyO: 3, KeyP: 2, BracketLeft: 1 };
+  // Слова, которыми игрок сам называет эталонное звучание. 5/5 без слов
+  // остаётся высокой оценкой, но не получает флаг reference: «люблю» — это
+  // не то же самое, что «неплохо».
+  const REFERENCE_WORDS = /(люб|нрав|тёпл|тепл|мягк|красив|обним|любим|love|warm|beautiful|cozy|moved)/i;
 
   let settings = { enabled: true, ask: true, version: SETTINGS_VERSION };
   let segments = [];
   let seg = null;            // открытое посещение
   let enterPerf = 0;         // performance.now() входа: для dwell/play
   let playFromPerf = 0;      // performance.now() первого события
+  let lastMusicPerf = 0;     // последняя нота/аккорд: activePlayMs и tailMs
+  let runState = null;       // текущий run одного аккорда
+  let fingerChordDegree = ''; // предыдущая ступень для fingerprint-переходов
+  let dataVersion = 0;       // меняется при сохранении: кэш профиля у Guide
   let pendingExit = '';      // причина следующего выхода (space/next/pause…)
   let lastClosed = null;     // последнее закрытое посещение — для карточки
   let session = null;        // общая метка сессии: группировка посещений
@@ -114,6 +130,7 @@ var Research = (function () {
   // (если и это не помогло) массив очищается — лучше потерять данные, чем
   // оставить игрока без звука из-за исключения в обработчике клавиши.
   function saveSegments() {
+    dataVersion += 1;
     while (segments.length > MAX_SEGMENTS) segments.shift();
     let json = JSON.stringify(segments);
     let guard = 0;
@@ -163,7 +180,8 @@ var Research = (function () {
       skipped: t.skipped,
       events: t.events,
       open: !!seg,
-      waiting: !!askSeg
+      waiting: !!askSeg,
+      dataVersion
     };
   }
 
@@ -245,6 +263,10 @@ var Research = (function () {
     // переходе и «Очистить» выглядело бы частичным.
     seg = null;
     playFromPerf = 0;
+    lastMusicPerf = 0;
+    runState = null;
+    fingerChordDegree = '';
+    dataVersion += 1;
     pendingExit = '';
     closeAsk(true);
     try { localStorage.removeItem(RES_KEY); } catch (e) { /* приватный режим */ }
@@ -343,6 +365,168 @@ var Research = (function () {
     p.chords = chords;
     p.homeShare = chords ? Math.round(((p.phases.home || 0) / chords) * 1000) / 1000 : 0;
   }
+  // ===== P0a: телеметрия визита =====
+  // Всё, что ниже, считается до проверки лимита событий. Поэтому даже визит
+  // с overflow:true (4000 событий) сохраняет честные агрегаты: плотность,
+  // длиннейший аккордовый run, гистограмму высот и последовательность ступеней.
+  function newTiming() {
+    return {
+      firstEventAt: 0, lastEventAt: 0, lastNoteAt: null,
+      activePlayMs: 0, tailMs: 0, playMs: 0,
+      recordingDurationMs: null, recordingCoverage: null,
+      recordingTruncated: false,
+      notesPerSec: 0, chordChangesPerSec: 0
+    };
+  }
+  function newFingerprint() {
+    return {
+      notePitchClasses: new Array(12).fill(0),
+      chordPitchClasses: new Array(12).fill(0),
+      pitchClasses: new Array(12).fill(0),
+      octaves: {},
+      velSum: 0, velCount: 0, panSum: 0, panCount: 0,
+      meanVelocity: 0, meanPan: 0,
+      chordSeq: [], transitions: {},
+      uniquePcs: 0, uniqueChords: 0
+    };
+  }
+  function newHints() {
+    return { requested: 0, stuck: 0, shown: 0, picked: 0, ignored: 0 };
+  }
+  function roundMs(value) { return Math.max(0, Math.round(Number(value) || 0)); }
+  function round2(value) { return Math.round((Number(value) || 0) * 100) / 100; }
+  function round3(value) { return Math.round((Number(value) || 0) * 1000) / 1000; }
+  // Время музыки. activePlayMs растёт только на коротких промежутках: пауза
+  // «отойду на минуту» не делает визит плотнее, а tailMs показывает, сколько
+  // игрок молчал после последней ноты до выхода из комбо.
+  function trackMusicTime(now, isNote) {
+    if (!seg) return;
+    const timing = seg.timing;
+    const t = roundMs(now - enterPerf);
+    if (!timing.firstEventAt) timing.firstEventAt = t;
+    if (lastMusicPerf) {
+      const gap = Math.max(0, now - lastMusicPerf);
+      if (gap <= ACTIVE_GAP_MS) timing.activePlayMs += gap;
+    }
+    lastMusicPerf = now;
+    timing.lastEventAt = t;
+    if (isNote) timing.lastNoteAt = t;
+  }
+  function fingerprintNote(midi, vel, pan) {
+    if (!seg) return;
+    const f = seg.fingerprint;
+    const m = Math.max(0, Math.min(127, Math.round(Number(midi) || 0)));
+    const pc = ((m % 12) + 12) % 12;
+    f.notePitchClasses[pc] += 1;
+    f.pitchClasses[pc] += 1;
+    const oct = Math.floor(m / 12) - 1;
+    f.octaves[oct] = (f.octaves[oct] || 0) + 1;
+    const v = Number(vel);
+    const p = Number(pan);
+    if (Number.isFinite(v)) { f.velSum += clamp(v, 0, 1); f.velCount += 1; }
+    if (Number.isFinite(p)) { f.panSum += clamp(p, -1, 1); f.panCount += 1; }
+  }
+  function fingerprintChord(h) {
+    if (!seg || !h) return;
+    const f = seg.fingerprint;
+    (h.pcs || []).forEach(raw => {
+      const pc = ((raw % 12) + 12) % 12;
+      f.chordPitchClasses[pc] += 1;
+      f.pitchClasses[pc] += 1;
+    });
+    const label = h.degree || h.name || '?';
+    if (fingerChordDegree) {
+      const key = fingerChordDegree + '>' + label;
+      f.transitions[key] = (f.transitions[key] || 0) + 1;
+    }
+    fingerChordDegree = label;
+    if (f.chordSeq.length < 64) f.chordSeq.push(label);
+  }
+  function chordRunKey(h) {
+    return (h.pcs || []).slice().sort((a, b) => a - b).join(',');
+  }
+  function startChordRun(now, h, pcsKey) {
+    runState = {
+      id: (seg.runs.length || 0) + 1,
+      startedPerf: now,
+      startScore: state.score,
+      pcsKey,
+      degree: h.degree || '',
+      name: h.name || '',
+      chordHits: 1,
+      notes: 0,
+      lastEvent: null
+    };
+  }
+  // Закрыть текущий run: агрегат живёт в seg.runs, а последнее событие run
+  // получает runEndedBy. Так по JSON видно не только «был длинный run», но и
+  // чем он закончился — сменой аккорда, паузой, переходом или выходом.
+  function finishChordRun(now, endedBy) {
+    if (!seg || !runState) return null;
+    const run = runState;
+    const durationMs = roundMs(now - run.startedPerf);
+    const density = durationMs > 0 ? round2(run.notes / (durationMs / 1000)) : 0;
+    const item = {
+      runId: run.id,
+      runIndex: (seg.runs.length || 0) + 1,
+      degree: run.degree,
+      name: run.name,
+      pcsKey: run.pcsKey,
+      startT: roundMs(run.startedPerf - enterPerf),
+      durationMs,
+      notes: run.notes,
+      chordHits: run.chordHits,
+      noteDensity: density,
+      scoreDelta: Math.round(state.score - run.startScore),
+      endedBy: endedBy || ''
+    };
+    if (run.lastEvent) run.lastEvent.runEndedBy = item.endedBy;
+    seg.runs.push(item);
+    if (durationMs > (seg.counts.longestChordRun || 0)) {
+      seg.counts.longestChordRun = durationMs;
+    }
+    runState = null;
+    return item;
+  }
+  // Итоговое время и сжатый отпечаток. Отпечаток переживает overflow: он
+  // считается на лету, а не восстанавливается из усечённого events[].
+  function finishTiming(current) {
+    const timing = current.timing;
+    timing.playMs = Math.max(0, Math.round(current.playMs || 0));
+    timing.activePlayMs = roundMs(timing.activePlayMs);
+    timing.tailMs = lastMusicPerf ? roundMs(performance.now() - lastMusicPerf) : 0;
+    const activeSec = Math.max(0.001, timing.activePlayMs / 1000);
+    timing.notesPerSec = round2((current.counts.notes || 0) / activeSec);
+    timing.chordChangesPerSec = round2((current.counts.chordChanges || 0) / activeSec);
+    const f = current.fingerprint;
+    f.meanVelocity = f.velCount ? round2(f.velSum / f.velCount) : 0;
+    f.meanPan = f.panCount ? round2(f.panSum / f.panCount) : 0;
+    f.uniquePcs = f.pitchClasses.filter(n => n > 0).length;
+    f.uniqueChords = new Set(f.chordSeq || []).size;
+    const rec = current.recordingId && typeof recordingById === 'function'
+      ? recordingById(current.recordingId) : null;
+    if (rec) {
+      timing.recordingDurationMs = roundMs(rec.duration);
+      const events = Array.isArray(rec.events) ? rec.events : [];
+      let first = -1, last = 0;
+      events.forEach(ev => {
+        const t = Math.max(0, Number(ev && ev.t) || 0);
+        if (first < 0 || t < first) first = t;
+        if (t > last) last = t;
+      });
+      const span = first >= 0 ? last - first : 0;
+      timing.recordingCoverage = timing.playMs > 0
+        ? round3(clamp(span / timing.playMs, 0, 1)) : 0;
+      const maxEvents = typeof REC_MAX_EVENTS !== 'undefined' ? REC_MAX_EVENTS : 6000;
+      const maxMs = typeof REC_MAX_MS !== 'undefined' ? REC_MAX_MS : 180000;
+      timing.recordingTruncated = events.length >= maxEvents ||
+        timing.recordingDurationMs >= maxMs;
+    }
+  }
+  function moodReference(score, comment) {
+    return score === 5 && REFERENCE_WORDS.test(String(comment || ''));
+  }
+
   // Вход в комбо. Если сегмент уже открыт (прямой loadCombo), он сначала
   // закрывается: данные не должны теряться из-за обходного пути.
   function enterCombo() {
@@ -383,10 +567,17 @@ var Research = (function () {
       // именно сыгранное комбо, даже если в панели выбрана другая запись.
       recordingId: '',
       events: [],
-      counts: { notes: 0, chords: 0 },
+      counts: { notes: 0, chords: 0, chordChanges: 0, longestChordRun: 0 },
+      runs: [],
+      timing: newTiming(),
+      fingerprint: newFingerprint(),
+      hints: newHints(),
       overflow: false
     };
     enterPerf = performance.now();
+    lastMusicPerf = 0;
+    runState = null;
+    fingerChordDegree = '';
     seg.plot = initialPlotLog(enterPerf);
     // Если исследование включили посреди визита, авто-дорожка уже идёт:
     // подхватываем её id из recorder.js.
@@ -410,11 +601,17 @@ var Research = (function () {
   function leaveCombo(via, keepAsk) {
     if (!keepAsk) closeAsk(true);
     const current = seg;
-    seg = null;
     const reason = via || pendingExit || 'load';
     pendingExit = '';
     lastClosed = null;
-    if (!current || !current.events.length) return null;
+    if (!current || !current.events.length) {
+      seg = null;
+      playFromPerf = 0;
+      lastMusicPerf = 0;
+      runState = null;
+      fingerChordDegree = '';
+      return null;
+    }
     const leftPerf = performance.now();
     current.leftAt = Date.now();
     current.dwellMs = Math.max(0, Math.round(leftPerf - enterPerf));
@@ -423,11 +620,18 @@ var Research = (function () {
     current.score = state.score;
     current.exit = { via: reason };
     current.rating = null;
+    // Run и время считаются до обнуления seg: им нужны агрегаты и lastMusicPerf.
+    finishChordRun(leftPerf, reason);
+    finishTiming(current);
     finishPlotLog(current, leftPerf);
+    seg = null;
     segments.push(current);
     saveSegments();
     lastClosed = current;
     playFromPerf = 0;
+    lastMusicPerf = 0;
+    runState = null;
+    fingerChordDegree = '';
     paint();
     return current;
   }
@@ -453,8 +657,23 @@ var Research = (function () {
     const fromPhase = plotState.lastPhase || '';
     const phase = plotState.phase || 'home';
     trackPlotChord(now, fromPhase, phase);
+    trackMusicTime(now, false);
+    fingerprintChord(h);
     const style = typeof stationPlotStyle === 'function' ? stationPlotStyle() : null;
-    if (recordEvent({
+    const pcsKey = chordRunKey(h);
+    const changed = !runState || runState.pcsKey !== pcsKey;
+    if (changed) {
+      if (runState) finishChordRun(now, 'change');
+      // Первый аккорд — не смена: chordChanges считает именно переходы.
+      if ((seg.counts.chords || 0) > 0) seg.counts.chordChanges += 1;
+      startChordRun(now, h, pcsKey);
+    } else {
+      runState.chordHits += 1;
+    }
+    const sinceChangeMs = roundMs(now - runState.startedPerf);
+    const runDensity = sinceChangeMs > 0
+      ? round2(runState.notes / (sinceChangeMs / 1000)) : 0;
+    const event = {
       type: 'chord',
       degree: h.degree || '',
       name: h.name || '',
@@ -473,12 +692,31 @@ var Research = (function () {
       motif: style && style.motif ? style.motif : '',
       window: P.smartHand && state.adaptive && state.adaptive.window
         ? state.adaptive.window.slice() : [],
-      vel: vel == null ? 1 : Math.round(clamp(vel, 0.05, 1) * 100) / 100
-    })) seg.counts.chords += 1;
+      vel: vel == null ? 1 : Math.round(clamp(vel, 0.05, 1) * 100) / 100,
+      // Run одного аккорда: по нему анализ отличает «долго держу тепло» от
+      // «застрял на одном аккорде». Поля пишутся даже при overflow.
+      runId: runState.id,
+      runIndex: runState.chordHits,
+      chordChanged: changed,
+      sinceChangeMs,
+      runNotes: runState.notes,
+      runChordHits: runState.chordHits,
+      runNoteDensity: runDensity,
+      runScoreDelta: Math.round(state.score - runState.startScore),
+      runEndedBy: ''
+    };
+    // counts — честные музыкальные итоги, а events[] может быть усечён лимитом.
+    seg.counts.chords += 1;
+    if (recordEvent(event)) runState.lastEvent = event;
   }
   function onNote(midi, vel, pan, withChord) {
     if (!settings.enabled || !seg || midi == null) return;
-    if (recordEvent({
+    const now = performance.now();
+    trackMusicTime(now, true);
+    if (runState) runState.notes += 1;
+    fingerprintNote(midi, vel, pan);
+    seg.counts.notes += 1;
+    recordEvent({
       type: 'note',
       midi: Math.round(midi),
       vel: vel == null ? 0.8 : Math.round(clamp(vel, 0.05, 1) * 100) / 100,
@@ -488,7 +726,156 @@ var Research = (function () {
       // на пианино. triggerBall с withChord=true — экранная клавиатура.
       source: withChord === false ? 'midi' : 'keys',
       withChord: withChord !== false
-    })) seg.counts.notes += 1;
+    });
+  }
+
+  // ===== Компас: события подсказок =====
+  // Подсказки сами ничего не играют. Они только фиксируют, что игрок попросил
+  // помощь, что ему показали и выбрал ли он один из вариантов. Эти события
+  // живут в том же визите, поэтому «полезность компаса» видна без отдельной БД.
+  const HINT_KEYS = {
+    hintRequested: 'requested', stuckMarked: 'stuck', hintShown: 'shown',
+    hintPicked: 'picked', hintIgnored: 'ignored'
+  };
+  function compactHintMoves(moves) {
+    return (moves || []).slice(0, 4).map(m => ({
+      role: m.role || '',
+      degree: m.degree || '',
+      name: m.name || '',
+      target: !!m.target
+    }));
+  }
+  function logHint(type, data) {
+    if (!settings.enabled || !seg || !type) return false;
+    if (!seg.hints) seg.hints = newHints();
+    const countKey = HINT_KEYS[type] || type;
+    if (seg.hints[countKey] == null) seg.hints[countKey] = 0;
+    seg.hints[countKey] += 1;
+    // Подсказка до первой ноты не должна материализовать пустой визит.
+    if (!seg.events.length) return false;
+    const d = data || {};
+    const event = {
+      type: 'hint',
+      hint: type,
+      chord: String(d.chord || ''),
+      played: String(d.played || ''),
+      via: String(d.via || ''),
+      target: d.target == null ? null : !!d.target,
+      afterMs: d.afterMs == null ? null : roundMs(d.afterMs),
+      moves: compactHintMoves(d.moves)
+    };
+    return recordEvent(event);
+  }
+
+  // ===== Эталонный профиль для компаса =====
+  // Строится только из оценённых визитов (4–5 или явный reference). Если
+  // эталон один и он в другой тональности, это гипотеза, а не перенос:
+  // абсолютные ноты нельзя тащить в другую тональность. После трёх эталонов
+  // ступени уже можно переносить, потому что «I → IV» значит одно и то же
+  // в любой тональности.
+  function segmentChordSeq(s) {
+    const f = s && s.fingerprint;
+    if (f && Array.isArray(f.chordSeq) && f.chordSeq.length) {
+      return f.chordSeq.map(x => String(x || '?')).filter(Boolean).slice(0, 64);
+    }
+    return (s && Array.isArray(s.events) ? s.events : [])
+      .filter(e => e && e.type === 'chord')
+      .map(e => String(e.degree || e.name || '?'))
+      .slice(0, 64);
+  }
+  function segmentKeyLabel(s) {
+    const c = s && s.combo;
+    return String((c && (c.keyNameLatin || c.keyName)) || '—');
+  }
+  function isStrictReference(s) {
+    const r = (s && s.rating) || {};
+    if (r.reference) return true;
+    return moodReference(r.score, r.comment);
+  }
+  function profileWeight(s) {
+    const r = (s && s.rating) || {};
+    if (isStrictReference(s)) return 3;
+    if (r.score === 5) return 2;
+    if (r.score === 4) return 1;
+    return 0;
+  }
+  function normalizeWeights(obj) {
+    const total = Object.keys(obj).reduce((sum, key) => sum + (Number(obj[key]) || 0), 0);
+    if (!total) return obj;
+    const out = {};
+    Object.keys(obj).forEach(key => {
+      out[key] = Math.round(((Number(obj[key]) || 0) / total) * 1000) / 1000;
+    });
+    return out;
+  }
+  function referenceProfile(opts) {
+    const o = opts || {};
+    const current = o.combo || (typeof combo === 'function' ? combo() : null);
+    const mode = o.mode || state.mode;
+    const root = ((Number(o.root != null ? o.root : (current && current.root)) || 0) % 12 + 12) % 12;
+    const rated = segments.filter(s => s && s.combo && profileWeight(s) > 0);
+    const high = rated.filter(s => {
+      const score = Number(s.rating && s.rating.score);
+      return isStrictReference(s) || score >= 4;
+    });
+    const strong = high.filter(isStrictReference);
+    const sameKey = high.filter(s => {
+      const c = s.combo;
+      return c && String(c.mode) === String(mode) &&
+        ((Number(c.root) || 0) % 12 + 12) % 12 === root;
+    });
+    const transfer = sameKey.length ? 'same-key'
+      : (high.length >= REF_TRANSFER_REFS ? 'degree' : 'hypothesis');
+    const sources = transfer === 'same-key' ? sameKey : (transfer === 'degree' ? high : []);
+    const degrees = {}, transitions = {};
+    sources.forEach(s => {
+      const w = profileWeight(s);
+      const seq = segmentChordSeq(s);
+      seq.forEach((degree, i) => {
+        degrees[degree] = (degrees[degree] || 0) + w;
+        if (i > 0) {
+          const key = seq[i - 1] + '>' + degree;
+          transitions[key] = (transitions[key] || 0) + w;
+        }
+      });
+    });
+    let pitchClasses = null;
+    if (transfer === 'same-key') {
+      const sum = new Array(12).fill(0);
+      sameKey.forEach(s => {
+        const f = s.fingerprint;
+        if (!f || !Array.isArray(f.pitchClasses)) return;
+        const total = f.pitchClasses.reduce((a, b) => a + (Number(b) || 0), 0);
+        if (!total) return;
+        const w = profileWeight(s);
+        f.pitchClasses.forEach((n, pc) => {
+          sum[pc] += ((Number(n) || 0) / total) * w;
+        });
+      });
+      const pcTotal = sum.reduce((a, b) => a + b, 0);
+      if (pcTotal) pitchClasses = sum.map(v => Math.round((v / pcTotal) * 1000) / 1000);
+    }
+    let label = '';
+    if (transfer === 'same-key') {
+      label = (strong.length ? 'эталон' : 'высокая оценка') + ' · ' + segmentKeyLabel(sameKey[0]);
+    } else if (transfer === 'degree') {
+      label = 'эталоны: ' + high.length + ' · по ступеням';
+    } else if (high.length) {
+      label = 'гипотеза · ' + segmentKeyLabel((strong[0] || high[0]));
+    }
+    return {
+      visits: rated.length,
+      highVisits: high.length,
+      referenceVisits: strong.length,
+      sameKeyVisits: sameKey.length,
+      transfer,
+      usable: !!sources.length,
+      label,
+      degrees: normalizeWeights(degrees),
+      transitions: normalizeWeights(transitions),
+      pitchClasses,
+      keys: Array.from(new Set(high.map(segmentKeyLabel)))
+    };
   }
 
   // ===== Карточка оценки =====
@@ -793,9 +1180,11 @@ var Research = (function () {
     const s = askSeg;
     if (!s) return false;
     const score = clamp(Math.round(n), 1, 5);
+    const comment = readComment();
     s.rating = {
       score,
-      comment: readComment(),
+      comment,
+      reference: moodReference(score, comment),
       at: Date.now(),
       answerMs: Math.max(0, Math.round(performance.now() - askPerf))
     };
@@ -816,6 +1205,9 @@ var Research = (function () {
       // «Готово» после оценки не должно затирать её пропуском; комментарий,
       // добавленный уже после оценки, всё равно сохраняем.
       if (commentEl()) s.rating.comment = readComment();
+      if (s.rating.score === 5) {
+        s.rating.reference = moodReference(s.rating.score, s.rating.comment);
+      }
       saveSegments();
     } else {
       s.rating = {
@@ -1093,6 +1485,9 @@ var Research = (function () {
     enable, disable, setAsk, clear,
     // Жизненный цикл посещения и события — их зовут game.js/midi.js
     onSessionStart, exitHint, enterCombo, leaveCombo, linkRecording, onChord, onNote,
+    // Компас: события подсказок и эталонный профиль для js/guide.js.
+    logHint, referenceProfile, moodReference,
+    dataVersion: () => dataVersion,
     // Карточка
     offerLast, gateKey, rate, skip, askRecording, exportAskVideo, exportAskAudio,
     exportAskJson, exportAskSuno, holdAsk, refreshAsk: paintAskButtons,

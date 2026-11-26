@@ -11,8 +11,13 @@
   · читает одну или несколько выгрузок (или сам находит их в корне проекта и
     `data/research/`), склеивает посещения и убирает дубли по id;
   · считает отклик, среднюю оценку, распределение, станции и комбо;
-  · сопоставляет оценки с поведением: время в комбо, число нот/аккордов, выход;
+  · сопоставляет оценки с поведением: время в комбо, активную игру, runs,
+    плотность нот, смены аккордов и выход;
+  · отличает поток, продуктивный поиск, застревание и локальный затык внутри
+    хорошего визита, не считая длинный аккорд автоматическим провалом;
   · разбирает сюжет пары: архетип, фазы, переходы и долю времени в «доме»;
+  · собирает эталонный профиль (тональности, ступени, переходы) и события
+    компаса «куда дальше»;
   · раскладывает свободные комментарии по темам (мягко/жёстко, громко/тихо,
     скучно/интересно, тембр/бас/октава);
   · печатает отчёт в Markdown, пишет CSV по посещениям и подсказывает, какие
@@ -38,6 +43,22 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 RESEARCH_DIR = ROOT / "data" / "research"
 MANUAL_MIN_N = 3
+ACTIVE_GAP_MS = 5000
+# Те же слова, что js/research.js использует для авто-флага reference. Высокая
+# оценка без слов остаётся «высокой», но не «эталоном».
+REFERENCE_WORDS = (
+    "люб", "нрав", "тёпл", "тепл", "мягк", "красив", "обним",
+    "love", "warm", "beautiful", "cozy", "moved",
+)
+VISIT_MODES = ("flow", "productive_struggle", "stuck", "local_stuck", "short", "unrated")
+MODE_LABELS = {
+    "flow": "поток",
+    "productive_struggle": "продуктивный поиск",
+    "stuck": "застревание",
+    "local_stuck": "локальный затык внутри хорошего визита",
+    "short": "слишком коротко",
+    "unrated": "без оценки",
+}
 
 # Темы комментариев. Слова сравниваются в нижнем регистре подстрокой, поэтому
 # русские окончания и английские синонимы ловятся без морфологии. Один
@@ -142,6 +163,229 @@ def counts(seg: dict):
         notes = sum(1 for e in events if (e or {}).get("type") == "note")
         chords = sum(1 for e in events if (e or {}).get("type") == "chord")
     return notes, chords
+
+
+def is_number(value) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def is_reference_visit(seg: dict) -> bool:
+    """Явный флаг важнее эвристики; старые файлы ловятся по 5/5 + словам."""
+    rating = obj(seg.get("rating"))
+    if rating.get("reference"):
+        return True
+    if seg_rating(seg) != 5:
+        return False
+    text = seg_comment(seg).lower()
+    return any(word in text for word in REFERENCE_WORDS)
+
+
+def profile_weight(seg: dict) -> int:
+    """Вес визита в эталонном профиле: reference > 5 > 4 > остальные."""
+    if is_reference_visit(seg):
+        return 3
+    score = seg_rating(seg)
+    if score == 5:
+        return 2
+    if score == 4:
+        return 1
+    return 0
+
+
+def profile_chord_seq(seg: dict) -> list:
+    """Ступени визита: fingerprint.chordSeq, иначе события (старый формат)."""
+    fingerprint = obj(seg.get("fingerprint"))
+    seq = fingerprint.get("chordSeq")
+    if isinstance(seq, list) and seq:
+        return [str(item) for item in seq if item][:64]
+    events = seg.get("events") or []
+    return [
+        str(obj(ev).get("degree") or obj(ev).get("name") or "?")
+        for ev in events
+        if obj(ev).get("type") == "chord"
+    ][:64]
+
+
+def derived_runs(seg: dict, play_ms: int) -> list:
+    """Собрать runs из событий, если старый JSON их не сохранил.
+
+    Группировка — по набору pitch class (pcsKey), поэтому повтор аккорда
+    остаётся одним run, а смена качества или корня начинает новый.
+    """
+    events = sorted(
+        [ev for ev in (seg.get("events") or []) if isinstance(ev, dict)],
+        key=lambda ev: float(ev.get("t") or 0),
+    )
+    chords = [ev for ev in events if ev.get("type") == "chord"]
+    if not chords:
+        return []
+    runs = []
+    group = []
+    group_key = None
+    for ev in chords:
+        key = ev.get("pcsKey")
+        if not key:
+            pcs = ev.get("pcs") or []
+            key = ",".join(str(pc) for pc in sorted(pcs)) if pcs else str(ev.get("degree") or "?")
+        if group and key != group_key:
+            runs.append(group)
+            group = []
+        group.append(ev)
+        group_key = key
+    if group:
+        runs.append(group)
+    out = []
+    for index, group in enumerate(runs, 1):
+        start = float(group[0].get("t") or 0)
+        next_start = None
+        if index < len(runs):
+            next_start = float(runs[index][0].get("t") or 0)
+        end = next_start if next_start is not None else max(play_ms, start)
+        duration = max(0.0, end - start)
+        note_count = sum(
+            1 for ev in events
+            if ev.get("type") == "note" and start <= float(ev.get("t") or 0) < end
+        )
+        first = group[0]
+        out.append({
+            "runId": index,
+            "runIndex": index,
+            "degree": str(first.get("degree") or ""),
+            "name": str(first.get("name") or ""),
+            "startT": round(start),
+            "durationMs": round(duration),
+            "notes": note_count,
+            "chordHits": len(group),
+            "noteDensity": round(note_count / (duration / 1000), 2) if duration > 0 else 0,
+            "scoreDelta": 0,
+            "endedBy": "change" if next_start is not None else "exit",
+        })
+    return out
+
+
+def visit_metrics(seg: dict) -> dict:
+    """Поведение одного визита: время, runs, плотность и компактный отпечаток."""
+    timing = obj(seg.get("timing"))
+    notes, chords = counts(seg)
+    play_ms = timing.get("playMs")
+    if not is_number(play_ms):
+        play_ms = seg.get("playMs")
+    if not is_number(play_ms):
+        play_ms = seg.get("dwellMs")
+    play_ms = int(max(0, play_ms or 0))
+    active_ms = timing.get("activePlayMs")
+    if not is_number(active_ms):
+        active_ms = play_ms
+    active_ms = int(max(0, active_ms or 0))
+    if active_ms <= 0:
+        active_ms = play_ms
+    tail_ms = timing.get("tailMs")
+    tail_ms = int(max(0, tail_ms or 0)) if is_number(tail_ms) else 0
+
+    events = sorted(
+        [ev for ev in (seg.get("events") or []) if isinstance(ev, dict)],
+        key=lambda ev: float(ev.get("t") or 0),
+    )
+    times = [float(ev.get("t") or 0) for ev in events]
+    max_gap = 0.0
+    gap_count = 0
+    for before, after in zip(times, times[1:]):
+        gap = max(0.0, after - before)
+        max_gap = max(max_gap, gap)
+        if gap > ACTIVE_GAP_MS:
+            gap_count += 1
+
+    runs = [r for r in (seg.get("runs") or []) if isinstance(r, dict)]
+    if not runs:
+        runs = derived_runs(seg, play_ms)
+    longest = max(runs, key=lambda r: float(r.get("durationMs") or 0), default={})
+    longest_ms = int(max(0, longest.get("durationMs") or 0))
+    longest_notes = int(max(0, longest.get("notes") or 0))
+    longest_hits = int(max(0, longest.get("chordHits") or 0))
+    longest_density = float(longest.get("noteDensity") or 0)
+    if longest_ms > 0 and not longest_density:
+        longest_density = round(longest_notes / (longest_ms / 1000), 2)
+    fingerprint = obj(seg.get("fingerprint"))
+    chord_changes = int_or_none(obj(seg.get("counts")).get("chordChanges"))
+    if chord_changes is None:
+        chord_changes = sum(1 for ev in events if ev.get("type") == "chord" and ev.get("chordChanged"))
+    change_ratio = chord_changes / chords if chords else 0
+    hints = obj(seg.get("hints"))
+    if not hints:
+        hints = {}
+        for ev in events:
+            if ev.get("type") == "hint":
+                name = str(ev.get("hint") or "")
+                if name:
+                    hints[name] = hints.get(name, 0) + 1
+    return {
+        "notes": notes,
+        "chords": chords,
+        "active_ms": active_ms,
+        "play_ms": play_ms,
+        "tail_ms": tail_ms,
+        "notes_per_s": round(notes / max(0.001, active_ms / 1000), 2) if active_ms else 0,
+        "chord_changes": chord_changes,
+        "changes_per_min": round(chord_changes / max(0.001, active_ms / 60000), 2) if active_ms else 0,
+        "run_count": len(runs),
+        "longest_run_ms": longest_ms,
+        "longest_run_degree": str(longest.get("degree") or ""),
+        "longest_run_notes": longest_notes,
+        "longest_run_hits": longest_hits,
+        "longest_run_density": longest_density,
+        "longest_run_share": round(longest_ms / active_ms, 3) if active_ms else 0,
+        "chord_change_ratio": round(change_ratio, 3),
+        "max_gap_ms": round(max_gap),
+        "gap_count": gap_count,
+        "recording_coverage": timing.get("recordingCoverage"),
+        "recording_truncated": bool(timing.get("recordingTruncated")),
+        "overflow": bool(seg.get("overflow")),
+        "unique_pcs": int_or_none(fingerprint.get("uniquePcs")) or 0,
+        "unique_chords": int_or_none(fingerprint.get("uniqueChords")) or 0,
+        "hints_requested": int(hints.get("requested") or 0),
+        "hints_stuck": int(hints.get("stuck") or 0),
+        "hints_shown": int(hints.get("shown") or 0),
+        "hints_picked": int(hints.get("picked") or 0),
+        "hints_ignored": int(hints.get("ignored") or 0),
+        "runs": runs,
+    }
+
+
+def classify_visit(rating, metrics: dict) -> str:
+    """Разделить поток, продуктивный поиск и застревание.
+
+    Долгий run сам по себе не затык: E major с сильным B-педалем — это поток.
+    Затык — долгий run при низкой плотности/малом числе смен или низкая оценка
+    без признаков поиска. Локальный затык — то же внутри визита с оценкой 4–5.
+    """
+    if metrics["notes"] + metrics["chords"] < 6 or metrics["active_ms"] < 8000:
+        return "short"
+    longest = metrics["longest_run_ms"]
+    density = metrics["longest_run_density"]
+    # Высокая оценка и высокая общая плотность важнее одного длинного run:
+    # E major с B-педалем — поток, а не затык.
+    if rating is not None and rating >= 4:
+        if (longest >= 30000 and density < 1.8 and
+                metrics["notes_per_s"] < 3.0 and metrics["longest_run_share"] >= 0.35):
+            return "local_stuck"
+        return "flow"
+    # Гармонический застой: много повторов одного аккорда при малой доле смен.
+    # Так F♯ minor с 62 хитами в run и 24 сменами на 133 аккорда — затык,
+    # даже если ноты поверх звучат часто.
+    stagnant = longest >= 30000 and (
+        (density < 2.0 and metrics["notes_per_s"] < 3.0) or
+        metrics["chord_changes"] <= 5 or
+        (metrics["longest_run_hits"] >= 20 and metrics["chord_change_ratio"] < 0.3)
+    )
+    if stagnant:
+        return "stuck"
+    if metrics["notes_per_s"] >= 2.5 and metrics["chord_changes"] >= 6:
+        return "productive_struggle"
+    if rating == 3:
+        return "productive_struggle"
+    if rating is not None and rating <= 2:
+        return "stuck"
+    return "unrated"
 
 
 def fmt_mean(value) -> str:
@@ -260,6 +504,14 @@ def analyze(payload: dict, min_n: int = MANUAL_MIN_N) -> dict:
     plot_visits = 0
     dwell_all = []
     noted = chorder = 0
+    metrics_cache = {}
+
+    def seg_metrics(seg: dict) -> dict:
+        key = id(seg)
+        if key not in metrics_cache:
+            metrics_cache[key] = visit_metrics(seg)
+        return metrics_cache[key]
+
     for seg, rating in zip(segments, ratings):
         sid = station_id(seg)
         srow = stations.setdefault(sid, {
@@ -395,10 +647,54 @@ def analyze(payload: dict, min_n: int = MANUAL_MIN_N) -> dict:
             "at": iso_time(seg.get("enteredAt")),
         })
 
+    visit_modes = Counter()
+    mode_rows = []
+    reference_rows = []
+    reference_degrees = Counter()
+    reference_transitions = Counter()
+    reference_keys = Counter()
+    reference_profile_visits = 0
+    hint_totals = Counter()
     rows = []
     for seg, rating in zip(segments, ratings):
         notes, chords = counts(seg)
         plot = plot_summary(seg)
+        metrics = seg_metrics(seg)
+        mode = classify_visit(rating, metrics)
+        metrics["mode"] = mode
+        visit_modes[mode] += 1
+        mode_row = {
+            "segment_id": seg.get("id") or "",
+            "combo_key": combo_key(seg),
+            "rating": rating,
+            "mode": mode,
+            "active_ms": metrics["active_ms"],
+            "notes_per_s": metrics["notes_per_s"],
+            "chord_changes": metrics["chord_changes"],
+            "longest_run_ms": metrics["longest_run_ms"],
+            "longest_run_degree": metrics["longest_run_degree"],
+            "longest_run_hits": metrics["longest_run_hits"],
+            "longest_run_density": metrics["longest_run_density"],
+            "chord_change_ratio": metrics["chord_change_ratio"],
+        }
+        mode_rows.append(mode_row)
+        hint_totals["requested"] += metrics["hints_requested"]
+        hint_totals["stuck"] += metrics["hints_stuck"]
+        hint_totals["shown"] += metrics["hints_shown"]
+        hint_totals["picked"] += metrics["hints_picked"]
+        hint_totals["ignored"] += metrics["hints_ignored"]
+        # Эталонный профиль: строгий reference или высокая оценка 4–5.
+        if is_reference_visit(seg) or (rating is not None and rating >= 4):
+            reference_profile_visits += 1
+            reference_keys[combo_key(seg)] += 1
+            weight = profile_weight(seg)
+            seq = profile_chord_seq(seg)
+            for index, degree in enumerate(seq):
+                reference_degrees[degree] += weight
+                if index > 0:
+                    reference_transitions[f"{seq[index - 1]}>{degree}"] += weight
+            if is_reference_visit(seg):
+                reference_rows.append(mode_row)
         rows.append({
             "segment_id": seg.get("id") or "",
             "session_id": seg.get("sessionId") or "",
@@ -413,9 +709,29 @@ def analyze(payload: dict, min_n: int = MANUAL_MIN_N) -> dict:
             "rating": "" if rating is None else rating,
             "skipped": 1 if (rating is None and seg_skipped(seg)) else 0,
             "dwell_ms": seg.get("dwellMs") or "",
-            "play_ms": seg.get("playMs") or "",
+            "play_ms": metrics["play_ms"],
+            "active_ms": metrics["active_ms"],
+            "tail_ms": metrics["tail_ms"],
             "notes": notes,
             "chords": chords,
+            "notes_per_s": metrics["notes_per_s"],
+            "chord_changes": metrics["chord_changes"],
+            "longest_run_ms": metrics["longest_run_ms"],
+            "longest_run_degree": metrics["longest_run_degree"],
+            "longest_run_notes": metrics["longest_run_notes"],
+            "longest_run_hits": metrics["longest_run_hits"],
+            "longest_run_density": metrics["longest_run_density"],
+            "chord_change_ratio": metrics["chord_change_ratio"],
+            "max_gap_ms": metrics["max_gap_ms"],
+            "recording_coverage": (
+                "" if metrics["recording_coverage"] is None else metrics["recording_coverage"]
+            ),
+            "recording_truncated": 1 if metrics["recording_truncated"] else 0,
+            "overflow": 1 if metrics["overflow"] else 0,
+            "visit_mode": mode,
+            "hints_requested": metrics["hints_requested"],
+            "hints_picked": metrics["hints_picked"],
+            "hints_ignored": metrics["hints_ignored"],
             "plot_archetype": plot["archetype"],
             "plot_phases": ";".join(
                 f"{name}:{count}" for name, count in sorted(plot["phases"].items())
@@ -459,6 +775,34 @@ def analyze(payload: dict, min_n: int = MANUAL_MIN_N) -> dict:
         "buckets": buckets,
         "comments": comments,
         "rows": rows,
+        # Поведение визита: поток / продуктивный поиск / застревание.
+        "visit_modes": {name: visit_modes.get(name, 0) for name in VISIT_MODES},
+        "mode_rows": mode_rows,
+        "flow_rows": [r for r in mode_rows if r["mode"] == "flow"],
+        "productive_rows": [r for r in mode_rows if r["mode"] == "productive_struggle"],
+        "stuck_rows": [r for r in mode_rows if r["mode"] == "stuck"],
+        "local_stuck_rows": [r for r in mode_rows if r["mode"] == "local_stuck"],
+        "short_rows": [r for r in mode_rows if r["mode"] == "short"],
+        # Эталонный профиль: только высокая оценка/явный reference.
+        "reference_rows": reference_rows,
+        "reference_profile_visits": reference_profile_visits,
+        "reference_keys": [
+            {"key": key, "visits": count}
+            for key, count in reference_keys.most_common()
+        ],
+        "reference_degrees": dict(reference_degrees.most_common()),
+        "reference_transitions": dict(reference_transitions.most_common(16)),
+        "hints": {
+            "requested": hint_totals.get("requested", 0),
+            "stuck": hint_totals.get("stuck", 0),
+            "shown": hint_totals.get("shown", 0),
+            "picked": hint_totals.get("picked", 0),
+            "ignored": hint_totals.get("ignored", 0),
+            "pick_rate": (
+                round(hint_totals.get("picked", 0) / hint_totals.get("shown", 0), 3)
+                if hint_totals.get("shown", 0) else None
+            ),
+        },
         "min_n": max(1, min_n),
     }
 
@@ -466,7 +810,12 @@ def analyze(payload: dict, min_n: int = MANUAL_MIN_N) -> dict:
 ROW_FIELDS = [
     "segment_id", "session_id", "visit", "entered_at", "left_at",
     "combo_id", "combo_key", "mode", "station_id", "station_label",
-    "rating", "skipped", "dwell_ms", "play_ms", "notes", "chords",
+    "rating", "skipped", "dwell_ms", "play_ms", "active_ms", "tail_ms",
+    "notes", "chords", "notes_per_s", "chord_changes",
+    "longest_run_ms", "longest_run_degree", "longest_run_notes", "longest_run_hits",
+    "longest_run_density", "chord_change_ratio",
+    "max_gap_ms", "recording_coverage", "recording_truncated", "overflow", "visit_mode",
+    "hints_requested", "hints_picked", "hints_ignored",
     "plot_archetype", "plot_phases", "plot_transitions", "plot_home_share",
     "exit_via", "comment",
 ]
@@ -528,6 +877,43 @@ def observations(result: dict) -> list:
             "слишком долго, либо слишком быстро уводит. Это гипотеза для "
             "следующей серии, а не приговор фазе."
         )
+    stuck_rows = result.get("stuck_rows") or []
+    if stuck_rows:
+        row = sorted(stuck_rows, key=lambda r: -r["longest_run_ms"])[0]
+        out.append(
+            f"Явное застревание: {row['combo_key']} — run {fmt_ms(row['longest_run_ms'])} "
+            f"на {row['longest_run_degree'] or 'одном аккорде'} "
+            f"({row.get('longest_run_hits', 0)} хитов, смен {row['chord_changes']}) "
+            f"при плотности {row['longest_run_density']:.1f} нот/с. Это не поток: "
+            "стоит предложить смену функции или паузу, а не ещё ноты поверх."
+        )
+    local_rows = result.get("local_stuck_rows") or []
+    if local_rows:
+        row = local_rows[0]
+        out.append(
+            f"Локальный затык внутри хорошего визита: {row['combo_key']} — "
+            f"{fmt_ms(row['longest_run_ms'])} на {row['longest_run_degree'] or 'аккорде'} "
+            "при высокой оценке. Хороший визит может содержать один провал: его "
+            "нельзя считать общим провалом станции."
+        )
+    productive = result.get("productive_rows") or []
+    if productive:
+        out.append(
+            f"Продуктивный поиск: {len(productive)} визит(ов) с высокой плотностью и "
+            "сменой аккордов, но без высокой оценки. Это не застревание — скорее "
+            "материал, который ещё не сложился."
+        )
+    hints = result.get("hints") or {}
+    if hints.get("requested"):
+        rate = "—" if hints.get("pick_rate") is None else f"{hints['pick_rate']:.0%}"
+        out.append(
+            f"Компас: запросов {hints['requested']}, выбрано {hints.get('picked', 0)} "
+            f"({rate}), проигнорировано {hints.get('ignored', 0)}. Если выбор редок, "
+            "подсказки объясняют ход, но не продолжают уже сформированное поле."
+        )
+    if result.get("reference_keys"):
+        top = ", ".join(f"{row['key']} ({row['visits']})" for row in result["reference_keys"][:3])
+        out.append(f"Эталонные тональности: {top}. Профиль переносится по ступеням только после трёх эталонов.")
     buckets = {name: data for name, data in result["buckets"].items() if data["total"]}
     if buckets:
         top = sorted(buckets.items(), key=lambda kv: (-kv[1]["total"], kv[0]))[:3]
@@ -652,9 +1038,72 @@ def render_md(result: dict) -> str:
             )
             add(f"Переходы фаз: {top}.")
         add("")
+    add("## Поток, поиск и застревание")
+    add("")
+    add("| Вид визита | Сколько |")
+    add("| --- | --- |")
+    for mode in VISIT_MODES:
+        add(f"| `{mode}` — {MODE_LABELS[mode]} | {result['visit_modes'].get(mode, 0)} |")
+    add("")
+    if result.get("mode_rows"):
+        add("| Комбо | Оценка | Вид | Плотность | Смен | Длинный run |")
+        add("| --- | --- | --- | --- | --- | --- |")
+        for row in result["mode_rows"][:20]:
+            score = "—" if row["rating"] is None else f"{row['rating']}/5"
+            add(
+                f"| {row['combo_key']} | {score} | `{row['mode']}` | "
+                f"{row['notes_per_s']:.1f} нот/с | {row['chord_changes']} | "
+                f"{fmt_ms(row['longest_run_ms'])} · {row['longest_run_degree'] or '—'} |"
+            )
+        add("")
+    if result.get("reference_profile_visits"):
+        add("## Эталоны и высокая оценка")
+        add("")
+        add(
+            f"В профиль входят **{result['reference_profile_visits']}** визит(ов): "
+            f"строгих эталонов — **{len(result.get('reference_rows') or [])}**."
+        )
+        add("")
+        if result.get("reference_keys"):
+            keys = ", ".join(f"{row['key']} ({row['visits']})" for row in result["reference_keys"][:8])
+            add(f"Тональности: {keys}.")
+            add("")
+        if result.get("reference_degrees"):
+            degrees = ", ".join(
+                f"`{degree}` ×{weight}" for degree, weight in list(result["reference_degrees"].items())[:10]
+            )
+            add(f"Ступени: {degrees}.")
+            add("")
+        transitions = result.get("reference_transitions") or {}
+        if transitions:
+            top = ", ".join(f"`{name}` ×{weight}" for name, weight in list(transitions.items())[:8])
+            add(f"Переходы: {top}.")
+            add("")
+    hints = result.get("hints") or {}
+    if hints.get("requested") or hints.get("shown"):
+        add("## Компас «куда дальше»")
+        add("")
+        add(
+            f"Запросов: **{hints.get('requested', 0)}**, показано: **{hints.get('shown', 0)}**, "
+            f"выбрано: **{hints.get('picked', 0)}**, проигнорировано: **{hints.get('ignored', 0)}**, "
+            f"«не знаю»: **{hints.get('stuck', 0)}**."
+        )
+        if hints.get("pick_rate") is not None:
+            add("")
+            add(f"Доля выбранных подсказок: **{hints['pick_rate']:.0%}**.")
+        add("")
     add("## Поведение")
     add("")
     add(f"- Нота и аккорд в данных: **{result['notes']}** нот, **{result['chords']}** аккордов.")
+    active_values = [row["active_ms"] for row in result["rows"] if row.get("active_ms")]
+    if active_values:
+        add(f"- Активная игра: среднее **{fmt_ms(sum(active_values) / len(active_values))}** "
+            f"из {fmt_ms(result['dwell_mean'])} в комбо.")
+    trunc = sum(1 for row in result["rows"] if row.get("recording_truncated"))
+    overflow = sum(1 for row in result["rows"] if row.get("overflow"))
+    if trunc or overflow:
+        add(f"- Усечённые данные: **{overflow}** визит(ов) с overflow событий, "
+            f"**{trunc}** с усечённой автозаписью. Агрегаты и отпечаток при этом сохранены.")
     add(f"- Время в комбо: среднее **{fmt_ms(result['dwell_mean'])}**, медиана **{fmt_ms(result['dwell_median'])}**.")
     if result["dwell_high"] is not None or result["dwell_low"] is not None:
         add(
@@ -699,11 +1148,62 @@ def synthetic_payload() -> dict:
         {"id": "glass", "label": "стекло"},
     ]
 
+    def run(degree, duration, notes, hits=8, ended="change"):
+        return {
+            "degree": degree, "durationMs": duration, "notes": notes,
+            "chordHits": hits, "noteDensity": round(notes / (duration / 1000), 2),
+            "endedBy": ended, "scoreDelta": 0, "startT": 0,
+        }
+
+    profiles = {
+        1: dict(active=55000, notes=600, chords=40, changes=30,
+                runs=[run("I", 12000, 80), run("IV", 10000, 70), run("V", 9000, 60),
+                      run("I", 8000, 55), run("vi", 7000, 50), run("IV", 6000, 45)],
+                seq=["I", "IV", "V", "I", "vi", "IV", "I"], hints=dict(requested=2, shown=2, picked=1, ignored=1),
+                rec_cov=0.92, overflow=True),
+        2: dict(active=40000, notes=300, chords=25, changes=20,
+                runs=[run("I", 18000, 70), run("V", 9000, 55), run("I", 7000, 45)],
+                seq=["I", "V", "I", "IV", "I"], rec_cov=0.88),
+        3: dict(active=50000, notes=450, chords=35, changes=26,
+                runs=[run("I", 15000, 85), run("IV", 11000, 70), run("V", 9000, 60), run("I", 8000, 55)],
+                seq=["I", "IV", "V", "I", "ii", "V", "I"], rec_cov=0.9),
+        4: dict(active=45000, notes=100, chords=30, changes=22,
+                runs=[run("I", 32000, 45), run("IV", 7000, 30), run("I", 6000, 25)],
+                seq=["I", "I", "I", "IV", "I"], rec_cov=0.86),
+        5: dict(active=4000, notes=4, chords=1, changes=0,
+                runs=[run("I", 1000, 4, hits=1)], seq=["I"], rec_cov=0.2),
+        6: dict(active=20000, notes=40, chords=6, changes=5,
+                runs=[run("I", 12000, 20, hits=3), run("IV", 4000, 10), run("I", 3000, 10)],
+                seq=["I", "I", "IV", "I"], rec_cov=0.4),
+        7: dict(active=25000, notes=150, chords=20, changes=19,
+                runs=[run("I", 8000, 40), run("IV", 7000, 45), run("V", 6000, 35), run("I", 4000, 30)],
+                seq=["I", "IV", "V", "I", "vi", "ii", "V", "I"], rec_cov=0.7),
+        8: dict(active=18000, notes=50, chords=4, changes=3,
+                runs=[run("I", 14000, 25, hits=2), run("IV", 2000, 15), run("I", 2000, 10)],
+                seq=["I", "I", "IV", "I"], rec_cov=0.3),
+        9: dict(active=3000, notes=3, chords=1, changes=0,
+                runs=[run("I", 800, 3, hits=1)], seq=["I"], rec_cov=0.1),
+        10: dict(active=45000, notes=90, chords=30, changes=25,
+                 runs=[run("I", 40000, 48, hits=10), run("IV", 4000, 25), run("I", 3000, 17)],
+                 seq=["I", "I", "I", "IV", "I", "ii", "V", "I"], rec_cov=0.84),
+        11: dict(active=42000, notes=300, chords=22, changes=18,
+                 runs=[run("I", 16000, 70), run("IV", 10000, 65), run("V", 8000, 55), run("I", 6000, 50)],
+                 seq=["I", "IV", "V", "I"], rec_cov=0.9),
+        12: dict(active=55000, notes=550, chords=35, changes=28,
+                 runs=[run("I", 14000, 80), run("IV", 12000, 75), run("V", 9000, 65), run("I", 7000, 55)],
+                 seq=["I", "IV", "I", "vi", "IV", "I"], hints=dict(requested=1, shown=1, picked=1, ignored=0),
+                 rec_cov=0.91),
+    }
+
     def seg(index, sid, score, comment="", dwell=30000):
+        profile = profiles[index]
         rating = {"score": score, "comment": comment, "at": 1763900000000, "answerMs": 1800}
         if score is None:
             rating["skipped"] = True
+        if score == 5 and any(word in comment.lower() for word in REFERENCE_WORDS):
+            rating["reference"] = True
         play_ms = max(0, dwell - 2000)
+        active = min(play_ms, profile["active"])
         # Синтетический сюжет: высокие оценки сидят в «доме» дольше, низкие
         # чаще уходят. Этого достаточно, чтобы проверить агрегаты и отчёт.
         phase = "home" if score is not None and score >= 4 else "departure"
@@ -715,6 +1215,17 @@ def synthetic_payload() -> dict:
         phase_ms = {"home": home_ms, "departure": play_ms - home_ms}
         if phase == "home":
             phase_ms = {"home": play_ms}
+        runs = [dict(item, runId=i + 1, runIndex=i + 1)
+                for i, item in enumerate(profile["runs"])]
+        seq = profile["seq"]
+        pcs = [0, 4, 7]
+        fingerprint = {
+            "chordSeq": seq,
+            "transitions": {f"{seq[i - 1]}>{seq[i]}": 1 for i in range(1, len(seq))},
+            "pitchClasses": [12, 0, 3, 0, 20, 4, 0, 14, 0, 5, 0, 8],
+            "uniquePcs": 7,
+            "uniqueChords": len(set(seq)),
+        }
         return {
             "id": f"v-{index}",
             "sessionId": "s-test",
@@ -747,10 +1258,34 @@ def synthetic_payload() -> dict:
                 "chords": 4,
                 "homeShare": home_share,
             },
-            "counts": {"notes": 8, "chords": 4},
+            "counts": {
+                "notes": profile["notes"], "chords": profile["chords"],
+                "chordChanges": profile["changes"],
+                "longestChordRun": max(item["durationMs"] for item in runs),
+            },
+            "runs": runs,
+            "timing": {
+                "firstEventAt": 0, "lastEventAt": active, "lastNoteAt": active,
+                "activePlayMs": active, "tailMs": max(0, play_ms - active),
+                "playMs": play_ms,
+                "recordingDurationMs": dwell,
+                "recordingCoverage": profile["rec_cov"],
+                "recordingTruncated": bool(profile.get("overflow")),
+                "notesPerSec": round(profile["notes"] / (active / 1000), 2) if active else 0,
+                "chordChangesPerSec": round(profile["changes"] / (active / 1000), 2) if active else 0,
+            },
+            "fingerprint": fingerprint,
+            "hints": profile.get("hints", {}),
+            "overflow": bool(profile.get("overflow")),
             "score": 300,
             "exit": {"via": "space"},
-            "events": [{"t": 0, "type": "chord", "phase": phase, "window": [0, 1, 2, 3, 4]}],
+            "events": [
+                {"t": 0, "type": "chord", "degree": seq[0], "pcs": pcs,
+                 "pcsKey": ",".join(map(str, pcs)), "phase": phase,
+                 "window": [0, 1, 2, 3, 4]},
+                {"t": round(active / 2), "type": "note", "midi": 64, "phase": phase},
+                {"t": active, "type": "note", "midi": 67, "phase": phase},
+            ],
             "rating": rating,
         }
 
@@ -818,10 +1353,53 @@ def self_test() -> int:
     assert result["home_share_low"] == 0, result["home_share_low"]
     assert result["rows"][0]["plot_archetype"] == "flat", result["rows"][0]
 
+    # P0a: поток отличается от застревания, локальный затык — от общего.
+    modes = result["visit_modes"]
+    assert modes["flow"] == 5, modes
+    assert modes["local_stuck"] == 2, modes
+    assert modes["stuck"] == 2, modes
+    assert modes["productive_struggle"] == 1, modes
+    assert modes["short"] == 2, modes
+    assert result["rows"][0]["visit_mode"] == "flow", result["rows"][0]
+    assert result["rows"][3]["visit_mode"] == "local_stuck", result["rows"][3]
+    assert result["rows"][7]["visit_mode"] == "stuck", result["rows"][7]
+    assert result["rows"][6]["visit_mode"] == "productive_struggle", result["rows"][6]
+    assert result["rows"][0]["active_ms"] == 55000, result["rows"][0]
+    assert result["rows"][0]["overflow"] == 1, result["rows"][0]
+    assert result["hints"]["requested"] == 3, result["hints"]
+    assert result["hints"]["picked"] == 2, result["hints"]
+    assert result["reference_profile_visits"] == 7, result["reference_profile_visits"]
+    assert len(result["reference_rows"]) == 2, result["reference_rows"]
+    assert result["reference_degrees"]["I"] > 0, result["reference_degrees"]
+    assert result["reference_transitions"].get("I>IV", 0) > 0, result["reference_transitions"]
+
+    # Длинный run сам по себе не приговор: E major с B-педалем и высокой
+    # плотностью остаётся потоком, а F♯ minor с 62 хитами и малой долей смен —
+    # гармонический затык, даже если ноты поверх частые.
+    e_major = {
+        "counts": {"notes": 3965, "chords": 35, "chordChanges": 20},
+        "timing": {"activePlayMs": 300000, "playMs": 310000},
+        "runs": [{"durationMs": 173000, "notes": 12, "chordHits": 12,
+                  "noteDensity": 0.07, "degree": "I"}],
+        "events": [], "overflow": True,
+    }
+    f_minor = {
+        "counts": {"notes": 295, "chords": 133, "chordChanges": 24},
+        "timing": {"activePlayMs": 300000, "playMs": 310000},
+        "runs": [{"durationMs": 88000, "notes": 295, "chordHits": 62,
+                  "noteDensity": 3.35, "degree": "i"}],
+        "events": [],
+    }
+    assert classify_visit(5, visit_metrics(e_major)) == "flow"
+    assert classify_visit(2, visit_metrics(f_minor)) == "stuck"
+
     md = render_md(result)
     assert "HARMONIA · исследование" in md
     assert "войлок" in md and "Наблюдения" in md
     assert "Сюжет станции" in md and "Доля «дома»" in md
+    assert "Поток, поиск и застревание" in md and "local_stuck" in md
+    assert "Эталоны и высокая оценка" in md and "C major" in md
+    assert "Компас «куда дальше»" in md and "Доля выбранных подсказок" in md
     csv_text = render_csv(result)
     lines = [line for line in csv_text.splitlines() if line.strip()]
     assert lines[0].startswith("segment_id,"), lines[0]
@@ -835,7 +1413,8 @@ def self_test() -> int:
 
     print(
         "OK: self-test — 12 посещений, 10 оценок, средняя 3.90; "
-        "станции neutral 4.75 / glass 4.33 / felt 2.33; min-n=4 оставляет neutral."
+        "станции neutral 4.75 / glass 4.33 / felt 2.33; min-n=4 оставляет neutral; "
+        "визиты: flow 5 / local_stuck 2 / stuck 2 / productive 1 / short 2."
     )
     return 0
 

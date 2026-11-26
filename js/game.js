@@ -479,6 +479,9 @@ function chordEvent(h, vel, source) {
     // значит он часть визита. Запись при этом по-прежнему не дублирует
     // распознанный с пианино аккорд.
     if (typeof Research !== 'undefined') Research.onChord(h, vel, source);
+    // Компас узнаёт, выбрал ли игрок подсказку или ушёл своим ходом. Это
+    // наблюдатель: sound/score уже посчитаны выше, Guide ничего не меняет.
+    if (typeof Guide !== 'undefined' && typeof Guide.onChord === 'function') Guide.onChord(h);
     if (typeof Composition !== 'undefined') Composition.onChord(h);
   }
   const c = combo(), now = performance.now();

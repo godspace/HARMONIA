@@ -46,6 +46,9 @@ const INPUT = {
     // Стрелки: ←/→ — лад, ↑/↓ — комбо.
     ArrowUp: 'next', ArrowDown: 'prev', ArrowLeft: 'major', ArrowRight: 'minor',
     KeyM: 'mute', KeyC: 'clear', Escape: 'pause', Digit0: 'restart', Space: 'comboAdvance',
+    // H — компас «куда дальше» (js/guide.js). Клавиша ничего не играет:
+    // она только раскрывает 2–3 объяснимых продолжения текущего аккорда.
+    KeyH: 'hint',
     Minus: 'octDown', Equal: 'octUp',
     // Цифры выбирают визуализацию напрямую: 1 — орбиты, 2 — спектр, 3 — круг.
     // Порядок совпадает с VIZ_ORDER.

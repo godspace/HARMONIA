@@ -343,6 +343,40 @@ var I18N = (function () {
     'Хранилище исследования заполнено — старые данные удалены':
       'Research storage is full — the oldest data was removed',
 
+    // ===== Компас «куда дальше» =====
+    // Подписи свёрнутой строки и трёх ходов. Причины короткие: они стоят
+    // третьей строкой на кнопке и не должны спорить с названием аккорда.
+    'Куда дальше': 'Where next',
+    'Не знаю, что дальше': 'I don’t know what comes next',
+    'H — показать 2–3 продолжения текущего аккорда':
+      'H — show 2–3 continuations of the current chord',
+    'Пометить, что не знаете, куда дальше, и открыть компас':
+      'Mark that you are unsure where to go and open the compass',
+    'Держать тепло': 'Hold the warmth',
+    'Развить': 'Develop',
+    'Контраст': 'Contrast',
+    'Сначала сыграйте аккорд': 'Play a chord first',
+    'общие тоны': 'common tones',
+    'по кварте': 'by a fourth',
+    'мягкий сдвиг': 'a soft shift',
+    'подготовка доминанты': 'preparing the dominant',
+    'разрешение в тонику': 'resolving to the tonic',
+    'вводный тон': 'leading tone',
+    'красивый переход': 'a lovely move',
+    'шаг вперёд': 'a step forward',
+    'краска вне лада': 'colour outside the key',
+    'сдвиг на терцию': 'a shift by a third',
+    'новый цвет': 'a new colour',
+    'цель такта': 'bar target',
+    'эталон': 'reference',
+    'высокая оценка': 'high rating',
+    'гипотеза': 'hypothesis',
+    'эталоны': 'references',
+    'по ступеням': 'by degree',
+    'Один эталон — это гипотеза, а не правило':
+      'One reference is a hypothesis, not a rule',
+    'Высокие оценки и явные эталоны': 'High ratings and explicit references',
+
     // ===== Визуализация =====
     'Визуализация': 'Visualisation',
     'Выбор визуализации сцены': 'Pick a scene visualisation',
@@ -510,6 +544,7 @@ var I18N = (function () {
     '= комбо ·': '= combo ·',
     '= барабаны ·': '= drums ·',
     '= новое комбо после 300 ·': '= new combo after 300 ·',
+    '= куда дальше ·': '= where next ·',
     '= визуализация ·': '= visualisation ·',
     '= пауза · MIDI: трезвучие = аккорд': '= pause · MIDI: triad = chord',
 

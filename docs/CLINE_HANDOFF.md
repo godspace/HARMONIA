@@ -199,6 +199,21 @@
   `tools/research.py` (`--md`, `--csv`, `--min-n`, `--self-test`). Smoke-шаг
   `research-rating` проверяет запись, клавиши, комментарий, Esc, связь с
   авто-записью, форму JSON и очистку.
+  P0a добавил в визит `timing` (`activePlayMs`, `tailMs`, `recordingCoverage`),
+  `runs[]` (`durationMs`, `notes`, `chordHits`, `noteDensity`, `endedBy`),
+  `counts.chordChanges/longestChordRun` и `fingerprint` (pitch class/октавы,
+  `chordSeq`, переходы). Эти агрегаты считаются до `MAX_EVENTS`, поэтому
+  `overflow: true` их не теряет. `tools/research.py` теперь различает `flow`,
+  `productive_struggle`, `stuck`, `local_stuck`, `short` и печатает эталоны.
+- **Компас «куда дальше»** — `js/guide.js`, строка `#guideLine` под аккордами.
+  `H` или **Не знаю, что дальше** раскрывают 2–3 хода: **Держать тепло**,
+  **Развить**, **Контраст**. Клик по ходу играет аккорд, без клика компас
+  молчит. Hold не сводится к V→I: он ищет общие тоны и медианту в «тёплых»
+  ступенях, Develop ценит `ii/IV→V`, вводный тон и цель такта, Contrast —
+  медианту/borrow. В пьесе цель такта закрепляется за Develop. Эталонный
+  профиль строится из оценок 4–5/`rating.reference`: один эталон в другой
+  тональности — `hypothesis`, три и больше — перенос по ступеням. Запросы,
+  показы, клики и игнор пишутся в `hints` визита. Smoke-шаг `guide-compass`.
 
 ## 2. Что осталось сделать вручную
 
