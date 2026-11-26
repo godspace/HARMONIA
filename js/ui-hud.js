@@ -6,6 +6,28 @@
 let chordCards = [];
 let chordHoldTimer = null;
 let chordHoldCode = null;
+function escHtml(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+// Каждая нота — отдельный span: js/guide.js красит его по роли для баса,
+// не перестраивая карточку и не теряя pointer-события.
+function chordNotesHtml(h) {
+  if (!h) return '';
+  const names = Array.isArray(h.names) ? h.names : [];
+  const pcs = Array.isArray(h.pcs) ? h.pcs : [];
+  if (!names.length) return escHtml(h.name || '');
+  return names.map((name, i) =>
+    `<span class="cc-note" data-pc="${pcs[i] == null ? '' : pcs[i]}">` +
+      `${escHtml(cap(noteLabel(name)))}</span>`
+  ).join('-');
+}
+function chordPcsKey(h) {
+  if (!h || !Array.isArray(h.pcs)) return '';
+  return typeof harmonyPcsKey === 'function'
+    ? harmonyPcsKey(h) : h.pcs.slice().sort((a, b) => a - b).join(',');
+}
 function markChordCard(code, on) {
   if (!code) return;
   const card = chordCards.find(el => el.dataset.code === code);
@@ -39,11 +61,16 @@ function startChordHold(code) {
 function buildChordPad() {
   const pad = $('chordPad');
   const list = harmonicChords();
-  pad.innerHTML = list.map(h =>
-    `<button class="chord-card${h.tonic ? ' tonic' : ''}" data-code="${h.code}" data-deg="${h.degree.toLowerCase()}" title="${h.hint}: ${h.names.join('-')}">` +
+  pad.innerHTML = list.map(h => {
+    const pcsKey = chordPcsKey(h);
+    const title = h.hint + ': ' + h.names.join('-');
+    return `<button class="chord-card${h.tonic ? ' tonic' : ''}" data-code="${h.code}" ` +
+      `data-deg="${h.degree.toLowerCase()}" data-root-pc="${h.rootPc == null ? '' : h.rootPc}" ` +
+      `data-pcs-key="${pcsKey}" data-base-title="${escHtml(title)}" title="${escHtml(title)}">` +
       `<span class="cc-head"><span class="cc-deg">${h.degree}</span><span class="cc-key">${KEY_CAP[h.code]}</span></span>` +
-      `<span class="cc-name">${h.name}</span>` +
-    `</button>`).join('');
+      `<span class="cc-name">${chordNotesHtml(h)}</span>` +
+    `</button>`;
+  }).join('');
   chordCards = Array.from(pad.querySelectorAll('.chord-card'));
   chordCards.forEach(card => {
     card.addEventListener('pointerdown', (e) => {
@@ -68,14 +95,21 @@ function syncChordPadLabels() {
     const h = list[i];
     if (!h) return;
     const deg = h.degree.toLowerCase();
-    if (card.dataset.deg === deg) return;
+    const pcsKey = chordPcsKey(h);
+    const sig = deg + '|' + pcsKey + '|' + (h.names || []).join(',') + '|' + (h.name || '');
+    if (card.dataset.sig === sig) return;
+    card.dataset.sig = sig;
     card.dataset.deg = deg;
+    card.dataset.rootPc = h.rootPc == null ? '' : String(h.rootPc);
+    card.dataset.pcsKey = pcsKey;
     card.classList.toggle('tonic', !!h.tonic);
-    card.title = h.hint + ': ' + h.names.join('-');
+    const title = h.hint + ': ' + h.names.join('-');
+    card.dataset.baseTitle = title;
+    card.title = title;
     const degEl = card.querySelector('.cc-deg');
     const nameEl = card.querySelector('.cc-name');
     if (degEl) degEl.textContent = h.degree;
-    if (nameEl) nameEl.textContent = h.name;
+    if (nameEl) nameEl.innerHTML = chordNotesHtml(h);
   });
 }
 function paintChordPad() {
@@ -90,6 +124,8 @@ function paintChordPad() {
     card.classList.toggle('next', card.dataset.deg === guide);
     card.classList.toggle('done', done.has(card.dataset.deg));
   });
+  // Цвета нот и «следующий аккорд» живут на тех же карточках.
+  if (typeof Guide !== 'undefined' && typeof Guide.paint === 'function') Guide.paint();
 }
 function flashTonicCard() {
   const card = chordCards.find(el => el.classList.contains('tonic'));

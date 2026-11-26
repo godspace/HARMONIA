@@ -16,10 +16,6 @@ function runCommand(id) {
     // На стартовом экране Enter перехватывает проба (introPress), поэтому
     // здесь команда работает уже в сессии.
     case 'groove': if (state.started) toggleGroove(); break;
-    // H — не аккорд и не нота: показать/обновить компас, не начиная игру.
-    case 'hint':
-      if (state.started && !state.paused && typeof Guide !== 'undefined') Guide.request();
-      break;
     case 'mute': toggleMute(); break;
     case 'pause': setPaused(!state.paused); break;
     case 'clear': clearPen(); toast('След очищен'); break;

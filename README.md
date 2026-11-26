@@ -587,10 +587,8 @@ HARMONIA.research.recordingJsonName(rec) // общее имя записи с .j
 HARMONIA.research.exportAskJson() // скачать JSON открытой карточки оценки
 HARMONIA.research.exportSelectedJson() // скачать JSON выбранной записи из панели
 HARMONIA.research.referenceProfile() // эталонный профиль: same-key / degree / hypothesis
-HARMONIA.Guide.request()      // H: показать 2–3 хода «куда дальше»
-HARMONIA.Guide.markStuck()    // «Не знаю, что дальше»: stuckMarked + компас
-HARMONIA.Guide.state()        // {open, moves, reference, referenceTransfer}
-HARMONIA.Guide.pick(0)        // сыграть выбранный ход; без вызова компас молчит
+HARMONIA.Guide.state()        // {moves, next, bassPc, reference, referenceTransfer}
+HARMONIA.Guide.paint()        // перекрасить ноты/следующий аккорд на карточках
 HARMONIA.Composition.start()  // запустить 16-тактную пьесу; stop(true) — вернуться в джем
 HARMONIA.Composition.targetForBar(1) // цель такта в текущем ладу
 HARMONIA.Transport.bpm; HARMONIA.state.transport // часы формы: такт, доля, фаза
@@ -628,9 +626,10 @@ Google Search Console, счётчик Яндекс.Метрики и старт�
 ручном переходе, игнор replay, счёт при перезапуске сессии и `pagehide`, а затем
 очищает сбор и `localStorage`. Он же проверяет **⬇ JSON** карточки и панели:
 `exportScope`, единственный сегмент визита, связанную запись, пустой `segments`
-для ручной записи, `recordingMissing` и имена `harmonia-combo-*.json`. Шаг `guide-compass`
-проверяет, что Hold не равен V→I, `H` пишет `hintRequested`/`hintShown`,
-клик даёт `hintPicked`, а цель такта ii в пьесе ведёт компас. P0a-поля
+для ручной записи, `recordingMissing` и имена `harmonia-combo-*.json`. Шаг `guide-inline`
+проверяет, что меню и H больше нет, ноты на карточках получают роли для баса,
+следующий аккорд отмечается рамкой, `hintShown`/`hintPicked` пишутся
+автоматически, а цель такта ii в пьесе ведёт подсветку. P0a-поля
 визита (`timing.activePlayMs/tailMs`, `runs[]`, `counts.chordChanges`,
 `fingerprint`, `overflow`) проверяются `python tools/research.py --self-test`
 на синтетических визитах. Шаги записи проверяют общую

@@ -1,8 +1,11 @@
-/* HARMONIA · js/guide.js — компас «куда дальше»: 2–3 продолжения текущего аккорда
+/* HARMONIA · js/guide.js — инлайн-подсказки на карточках аккордов (P0c)
    Модуль без сборки: подключается <script> в index.html после research.js.
-   Это не генератор мелодии и не автопилот: подсказка только называет ход,
-   а звучит он после нажатия игрока. Все решения объяснимы: общие тоны,
-   функция, тяготение, недавний повтор и эталонный профиль из Research.
+   Отдельного меню и клавиши H больше нет: игрок держит аккорд правой рукой,
+   левой ищет бас, а карточки уже стоят перед глазами. Guide только красит
+   названия нот по роли для баса и отмечает следующий аккорд. Это не генератор
+   мелодии и не автопилот: ничего не звучит без нажатия игрока.
+   Все решения объяснимы: общие тоны, функция, тяготение, недавний повтор и
+   эталонный профиль из Research.
    Все модули делят глобальную область — имена функций/констант уникальны. */
 
 var Guide = (function () {
@@ -15,6 +18,13 @@ var Guide = (function () {
     develop: 'Развить',
     contrast: 'Контраст'
   };
+  const BASS_LABEL = {
+    root: 'корень аккорда',
+    tone: 'тон аккорда',
+    color: 'мягкая краска',
+    clash: 'трение',
+    outside: 'вне лада'
+  };
   // «Тёплые» ступени: отсюда компас держит поле, а не тащит в каденцию.
   // V/vii° не входят в hold: их место — в «Развить», и только как один из
   // вариантов, а не как единственный «правильный» ход.
@@ -23,24 +33,19 @@ var Guide = (function () {
     minor: ['i', 'III', 'iv', 'VI']
   };
 
-  let open = false;
   let moves = [];
-  let pending = null;        // показанные варианты, ждущие ответа игрока
-  let offeredAt = 0;
-  let picking = false;       // клик по подсказке не считается «игнором»
+  let next = null;
   let profileCache = null;
   let profileKey = '';
   let lastSig = '';
+  let lastCue = '';
 
-  function guideLine() { return $('guideLine'); }
+  function mod12(value) {
+    return ((Number(value) % 12) + 12) % 12;
+  }
   function tr(s) {
     return typeof I18N !== 'undefined' && I18N.enabled() &&
       typeof I18N.text === 'function' ? I18N.text(s) : String(s == null ? '' : s);
-  }
-  function esc(s) {
-    return String(s == null ? '' : s)
-      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
   }
   function currentChord() {
     const act = state.harmony && state.harmony.lastTriad;
@@ -53,6 +58,34 @@ var Guide = (function () {
       if (held && held.length) return held;
     }
     return state.heard && Array.isArray(state.heard.pcs) ? state.heard.pcs.slice() : [];
+  }
+  // Активный бас — самая низкая зажатая/залипшая MIDI-нота. Правая рука
+  // обычно выше, поэтому это именно левая. Без MIDI подсветки нет: клик по
+  // карточке не должен выдавать её корень за «взятую» басовую ноту.
+  function activeBassPc() {
+    if (typeof Heard === 'undefined' || typeof Heard.midis !== 'function') return null;
+    const midis = Heard.midis();
+    return midis.length ? mod12(midis[0]) : null;
+  }
+  // Роль ноты как баса под текущим аккордом:
+  //   root  — корень, tone — терция/квинта (устойчиво),
+  //   color — ступень лада без острого трения (мягкая краска),
+  //   clash — малая секунда/тритон к тону аккорда,
+  //   outside — вне лада.
+  function bassAffinity(pc, chord) {
+    if (!chord || !Array.isArray(chord.pcs) || !chord.pcs.length) return '';
+    const p = mod12(pc);
+    if (chord.pcs.some(c => mod12(c) === p)) {
+      return chord.rootPc != null && mod12(chord.rootPc) === p ? 'root' : 'tone';
+    }
+    if (typeof scalePcs === 'function' && scalePcs().indexOf(p) === -1) return 'outside';
+    let nearest = 12;
+    chord.pcs.forEach(c => {
+      const d = Math.abs(p - mod12(c)) % 12;
+      const interval = Math.min(d, 12 - d);
+      if (interval < nearest) nearest = interval;
+    });
+    return nearest === 1 || nearest === 6 ? 'clash' : 'color';
   }
   function pieceTarget() {
     if (!state.form || !state.form.enabled || !state.form.running ||
@@ -266,163 +299,121 @@ var Guide = (function () {
     return out;
   }
 
-  function moveHtml(move, i) {
-    const kind = tr(ROLE_LABEL[move.role] || move.role);
-    const target = move.target ? ' · ' + tr('цель такта') : '';
-    const star = move.refHit ? ' ✦' : '';
-    return `<button class="guide-move ${move.role}${move.target ? ' target' : ''}" ` +
-      `type="button" data-guide-pick="${i}" title="${esc(tr(move.why))}: ${esc(move.name)}">` +
-      `<span class="gm-kind">${esc(kind + target)}</span>` +
-      `<span class="gm-chord"><b>${esc(move.degree)}</b> ${esc(move.name)}</span>` +
-      `<span class="gm-why">${esc(tr(move.why))}${star}</span>` +
-    `</button>`;
+  // Один «следующий» аккорд: цель такта важнее свободного ранжирования,
+  // затем Развить, Держать, Контраст. Если такого аккорда нет на пяти
+  // карточках, подсветка не появляется — ряд не обещает лишнего.
+  function nextMove() {
+    if (!moves.length) return null;
+    const cardKeys = typeof harmonicChords === 'function'
+      ? harmonicChords().map(h => harmonyPcsKey(h)) : [];
+    const ordered = moves.filter(m => m.target)
+      .concat(moves.filter(m => m.role === 'develop'))
+      .concat(moves.filter(m => m.role === 'hold'))
+      .concat(moves.filter(m => m.role === 'contrast'));
+    const seen = new Set();
+    const unique = ordered.filter(m => {
+      if (!m || !m.pcsKey || seen.has(m.pcsKey)) return false;
+      seen.add(m.pcsKey);
+      return true;
+    });
+    return unique.find(m => cardKeys.indexOf(m.pcsKey) !== -1) || unique[0] || null;
+  }
+  function paintChordCards(chord, bassPc) {
+    if (typeof chordCards === 'undefined' || !chordCards || !chordCards.length) return;
+    const nextKey = next ? next.pcsKey : '';
+    chordCards.forEach(card => {
+      card.querySelectorAll('.cc-note[data-pc]').forEach(el => {
+        const raw = el.getAttribute('data-pc');
+        const pc = raw == null || raw === '' ? null : Number(raw);
+        const role = pc == null ? '' : bassAffinity(pc, chord);
+        el.classList.remove('bn-root', 'bn-tone', 'bn-color', 'bn-clash', 'bn-outside', 'bn-live');
+        if (role) el.classList.add('bn-' + role);
+        if (bassPc != null && pc != null && mod12(pc) === bassPc) el.classList.add('bn-live');
+        if (role) el.title = tr(BASS_LABEL[role] || role);
+        else el.removeAttribute('title');
+      });
+      const rootRaw = card.getAttribute('data-root-pc');
+      const rootPc = rootRaw == null || rootRaw === '' ? null : Number(rootRaw);
+      const rootRole = rootPc == null ? '' : bassAffinity(rootPc, chord);
+      card.classList.remove('bass-root', 'bass-tone', 'bass-color', 'bass-clash',
+        'bass-outside', 'bass-live');
+      if (rootRole) card.classList.add('bass-' + rootRole);
+      if (bassPc != null && rootPc != null && mod12(rootPc) === bassPc) {
+        card.classList.add('bass-live');
+      }
+      const isNext = !!nextKey && card.dataset.pcsKey === nextKey;
+      card.classList.toggle('guide-next', isNext);
+      const base = card.dataset.baseTitle || '';
+      const bassHint = rootRole
+        ? ' · ' + tr('бас') + ': ' + tr(BASS_LABEL[rootRole] || rootRole) : '';
+      card.title = base + bassHint + (isNext && next
+        ? ' · ' + tr('следующий аккорд') + ': ' + tr(ROLE_LABEL[next.role] || next.role) +
+          ' · ' + tr(next.why)
+        : '');
+    });
   }
   function paint(force) {
-    const line = guideLine();
-    if (!line) return moves;
+    if (typeof chordCards === 'undefined' || !chordCards || !chordCards.length) {
+      moves = [];
+      next = null;
+      return moves;
+    }
     const prev = currentChord();
     const profile = referenceProfile();
+    const held = heldPcs();
+    const bassPc = activeBassPc();
+    const target = typeof smartTargetDegree === 'function' ? smartTargetDegree() : '';
     const sig = [
       state.mode, state.comboIdx, prev ? harmonyPcsKey(prev) : '',
-      heldPcs().join(','), open ? '1' : '0',
+      state.chordIndex, target, held.join(','),
+      bassPc == null ? '' : bassPc, chordCards.length,
       state.form && state.form.bar ? state.form.bar : '',
+      state.form && state.form.phase ? state.form.phase : '',
       profile && profile.label ? profile.label : ''
     ].join('|');
     if (!force && sig === lastSig) return moves;
     lastSig = sig;
-    moves = open ? computeMoves() : [];
-    const movesEl = $('guideMoves');
-    const refEl = $('guideRef');
-    const kicker = $('guideHintBtn');
-    line.classList.toggle('open', !!open);
-    line.classList.toggle('empty', !!open && !moves.length);
-    if (kicker) kicker.setAttribute('aria-expanded', String(!!open));
-    if (refEl) {
-      const label = profile && profile.label ? tr(profile.label) : '';
-      refEl.hidden = !label;
-      refEl.textContent = label;
-      refEl.title = profile && profile.transfer === 'hypothesis'
-        ? 'Один эталон — это гипотеза, а не правило' : 'Высокие оценки и явные эталоны';
-    }
-    if (movesEl) {
-      movesEl.innerHTML = moves.map(moveHtml).join('') +
-        (open && !moves.length
-          ? `<span class="guide-empty">${esc(tr('Сначала сыграйте аккорд'))}</span>` : '');
-    }
-    return moves;
-  }
-  function openCompass(via) {
-    open = true;
-    const shown = paint(true);
-    offeredAt = performance.now();
-    pending = shown.length ? shown.map(m => Object.assign({}, m, { pcs: m.pcs.slice() })) : null;
-    if (shown.length) {
-      const prev = currentChord();
-      if (typeof Research !== 'undefined' && typeof Research.logHint === 'function') {
-        Research.logHint('hintShown', {
-          chord: prev ? prev.degree : '', moves: shown, via: via || ''
-        });
-      }
-    }
-    return shown;
-  }
-  function request() {
-    const prev = currentChord();
-    if (typeof Research !== 'undefined' && typeof Research.logHint === 'function') {
-      Research.logHint('hintRequested', { chord: prev ? prev.degree : '', via: 'H' });
-    }
-    openCompass('H');
-    return true;
-  }
-  function markStuck() {
-    const prev = currentChord();
-    if (typeof Research !== 'undefined' && typeof Research.logHint === 'function') {
-      Research.logHint('stuckMarked', { chord: prev ? prev.degree : '', via: 'stuck' });
-    }
-    openCompass('stuck');
-    return true;
-  }
-  function onChord(h) {
-    if (picking) { picking = false; pending = null; return; }
-    if (!pending || !h || !h.pcs) return;
-    const key = harmonyPcsKey(h);
-    const match = pending.find(m => m.pcsKey === key);
-    if (typeof Research !== 'undefined' && typeof Research.logHint === 'function') {
-      if (match) {
-        Research.logHint('hintPicked', {
-          chord: match.degree, played: match.degree, moves: pending, via: 'played'
-        });
-      } else {
-        Research.logHint('hintIgnored', {
-          chord: currentChord() ? currentChord().degree : '',
-          played: h.degree || h.name || '',
-          afterMs: performance.now() - offeredAt,
-          moves: pending, via: 'played'
-        });
-      }
-    }
-    pending = null;
-  }
-  function playMove(move) {
-    if (!move) return false;
-    if (typeof playable === 'function' && !playable()) return false;
-    if (typeof initAudio === 'function') initAudio();
-    if (typeof harmonicChords === 'function' && typeof playHarmonic === 'function') {
-      const idx = harmonicChords().findIndex(h => harmonyPcsKey(h) === move.pcsKey);
-      if (idx !== -1) { playHarmonic(idx, 0.9); return true; }
-    }
-    if (typeof playChordAudio === 'function' && typeof chordEvent === 'function') {
-      playChordAudio(move, 0.9);
-      chordEvent(move, 0.9, 'keys');
-      return true;
-    }
-    return false;
-  }
-  function pick(index) {
-    const move = moves[index];
-    if (!move) return false;
-    if (typeof playable === 'function' && !playable()) return false;
-    if (typeof Research !== 'undefined' && typeof Research.logHint === 'function') {
-      Research.logHint('hintPicked', {
-        chord: currentChord() ? currentChord().degree : '',
-        played: move.degree, moves: moves, target: !!move.target, via: 'click'
+    moves = prev ? computeMoves() : [];
+    next = nextMove();
+    paintChordCards(prev, bassPc);
+    const cue = prev && next ? harmonyPcsKey(prev) + '>' + next.pcsKey : '';
+    if (cue && cue !== lastCue && !state.replay && typeof Research !== 'undefined' &&
+        typeof Research.logHint === 'function') {
+      Research.logHint('hintShown', {
+        chord: prev.degree, moves: [next], via: 'inline'
       });
     }
-    picking = true;
-    const ok = playMove(move);
-    picking = false;
-    if (ok) pending = null;
-    return ok;
+    lastCue = cue;
+    return moves;
+  }
+  function onChord(h) {
+    if (!h || !h.pcs) return;
+    // chordEvent() зовёт это до обновления lastTriad: next — ещё подсказка
+    // предыдущего аккорда. Если игрок сыграл именно её, это hintPicked.
+    if (next && next.pcsKey === harmonyPcsKey(h) &&
+        typeof Research !== 'undefined' && typeof Research.logHint === 'function') {
+      Research.logHint('hintPicked', {
+        chord: currentChord() ? currentChord().degree : '',
+        played: h.degree || h.name || '',
+        moves: [next], via: 'inline'
+      });
+    }
   }
   function stateOf() {
     const profile = referenceProfile();
     return {
-      open: !!open,
       moves: moves.map(m => Object.assign({}, m, { pcs: m.pcs.slice() })),
+      next: next ? Object.assign({}, next, { pcs: next.pcs.slice() }) : null,
+      bassPc: activeBassPc(),
       reference: profile && profile.label ? profile.label : '',
       referenceTransfer: profile ? profile.transfer : '',
       referenceUsable: !!(profile && profile.usable)
     };
   }
   function initGuide() {
-    const line = guideLine();
-    if (!line) return;
-    line.addEventListener('click', (e) => {
-      const pickBtn = e.target.closest ? e.target.closest('[data-guide-pick]') : null;
-      if (pickBtn) {
-        e.preventDefault();
-        pick(parseInt(pickBtn.dataset.guidePick, 10));
-        return;
-      }
-      const act = e.target.closest ? e.target.closest('[data-guide-act]') : null;
-      if (!act) return;
-      e.preventDefault();
-      if (act.dataset.guideAct === 'stuck') markStuck();
-      else request();
-    });
     paint(true);
   }
   initGuide();
 
-  return { request, markStuck, pick, onChord, paint, state: stateOf };
+  return { onChord, paint, state: stateOf };
 })();

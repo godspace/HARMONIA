@@ -49,7 +49,7 @@
 | `audio-export` | сохранение записи в WAV | `startAudioExport(rec, {purpose, onDone})`, `cancelAudioExport`, `audioExportStatus` (`id`, `purpose`), `audioSupported`, `audioFileName`, `audioDuration`, `audioPcmToWav`, `#recAudio`/`#researchAskAudio`/`#audioExport` |
 | `suno` | мостик к Suno без API: английский промпт + WAV | `SUNO_CREATE_URL`, `sunoPrompt`, `sunoStart`, `sunoOpen`, `sunoCopyText`, `sunoPaint`, `sunoState`, кнопки `#recSuno`/`#researchAskSuno` |
 | `research` | оценки комбо и поведение (по умолчанию включены) | `Research` (`enable`, `disable`, `setAsk`, `status`, `exportData`, `exportVisitData`, `exportRecordingData`, `download`, `exportAskJson`, `exportSelectedJson`, `visitFileName`, `recordingJsonName`, `gateKey`, `linkRecording`, `askRecording`, `exportAskVideo`, `exportAskAudio`, `exportAskSuno`, `holdAsk`, `onChord/Note`, `enterCombo/leaveCombo`, `logHint`, `referenceProfile`, `dataVersion`), `CFG.research`, кнопки `#researchAskJson`/`#recJson` |
-| `guide` | компас «куда дальше»: 2–3 хода, объяснимые без LLM | `Guide` (`request`, `markStuck`, `pick`, `onChord`, `paint`, `state`), `#guideLine`, `#guideMoves`, `#guideHintBtn`, `#guideStuck`, `CFG.guide` |
+| `guide` | инлайн-подсказки: роли нот под бас и следующий аккорд на карточках | `Guide` (`onChord`, `paint`, `state`), `#chordPad .chord-card`, `.cc-note`, `.guide-next`, `CFG.guide` |
 | `ui-panel` | настройки | `bindRange`, `bindSelect`, `bindToggle`, `syncAll`, `togglePedal` |
 | `ui-drawers` | выдвижные панели | `drawers`, `drawerOpen`, `drawerIntro`, `setDrawer`, `toggleDrawer`, `setDrawerIntro`, `initDrawers` |
 | `ui-compose` | HUD/панель формы и результат | `buildFormHud`, `updateFormHUD`, `resetFormHud`, `setFormEnabled`, `showFormResult`, `initCompose` |
@@ -431,11 +431,11 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
   ступеней и переходы) считается **до** проверки `MAX_EVENTS`, поэтому
   `overflow: true` не лишает визит компактного поведения. `counts.notes/chords`
   теперь честные музыкальные итоги, а `events[]` может быть усечён лимитом.
-- **Подсказки и эталоны.** `Research.logHint(type, data)` пишет `hintRequested`,
-  `stuckMarked`, `hintShown`, `hintPicked`, `hintIgnored` в `hints`
-  (`requested/stuck/shown/picked/ignored`) и отдельным событием `type: 'hint'`.
-  Компасом управляет `Guide`, но данные остаются наблюдательскими: без
-  `enabled` хуки выходят сразу, звук и счёт не меняются. `referenceProfile()`
+- **Подсказки и эталоны.** `Research.logHint(type, data)` пишет `hintShown` и
+  `hintPicked` в `hints` (`shown/picked`) и отдельным событием `type: 'hint'`;
+  старые ключи `requested/stuck/ignored` остаются в схеме для совместимости.
+  Инлайн-подсказками управляет `Guide`, но данные остаются наблюдательскими:
+  без `enabled` хуки выходят сразу, звук и счёт не меняются. `referenceProfile()`
   строит профиль только из оценок 4–5 и явных эталонов; при одном эталоне в
   другой тональности это `hypothesis`, при трёх и более — перенос ступеней,
   абсолютные pitch class используются только в той же тональности.
@@ -496,14 +496,25 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
   Поэтому исследование можно включать и выключать посреди игры: звук и счёт от
   этого не зависят, меняется только наличие карточки.
 
-## Компас «куда дальше»: P0b
+## Инлайн-подсказки на карточках: P0c
 
 `js/guide.js` — отдельный слой поверх `state.harmony.lastTriad`, а не генератор
-мелодии. Под аккордами живёт свёрнутая строка `#guideLine`; `H` (или кнопка
-**Не знаю, что дальше**) раскрывает 2–3 кнопки `#guideMoves`. Клик по кнопке
-играет тот же аккорд, что и карточка/пэд (`playHarmonic`, иначе
-`playChordAudio` + `chordEvent`); без клика компас ничего не озвучивает.
+мелодии. Отдельного меню и клавиши `H` больше нет: игрок держит аккорд правой
+рукой и ищет бас левой, поэтому подсказка должна быть на уже существующем ряду
+`#chordPad`. Ряд не перестраивается: `Guide.paint()` только добавляет классы
+нотам `.cc-note[data-pc]` и карточкам.
 
+- **Роли для баса.** `bassAffinity(pc, chord)` возвращает `root` (корень
+  аккорда), `tone` (терция/квинта), `color` (ступень лада без острого трения),
+  `clash` (малая секунда/тритон к тону аккорда) или `outside` (вне лада).
+  Корень красится золотым, тоны — зелёным, мягкая краска — янтарным,
+  трение/вне лада — приглушённо. Нижняя полоска карточки показывает роль её
+  **корня** как баса, а самая низкая зажатая MIDI-нота получает `bn-live`
+  (подчёркивание): видно, где сейчас левая рука.
+- **Следующий аккорд.** Из тех же 2–3 ходов выбирается один: цель такта, затем
+  `Развить`, `Держать`, `Контраст`. Если его `pcsKey` есть среди пяти карточек,
+  карточка получает `.guide-next` с зелёной рамкой и стрелкой; иначе ряд не
+  подсвечивается, чтобы не обещать несуществующую кнопку.
 - **Слоты.** `Держать тепло` ищет общие тоны, плагальность и медианту в
   «тёплых» ступенях (`I ii iii IV vi` в мажоре, `i III iv VI` в миноре) и не
   предлагает V→I как «правильный» ход. `Развить` ценит `ii/IV→V`, `V→I`,
@@ -518,15 +529,16 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
 - **Эталонный профиль.** `Research.referenceProfile()` возвращает
   `transfer: 'same-key' | 'degree' | 'hypothesis'`, нормализованные `degrees`,
   `transitions` и (только для той же тональности) `pitchClasses`. При одном
-  эталоне в другой тональности это `hypothesis` и подпись «гипотеза · E major»;
-  после `CFG.guide.transferRefs = 3` ступени переносятся между тональностями.
+  эталоне в другой тональности это `hypothesis`; после
+  `CFG.guide.transferRefs = 3` ступени переносятся между тональностями.
   `Guide` кэширует профиль по `Research.dataVersion()`.
-- **Наблюдения.** Requests/picks/ignored пишутся через `Research.logHint` в
-  `hints` и события `hint`; `hintShown` фиксирует, что именно было показано.
-  В `tools/research.py` это раздел **Компас «куда дальше»** и колонки
-  `hints_requested/picked/ignored`. Smoke-шаг `guide-compass` проверяет, что
-  Hold не равен V, H пишет события, клик даёт `hintPicked`, а цель такта ii
-  в пьесе действительно ведёт компас.
+- **Наблюдения.** `paint()` пишет `hintShown`, когда меняется показанный
+  следующий аккорд, а `onChord()` — `hintPicked`, если игрок сыграл именно
+  подсвеченную карточку. В `tools/research.py` это раздел **Подсказки на
+  карточках** и колонки `hints_shown/picked` (старые `requested/stuck/ignored`
+  сохраняются для совместимости). Smoke-шаг `guide-inline` проверяет отсутствие
+  меню/H, роли нот, рамку следующего аккорда, автоматические события и цель
+  такта ii в пьесе.
 
 ## Звук
 

@@ -25,7 +25,7 @@ window.HARMONIA = {
   Transport, Groove, Composition, setFormEnabled, updateFormHUD,
   // Исследование оценок: включено по умолчанию; ?research=0 или панель выключают.
   research: Research,
-  // Компас «куда дальше»: те же ходы, что видны под аккордами.
+  // Инлайн-подсказки: цвета нот под бас и следующий аккорд на карточках.
   Guide,
   groovePattern, grooveSteps, groovePlan,
   harmonicChords, updateHUD, playHarmonic, chordEvent, pressCode, releaseCode, runCommand, loadCombo, setMode, startSession,

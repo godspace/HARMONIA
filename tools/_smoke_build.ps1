@@ -182,12 +182,11 @@ $post = @'
     }
     if ($('scalePrompt')) throw new Error('old scale prompt modal is still in the DOM');
     if (!$('spaceNext')) throw new Error('Space transition button is missing');
-    if ($('chordPad').nextElementSibling !== $('guideLine')) {
-      throw new Error('the guide line is not directly under the chord chips');
+    if ($('chordPad').nextElementSibling !== $('spaceNext')) {
+      throw new Error('Space button is not directly under the chord chips');
     }
-    if ($('guideLine').nextElementSibling !== $('spaceNext')) {
-      throw new Error('Space button is not directly under the guide line');
-    }
+    if ($('guideLine')) throw new Error('the old guide popup is still in the DOM');
+    if (HARMONIA.INPUT.commands.KeyH) throw new Error('the old H guide binding is still active');
   });
 
   step('drawers-intro', function () {
@@ -1990,12 +1989,15 @@ $post = @'
     }
   });
 
-  step('guide-compass', function () {
-    // Компас: 2–3 объяснимых хода, «Держать тепло» не сводится к V→I,
-    // H пишет hintRequested/hintShown, клик — hintPicked, а цель такта
-    // в пьесе имеет приоритет.
+  step('guide-inline', function () {
+    // P0c: подсказки живут на пяти карточках, без меню и без H. Ноты красятся
+    // по роли для баса, следующий аккорд получает рамку, а телеметрия пишет
+    // hintShown/hintPicked автоматически.
     var H = HARMONIA, G = H.Guide, R = H.research;
     if (!G) throw new Error('Guide API is missing');
+    if (typeof G.request !== 'undefined' || typeof G.pick !== 'undefined') {
+      throw new Error('the old popup API is still available');
+    }
     if (!R) throw new Error('research API is missing');
     R.enable();
     R.clear();
@@ -2006,38 +2008,48 @@ $post = @'
     H.loadCombo(0, false);
     var tonic = H.diatonicPalette()[0];
     H.chordEvent(tonic, 0.8, 'keys');
-    if (!G.request()) throw new Error('H did not request the compass');
     var st = G.state();
-    if (!st.open) throw new Error('the compass did not open');
+    if (!st.next) throw new Error('the inline next-chord cue is missing');
     if (st.moves.length < 2 || st.moves.length > 3) {
-      throw new Error('the compass must show 2–3 moves, got ' + st.moves.length);
+      throw new Error('the guide must rank 2–3 moves, got ' + st.moves.length);
     }
-    var hold = st.moves.filter(function (m) { return m.role === 'hold'; })[0];
-    if (!hold) throw new Error('the compass has no Hold move');
-    if (hold.degree === 'V') throw new Error('Hold must not default to V→I');
-    if (['IV', 'ii', 'vi', 'iii'].indexOf(hold.degree) === -1) {
-      throw new Error('Hold did not keep the warm field: ' + hold.degree);
+    var nextCard = document.querySelector('#chordPad .chord-card.guide-next');
+    if (!nextCard || nextCard.dataset.pcsKey !== st.next.pcsKey) {
+      throw new Error('the next chord is not marked on the chord cards');
     }
-    // События подсказок живут в визите; закрываем его, чтобы exportData видел данные.
-    R.leaveCombo('guide');
+    var tonicCard = document.querySelector('#chordPad .chord-card.tonic');
+    if (!tonicCard) throw new Error('the tonic chord card is missing');
+    var rootNote = tonicCard.querySelector('.cc-note[data-pc="' + tonic.rootPc + '"]');
+    if (!rootNote || !rootNote.classList.contains('bn-root')) {
+      throw new Error('the bass root is not coloured as a chord root');
+    }
+    var fifthPc = (tonic.rootPc + (tonic.fifth == null ? 7 : tonic.fifth)) % 12;
+    var fifthNote = tonicCard.querySelector('.cc-note[data-pc="' + fifthPc + '"]');
+    if (!fifthNote || !fifthNote.classList.contains('bn-tone')) {
+      throw new Error('the bass fifth is not coloured as a chord tone');
+    }
+    // Активная левая рука: самая низкая MIDI-нота получает bn-live.
+    H.Heard.clear();
+    H.Heard.on(48, 0.8);
+    H.updateHUD();
+    var liveRoot = tonicCard.querySelector('.cc-note[data-pc="' + tonic.rootPc + '"].bn-live');
+    if (!liveRoot) throw new Error('the active MIDI bass is not marked live');
+    H.Heard.clear();
+    H.updateHUD();
+    if (!document.querySelector('#chordPad .cc-note.bn-color') &&
+        !document.querySelector('#chordPad .cc-note.bn-clash')) {
+      throw new Error('the cards do not distinguish soft colour from tension');
+    }
+    // Игрок сыграл подсвеченный аккорд — это hintPicked без клика по меню.
+    // hintShown уже записан paint() при появлении следующего аккорда; оба
+    // события должны жить в одном визите, поэтому leaveCombo — после игры.
+    H.chordEvent(st.next, 0.8, 'keys');
+    R.leaveCombo('inline');
     var data = R.exportData();
     var seg = data.segments[data.segments.length - 1];
-    if (!seg || !seg.hints || seg.hints.requested < 1 || seg.hints.shown < 1) {
-      throw new Error('hint events were not recorded: ' + JSON.stringify(seg && seg.hints));
-    }
-    // Клик по подсказке играет тот же аккорд и пишет hintPicked.
-    H.loadCombo(0, false);
-    H.chordEvent(tonic, 0.8, 'keys');
-    G.request();
-    st = G.state();
-    var picked = st.moves[0];
-    if (!picked) throw new Error('the compass lost its moves');
-    if (!G.pick(0)) throw new Error('clicking a hint did not play the chord');
-    R.leaveCombo('guide');
-    data = R.exportData();
-    seg = data.segments[data.segments.length - 1];
-    if (!seg || !seg.hints || seg.hints.picked < 1) {
-      throw new Error('hintPicked was not recorded');
+    if (!seg || !seg.hints || seg.hints.shown < 1 || seg.hints.picked < 1) {
+      throw new Error('inline hint events were not recorded: ' +
+        JSON.stringify(seg && seg.hints));
     }
     // В пьесе цель такта важнее свободного ранжирования.
     H.loadCombo(0, false);
@@ -2051,10 +2063,9 @@ $post = @'
     H.state.form.phase = 'playing';
     H.state.form.bar = 8;
     H.updateHUD();
-    G.request();
-    var targetMove = G.state().moves.filter(function (m) { return m.target; })[0];
+    var targetMove = G.state().next;
     if (!targetMove || targetMove.degree !== 'ii') {
-      throw new Error('the piece target did not lead the compass: ' +
+      throw new Error('the piece target did not lead the inline cue: ' +
         (targetMove && targetMove.degree));
     }
     H.state.form.enabled = saved.enabled;

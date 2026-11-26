@@ -1080,14 +1080,22 @@ def render_md(result: dict) -> str:
             add(f"Переходы: {top}.")
             add("")
     hints = result.get("hints") or {}
-    if hints.get("requested") or hints.get("shown"):
-        add("## Компас «куда дальше»")
+    if hints.get("shown") or hints.get("requested"):
+        add("## Подсказки на карточках")
         add("")
         add(
-            f"Запросов: **{hints.get('requested', 0)}**, показано: **{hints.get('shown', 0)}**, "
-            f"выбрано: **{hints.get('picked', 0)}**, проигнорировано: **{hints.get('ignored', 0)}**, "
-            f"«не знаю»: **{hints.get('stuck', 0)}**."
+            f"Показано: **{hints.get('shown', 0)}**, выбрано: **{hints.get('picked', 0)}**."
         )
+        legacy = []
+        if hints.get("requested"):
+            legacy.append(f"запросов: **{hints['requested']}**")
+        if hints.get("stuck"):
+            legacy.append(f"«не знаю»: **{hints['stuck']}**")
+        if hints.get("ignored"):
+            legacy.append(f"проигнорировано: **{hints['ignored']}**")
+        if legacy:
+            add("")
+            add("Старые события меню: " + ", ".join(legacy) + ".")
         if hints.get("pick_rate") is not None:
             add("")
             add(f"Доля выбранных подсказок: **{hints['pick_rate']:.0%}**.")
@@ -1399,7 +1407,7 @@ def self_test() -> int:
     assert "Сюжет станции" in md and "Доля «дома»" in md
     assert "Поток, поиск и застревание" in md and "local_stuck" in md
     assert "Эталоны и высокая оценка" in md and "C major" in md
-    assert "Компас «куда дальше»" in md and "Доля выбранных подсказок" in md
+    assert "Подсказки на карточках" in md and "Доля выбранных подсказок" in md
     csv_text = render_csv(result)
     lines = [line for line in csv_text.splitlines() if line.strip()]
     assert lines[0].startswith("segment_id,"), lines[0]
