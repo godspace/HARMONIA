@@ -58,6 +58,45 @@ function startChordHold(code) {
     playHarmonic(INPUT.chordIndex(code));
   }, CFG.holdPulseMs);
 }
+// ===== Мини-клавиатуры под карточками =====
+// Один октавный ряд C–B: белые клавиши идут подряд, чёрные ставятся на границы.
+// Карточка уже называет аккорд нотами; клавиатура показывает ту же форму
+// пальцами, поэтому новичку не нужно переводить «до-ми-соль» в клавиши.
+const KEYMAP_WHITE = [0, 2, 4, 5, 7, 9, 11];
+const KEYMAP_BLACK = [
+  { pc: 1, after: 1 }, { pc: 3, after: 2 }, { pc: 6, after: 4 },
+  { pc: 8, after: 5 }, { pc: 10, after: 6 }
+];
+let keyMapSig = '';
+function keyMapPc(value) {
+  const pc = Number(value);
+  return isFinite(pc) ? ((Math.round(pc) % 12) + 12) % 12 : -1;
+}
+function miniKeyboardHtml(h) {
+  const pcs = (h && Array.isArray(h.pcs) ? h.pcs : []).map(keyMapPc);
+  const rootPc = h && h.rootPc != null ? keyMapPc(h.rootPc) : -1;
+  const cls = pc => pcs.indexOf(pc) === -1 ? '' : (pc === rootPc ? ' on root' : ' on');
+  const white = KEYMAP_WHITE.map(pc =>
+    `<i class="km-key km-w${cls(pc)}" data-pc="${pc}"></i>`).join('');
+  const black = KEYMAP_BLACK.map(k =>
+    `<i class="km-key km-b${cls(k.pc)}" data-pc="${k.pc}" style="--after:${k.after}"></i>`).join('');
+  return `<span class="km-board">${white}${black}</span>`;
+}
+function renderKeyMap(list) {
+  const host = $('keyMap');
+  if (!host) return;
+  const rows = Array.isArray(list) ? list : harmonicChords();
+  const sig = rows.map(h => (h.pcs || []).join(',') + '|' + (h.rootPc == null ? '' : h.rootPc)).join(';');
+  if (sig === keyMapSig) return;
+  keyMapSig = sig;
+  host.innerHTML = rows.map(h => {
+    const pcs = (h.pcs || []).map(keyMapPc).sort((a, b) => a - b);
+    const rootPc = h.rootPc == null ? '' : keyMapPc(h.rootPc);
+    return `<span class="km-item" data-pcs="${pcs.join(',')}" data-root="${rootPc}">` +
+      miniKeyboardHtml(h) + '</span>';
+  }).join('');
+}
+
 function buildChordPad() {
   const pad = $('chordPad');
   const list = harmonicChords();
@@ -72,6 +111,7 @@ function buildChordPad() {
     `</button>`;
   }).join('');
   chordCards = Array.from(pad.querySelectorAll('.chord-card'));
+  renderKeyMap(list);
   chordCards.forEach(card => {
     card.addEventListener('pointerdown', (e) => {
       e.preventDefault();
@@ -111,6 +151,9 @@ function syncChordPadLabels() {
     if (degEl) degEl.textContent = h.degree;
     if (nameEl) nameEl.innerHTML = chordNotesHtml(h);
   });
+  // Форма аккордов могла измениться без пересборки пэда (пьеса, тренажёр):
+  // мини-клавиатуры обязаны следовать за теми же pitch class.
+  renderKeyMap(list);
 }
 function paintChordPad() {
   if (!chordCards.length) return;
@@ -355,7 +398,7 @@ function updateHUD() {
   $('comboNext').classList.toggle('pulse', cycleDone && state.running && !state.paused);
   $('pNextCombo').classList.toggle('pulse', cycleDone && state.running && !state.paused);
   paintChordPad();
-  // Компас живёт под аккордами и пересчитывается от того же состояния.
+  // Подсказки живут на самих карточках и на мини-клавиатурах под ними.
   if (typeof Guide !== 'undefined' && typeof Guide.paint === 'function') Guide.paint();
   paintWheel();
   paintComboStrip();
@@ -406,14 +449,13 @@ function paintComboStrip() {
   bar.setAttribute('aria-valuetext', played + ' / ' + total);
 }
 // ===== Напоминание о пробеле =====
-// Очки игрок видит в левом верхнем углу, маршрут по 24 комбо — в полосе по
-// центру, а кнопка перехода живёт внизу под аккордами, и после 300 очков её
-// легко не заметить: руки заняты, взгляд на сцене. Поэтому подсказка стоит в
-// самой полосе: до рубежа — «Space · ещё N», после — «Space → новое комбо».
-// Это не модальное окно и не тост (тост занят названием аккорда), а тихое
-// напоминание рядом с мигающей ячейкой текущего комбо. Полоса мягко
-// подсвечивается на рубеже и ещё дважды, если игрок решил играть дальше;
-// после третьего раза мигалка замолкает до смены комбо.
+// Очки игрок видит в левом верхнем углу, маршрут по 24 комбо — в верхнем
+// виджете, а путь дальше — в его нижней строке Space. До рубежа кнопка
+// показывает прогресс, после — «готово» и пульсирует: руки заняты, взгляд на
+// сцене, поэтому напоминание живёт рядом с мигающей ячейкой текущего комбо, а
+// не в отдельном окне. Виджет мягко подсвечивается на рубеже и ещё дважды,
+// если игрок решил играть дальше; после третьего раза мигалка замолкает до
+// смены комбо.
 let spaceNudgeKey = '', spaceNudgeStage = 0, spaceNudgeTimer = null;
 function resetSpaceNudge(key) {
   if (spaceNudgeTimer) { clearTimeout(spaceNudgeTimer); spaceNudgeTimer = null; }
@@ -421,16 +463,6 @@ function resetSpaceNudge(key) {
     .forEach(el => el.classList.remove('attn'));
   spaceNudgeKey = key;
   spaceNudgeStage = 0;
-}
-function updateSpaceHint(ready, threshold) {
-  const hint = $('spaceHint');
-  const text = $('spaceHintText');
-  if (!hint || !text) return;
-  hint.classList.toggle('ready', !!ready);
-  // До рубежа — сколько очков осталось, после — что именно сделает пробел.
-  text.textContent = ready
-    ? '→ новое комбо'
-    : 'ещё ' + Math.max(0, threshold - Math.min(state.score, threshold));
 }
 function nudgeSpace(ready, threshold) {
   const key = state.mode + '#' + state.comboIdx;
@@ -454,9 +486,10 @@ function nudgeSpace(ready, threshold) {
     targets.forEach(el => el.classList.remove('attn'));
   }, 3200);
 }
-// Кнопка Space под аккордами: до рубежа показывает прогресс, после —
-// включает пульсацию готовности. Переход выполняет advanceCombo(), который
-// сам проверяет порог, поэтому клик и клавиша идут одним путём.
+// Кнопка Space в нижней строке верхнего виджета: до рубежа показывает
+// прогресс, после — включает пульсацию готовности. Переход выполняет
+// advanceCombo(), который сам проверяет порог, поэтому клик и клавиша идут
+// одним путём.
 function updateSpaceNext() {
   const btn = $('spaceNext');
   if (!btn || typeof nextComboTarget !== 'function') return;
@@ -477,7 +510,6 @@ function updateSpaceNext() {
   btn.title = hint;
   btn.setAttribute('aria-label', hint);
   btn.setAttribute('aria-disabled', String(!ready));
-  updateSpaceHint(ready, threshold);
   nudgeSpace(ready, threshold);
 }
 function fillComboSelect() {

@@ -182,8 +182,13 @@ $post = @'
     }
     if ($('scalePrompt')) throw new Error('old scale prompt modal is still in the DOM');
     if (!$('spaceNext')) throw new Error('Space transition button is missing');
-    if ($('chordPad').nextElementSibling !== $('spaceNext')) {
-      throw new Error('Space button is not directly under the chord chips');
+    if ($('spaceNext').parentElement !== $('comboStrip')) {
+      throw new Error('Space button must live in the top combo widget');
+    }
+    if ($('spaceHint')) throw new Error('the separate Space hint must be gone');
+    if (!$('keyMap')) throw new Error('mini MIDI keyboards are missing');
+    if ($('chordPad').nextElementSibling !== $('keyMap')) {
+      throw new Error('mini MIDI keyboards are not directly under the chord chips');
     }
     if ($('guideLine')) throw new Error('the old guide popup is still in the DOM');
     if (HARMONIA.INPUT.commands.KeyH) throw new Error('the old H guide binding is still active');
@@ -468,9 +473,9 @@ $post = @'
     if ($('spaceNextProgress').textContent.indexOf('\u0433\u043e\u0442\u043e\u0432\u043e') === -1) {
       throw new Error('Space readiness text is missing: ' + $('spaceNextProgress').textContent);
     }
-    dispatchSpace();
+    btn.click();
     if (st.mode !== 'minor' || st.comboIdx !== 0) {
-      throw new Error('major should lead to the minor pair, got ' + st.mode + ':' + st.comboIdx);
+      throw new Error('clicking the top Space button did not advance, got ' + st.mode + ':' + st.comboIdx);
     }
     var minorId = HARMONIA.COMBOS[HARMONIA.ORDER[st.mode][st.comboIdx]].id;
     if (minorId !== before + 12) throw new Error('minor pair id mismatch: ' + before + ' -> ' + minorId);
@@ -494,34 +499,49 @@ $post = @'
   });
 
   step('space-hint', function () {
-    // Подсказка о пробеле живёт в полосе комбо (верх по центру): до рубежа там
-    // остаток очков, после — что сделает пробел. На рубеже полоса мягко
-    // подсвечивается (класс attn), чтобы подсказку заметили без тоста.
+    // Маршрут и переход Space — один верхний виджет. В его нижней строке до
+    // рубежа виден прогресс, после — «готово» и пульсация; на рубеже виджет
+    // мягко подсвечивается (класс attn), чтобы шаг заметили без тоста.
     var st = HARMONIA.state;
     var gate = HARMONIA.CFG.comboAdvanceAt;
     HARMONIA.setMode('major');
     HARMONIA.loadCombo(0, false);
     st.score = 0;
     HARMONIA.updateHUD();
-    var hint = $('spaceHint');
-    var text = $('spaceHintText');
+    var btn = $('spaceNext');
+    var label = $('spaceNextText');
+    var progress = $('spaceNextProgress');
     var strip = $('comboStrip');
-    if (!hint || !text) throw new Error('the combo strip has no Space hint');
-    if (!strip || !strip.contains(hint)) throw new Error('the Space hint must live in the combo strip');
-    if (hint.classList.contains('ready')) throw new Error('Space hint is armed at zero score');
-    if (text.textContent.indexOf(String(gate)) === -1) {
-      throw new Error('Space hint lost the remaining points: ' + text.textContent);
+    if (!btn || !label || !progress) throw new Error('the top widget has no Space button');
+    if (!strip || btn.parentElement !== strip) {
+      throw new Error('the Space button must live in the top combo widget');
     }
-    if (strip.classList.contains('attn')) throw new Error('the combo strip nudged below the gate');
+    if ($('spaceHint')) throw new Error('the separate Space hint must be gone');
+    if (!btn.disabled) throw new Error('Space transition is enabled at zero score');
+    if (btn.classList.contains('ready')) throw new Error('Space transition is armed at zero score');
+    if (window.getComputedStyle(btn).pointerEvents !== 'auto') {
+      throw new Error('Space button inside the HUD must accept pointer input');
+    }
+    if (progress.textContent.indexOf(String(gate)) === -1) {
+      throw new Error('Space progress lost the threshold: ' + progress.textContent);
+    }
+    if (label.textContent.indexOf('новое комбо') === -1) {
+      throw new Error('the Space row does not name the next combo: ' + label.textContent);
+    }
+    if (strip.classList.contains('attn')) throw new Error('the top widget nudged below the gate');
     st.score = gate - 25;
     HARMONIA.updateHUD();
-    if (text.textContent.indexOf('25') === -1) {
-      throw new Error('Space hint did not count down: ' + text.textContent);
+    if (progress.textContent.indexOf(String(gate - 25)) === -1) {
+      throw new Error('Space progress did not count down: ' + progress.textContent);
     }
     st.score = gate;
     HARMONIA.updateHUD();
-    if (!hint.classList.contains('ready')) throw new Error('Space hint is not ready at ' + gate);
-    if (!strip.classList.contains('attn')) throw new Error('the combo strip did not nudge at ' + gate);
+    if (btn.disabled) throw new Error('Space transition is disabled at ' + gate);
+    if (!btn.classList.contains('ready')) throw new Error('Space transition does not pulse at ' + gate);
+    if (progress.textContent.indexOf('готово') === -1) {
+      throw new Error('Space readiness text is missing: ' + progress.textContent);
+    }
+    if (!strip.classList.contains('attn')) throw new Error('the top widget did not nudge at ' + gate);
     var keyEl = $('comboKey');
     var comboName = HARMONIA.keyNameOf(HARMONIA.COMBOS[HARMONIA.ORDER[st.mode][st.comboIdx]]);
     if (!keyEl || keyEl.textContent !== comboName) {
@@ -539,7 +559,9 @@ $post = @'
     }
     st.score = 0;
     HARMONIA.updateHUD();
-    if (hint.classList.contains('ready')) throw new Error('Space hint stayed ready after the score reset');
+    if (!btn.disabled || btn.classList.contains('ready')) {
+      throw new Error('Space transition stayed ready after the score reset');
+    }
   });
 
   step('combo-strip', function () {
@@ -597,6 +619,117 @@ $post = @'
       throw new Error('the strip did not come back after the form');
     }
     HARMONIA.loadCombo(0, false);
+  });
+
+  step('key-map', function () {
+    // Под карточками живут пять мини-клавиатур: по одной на аккорд. Каждая
+    // показывает октавный ряд C–B, зажигает ровно три pitch class аккорда и
+    // красит корень золотым. Это визуальная опора, а не второй пэд: фокуса и
+    // pointer-событий у неё нет.
+    var H = HARMONIA;
+    var host = $('keyMap');
+    var pad = $('chordPad');
+    if (!host) throw new Error('the mini keyboard row is missing');
+    if (pad.nextElementSibling !== host) {
+      throw new Error('the mini keyboards are not directly under the chord chips');
+    }
+    if (host.getAttribute('aria-hidden') !== 'true') {
+      throw new Error('the mini keyboards must stay out of the accessibility tree');
+    }
+    if (window.getComputedStyle(host).pointerEvents !== 'none') {
+      throw new Error('the mini keyboards must not intercept pointer input');
+    }
+    if (host.querySelector('button,a,input,select,textarea')) {
+      throw new Error('the mini keyboards must be visual only');
+    }
+    function pc12(value) {
+      return ((Math.round(Number(value)) % 12) + 12) % 12;
+    }
+    function sortedPcs(list) {
+      return list.map(pc12).sort(function (a, b) { return a - b; }).join(',');
+    }
+    function items() { return host.querySelectorAll('.km-item'); }
+    function checkRows(where) {
+      var chords = H.harmonicChords();
+      var rows = items();
+      if (rows.length !== 5) {
+        throw new Error(where + ': expected five mini keyboards, got ' + rows.length);
+      }
+      if (chords.length !== rows.length) {
+        throw new Error(where + ': chord cards and mini keyboards disagree');
+      }
+      chords.forEach(function (h, i) {
+        var item = rows[i];
+        var board = item.querySelector('.km-board');
+        if (!board) throw new Error(where + ': mini keyboard ' + i + ' has no board');
+        if (board.querySelectorAll('.km-w').length !== 7 ||
+            board.querySelectorAll('.km-b').length !== 5) {
+          throw new Error(where + ': mini keyboard ' + i + ' must show 7 white + 5 black keys');
+        }
+        var active = board.querySelectorAll('.km-key.on');
+        if (active.length !== 3) {
+          throw new Error(where + ': mini keyboard ' + i + ' must light exactly three keys');
+        }
+        var activePcs = [];
+        Array.prototype.forEach.call(active, function (key) {
+          activePcs.push(pc12(key.dataset.pc));
+        });
+        if (sortedPcs(activePcs) !== sortedPcs(h.pcs)) {
+          throw new Error(where + ': mini keyboard ' + i + ' does not match the chord: ' +
+            sortedPcs(activePcs) + ' vs ' + sortedPcs(h.pcs));
+        }
+        if (item.dataset.pcs !== sortedPcs(h.pcs)) {
+          throw new Error(where + ': mini keyboard ' + i + ' data-pcs is stale: ' +
+            item.dataset.pcs + ' vs ' + sortedPcs(h.pcs));
+        }
+        var roots = board.querySelectorAll('.km-key.root');
+        if (roots.length !== 1) {
+          throw new Error(where + ': mini keyboard ' + i + ' must have one golden root');
+        }
+        if (pc12(roots[0].dataset.pc) !== pc12(h.rootPc)) {
+          throw new Error(where + ': mini keyboard ' + i + ' coloured the wrong root');
+        }
+        if (pc12(item.dataset.root) !== pc12(h.rootPc)) {
+          throw new Error(where + ': mini keyboard ' + i + ' data-root is stale');
+        }
+      });
+    }
+    H.setMode('major');
+    H.loadCombo(0, false);
+    checkRows('major C');
+    // Корень тоники C мажора — белая клавиша: рисунок не должен терять
+    // ориентацию на чёрных клавишах.
+    var tonicItem = items()[4];
+    if (!tonicItem || tonicItem.dataset.root !== '0' ||
+        !tonicItem.querySelector('.km-w.root')) {
+      throw new Error('the C major tonic root is not on the white C key');
+    }
+    // Чёрный корень — чёрная клавиша: проверяем не только удобный C мажор.
+    var blackChecked = false;
+    for (var bi = 0; bi < H.ORDER.major.length && !blackChecked; bi++) {
+      H.loadCombo(bi, false);
+      var blackTonic = H.harmonicChords()[4];
+      if (pc12(blackTonic.rootPc) !== 6) continue;
+      checkRows('black root');
+      if (!items()[4].querySelector('.km-b.root')) {
+        throw new Error('the F sharp major tonic root is not on a black key');
+      }
+      blackChecked = true;
+    }
+    if (!blackChecked) throw new Error('no black-root combo was found');
+    H.loadCombo(0, false);
+    checkRows('major C reset');
+    var before = Array.prototype.map.call(items(), function (item) {
+      return item.dataset.pcs;
+    }).join(';');
+    H.loadCombo(5, false);
+    checkRows('major after move');
+    var after = Array.prototype.map.call(items(), function (item) {
+      return item.dataset.pcs;
+    }).join(';');
+    if (before === after) throw new Error('the mini keyboards did not follow the combo move');
+    H.loadCombo(0, false);
+    checkRows('major C again');
   });
 
   step('notation', function () {

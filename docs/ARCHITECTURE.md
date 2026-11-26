@@ -43,7 +43,7 @@
 | `viz` | геометрия и картинка режима | `VIZ`, `VIZ_ORDER`, `viz()`, `setViz`, `vizDebug` |
 | `game` | правила и счёт | `chordEvent`, `playChordAudio`, `playHarmonic`, `triggerBall`, `pressCode`, `setMode`, `advanceCombo`, `requestAdaptiveAnchor`, `setAdaptiveAnchor`, `resetAdaptive` |
 | `listen` | слух приложения | `Heard` (`notes`, `latched`, `sustain`, `recognize()`) |
-| `ui-hud` | отображение состояния | `updateHUD`, `updateHomeIndicator`, `renderPalette`, `renderHint`, `updateHeardChip`, `paintSoundChip` |
+| `ui-hud` | отображение состояния | `updateHUD`, `updateHomeIndicator`, `renderPalette`, `renderHint`, `updateHeardChip`, `paintSoundChip`, `renderKeyMap` |
 | `recorder` | запись, автозапись станции, прослушивание, MIDI и общие имена файлов | `recordChord/Note`, `recordDrum/recordDrumAt`, `recordingTimeline`, `startRecording`, `stopRecording`, `autoRecordStart/Finalize/Status`, `setAutoRecord`, `playSelected`, `deleteSelectedRecording`, `recordingById`, `recordingTonic/Title/FileName`, `buildMidiFile`, `midiRecordingEvents`, `exportSelectedMidi` |
 | `video` | рендер записи в WebM | `startVideoExport(rec)`, `cancelVideoExport`, `videoExportStatus`, `videoSupported`, `videoFileName`, `videoDuration`, `videoSize`, `videoCaption`, `copyVideoCaption`, `videoLegacyWarning`, `videoMediaElapsed`, `videoStepVisual`, `videoMarkTonic`, `videoSyncVisual`, `videoFrameStep`, `paintVideoFrame` |
 | `audio-export` | сохранение записи в WAV | `startAudioExport(rec, {purpose, onDone})`, `cancelAudioExport`, `audioExportStatus` (`id`, `purpose`), `audioSupported`, `audioFileName`, `audioDuration`, `audioPcmToWav`, `#recAudio`/`#researchAskAudio`/`#audioExport` |
@@ -167,24 +167,23 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
   пересобирает колесо и шары. `nextCombo()`/`prevCombo()` идут по чередующемуся
   маршруту: мажор → минор той же пары, минор → мажор следующей. Ручные
   `↑`/`↓` и `Backspace` доступны всегда, `Enter` принадлежит барабанам, а
-  `advanceCombo()` (Space или
-  кнопка под аккордами) проверяет `comboAdvanceReady()`: `state.score` должен
-  достичь `CFG.comboAdvanceAt` (300), игра не должна стоять на паузе или
-  проигрывать запись. `updateSpaceNext()` показывает прогресс, включает кнопку
-  и пульсацию после рубежа, а заодно ведёт подсказку в полосе комбо:
-  `updateSpaceHint()` пишет `ещё N` / `→ новое комбо`, `nudgeSpace()` на рубеже
-  (и на +150/+300 сверх него) дважды подсвечивает `#comboStrip` и коротко
-  подпрыгивает кнопкой (`#spaceNext.attn`). Это единственное напоминание: тост
-  занят названием аккорда, поэтому модальных окон и повторов в тосте нет.
-  Необязательная карточка исследования (`#researchAsk`) — отдельный слой: она
-  появляется после перехода и только при включённом сборе оценок.
+  `advanceCombo()` (Space или кнопка в нижней строке верхнего виджета) проверяет
+  `comboAdvanceReady()`: `state.score` должен достичь `CFG.comboAdvanceAt` (300),
+  игра не должна стоять на паузе или проигрывать запись. `updateSpaceNext()`
+  показывает прогресс, включает кнопку и пульсацию после рубежа, а
+  `nudgeSpace()` на рубеже (и на +150/+300 сверх него) дважды подсвечивает
+  `#comboStrip` и коротко подпрыгивает кнопкой (`#spaceNext.attn`). Это
+  единственное напоминание: тост занят названием аккорда, поэтому модальных окон
+  и повторов в тосте нет. Необязательная карточка исследования (`#researchAsk`) —
+  отдельный слой: она появляется после перехода и только при включённом сборе
+  оценок.
 - `#comboKey` под счётом — музыкальное имя комбо (`keyNameOf(combo())`, то есть
   `До мажор` / `C major`): счёт принадлежит тональности, а после старта топбар с
   `#comboSel` скрыт. Строка помечена `notranslate` и входит в `SHIELD`, иначе
   Google перевёл бы «До мажор» как «Before major». То же имя стоит в центре
   круга тональностей (`paintWheel`): `№1 · До мажор · 0/12`.
-- `#comboStrip` — полоса маршрута по 24 комбо в верхней середине сцены: две
-  строки по двенадцать ячеек в порядке круга (`ORDER[mode]`, подпись —
+- `#comboStrip` — верхний виджет маршрута по 24 комбо: две строки по двенадцать
+  ячеек в порядке круга (`ORDER[mode]`, подпись —
   `cap(noteLabel(COMBOS[id].chords[0][0]))`, то есть тоника лада),
   `role="progressbar"` на `aria-valuemax="24"`. `buildComboStrip()` собирает
   ячейки (зовётся из `main.js` и из `refreshNotation()` при смене нотации),
@@ -194,11 +193,19 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
   Двадцать четыре ячейки — самый длинный ряд на сцене, поэтому он остаётся
   мелким (8 px, `min-width` 15 px): `display: grid` с `max-content` колонками
   держит мажор и минор выровненными, а ширину колонки задаёт самая длинная
-  подпись, так что «Соль♭» не вылезает из рамки. В пьесе центр занимает
-  форма, и полоса уступает ей место: `#formHud.on ~ .combo-strip { display:none }`
-  (порядок соседей в разметке важен). Подсказка о пробеле живёт здесь же —
-  `#spaceHint` больше не часть блока счёта, поэтому счёт и маршрут читаются
-  отдельно.
+  подпись, так что «Соль♭» не вылезает из рамки. Нижняя строка виджета — кнопка
+  `#spaceNext`: до рубежа она показывает `N / 300`, после — `готово`; клик и
+  клавиша ведут в один `advanceCombo()`. В пьесе центр занимает форма, и виджет
+  уступает ей место: `#formHud.on ~ .combo-strip { display:none }` (порядок
+  соседей в разметке важен). Отдельного `#spaceHint` больше нет: прогресс и
+  готовность читаются на самой кнопке, поэтому счёт и маршрут не дублируют текст.
+- `#keyMap` — пять мини-клавиатур под `#chordPad`, по одной на аккорд. Каждая
+  рисует октавный ряд C–B (7 белых + 5 чёрных клавиш), зажигает ровно три pitch
+  class аккорда и красит корень золотым; остальные ноты — голубым. `renderKeyMap()`
+  строит их из `harmonicChords()` и вызывается из `buildChordPad()` и
+  `syncChordPadLabels()`, поэтому пьеса, тренажёр и смена комбо обновляют рисунок
+  вместе с карточками. Это наблюдатель: `aria-hidden`, `pointer-events:none`, ни
+  звука, ни очков, ни фокуса.
 - Нотация подписей — `P.notation` (`sol` | `letters`). Данные и звук её не
   знают: `util.js` держит `letterNoteName()`/`noteLabel()`/`chordLabel()`/
   `keyNameOf()`/`sharpLabel()`, а `data.js` считает `keyNameLatin` при разборе
@@ -944,7 +951,8 @@ Translate через `translate.js` (тот же приём, что в сосе�
 | Новая палитра | `PALETTES` + `<option>` в `index.html` |
 | Новая визуализация | `VIZ` + `VIZ_ORDER` (`project/guides/center/ball/ring`) — меню и цифры `1`–`3` строятся сами |
 | Порог Space-перехода | `CFG.comboAdvanceAt` + `advanceCombo()` / `updateSpaceNext()` |
-| Напоминание о пробеле | `updateSpaceHint` / `nudgeSpace` + `#spaceHint` в полосе `#comboStrip` (`index.html`, `css/stage.css`) |
+| Напоминание о пробеле | `nudgeSpace` + `#spaceNext` в нижней строке `#comboStrip` (`index.html`, `css/stage.css`) |
+| Мини-клавиатуры под аккордами | `KEYMAP_WHITE` / `KEYMAP_BLACK` + `renderKeyMap()` (`ui-hud.js`), `#keyMap` / `.km-board` (`index.html`, `css/stage.css`), шаг `key-map` |
 | Полоса прогресса по 24 комбо | `buildComboStrip` / `paintComboStrip` (`ui-hud.js`) + `state.entered`/`state.played` + `.cs-cell.seen/.done/.current` |
 | Нотация подписей (до-ре-ми ↔ C-D-E) | `P.notation` + `noteLabel`/`chordLabel`/`keyNameOf` (`util.js`), `resetNotationCaches`/`refreshNotation`, `notationForLang` (`ui-panel.js`), `applyLanguageNotation` (`translate.js`) |
 | Состав стартовой пробы | `INTRO_KEYS` + `introPress()` + `data-key` на клавишах в `index.html` |
@@ -1014,9 +1022,10 @@ Translate через `translate.js` (тот же приём, что в сосе�
   пересборку окна при возврате в smart, цель такта пьесы и её карточку Q,
   отсутствие переезда под зажатой клавишей, подавление автотрезвучия на
   полутоновом столкновении, гармонизацию без smart и переход Space после 300
-  с чередованием мажора и минора. Шаг `space-hint` проверяет строку под счётом
-  (`ещё N` → `Space → новое комбо`, класс `attn` на рубеже, имя тональности в
-  `#comboKey` и его `translate="no"`), шаг `notation` — до-ре-ми ↔ C-D-E:
+  с чередованием мажора и минора. Шаг `space-hint` проверяет нижнюю строку
+  верхнего виджета (`N / 300` → `готово`, класс `attn` на рубеже, имя тональности
+  в `#comboKey` и его `translate="no"`), шаг `key-map` — пять мини-клавиатур под
+  карточками, шаг `notation` — до-ре-ми ↔ C-D-E:
   карточка `C-E-G`, `C major` в списке комбо и под счётом, буквы на шарах,
   `G-B-D` в палитре и возврат к сольфеджио кнопкой панели и кодом языка.
 - `tools/_visual_build.ps1` + headless `--screenshot` дают `visual.png` для

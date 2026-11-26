@@ -34,8 +34,8 @@ canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
 .score-title { font-size: 10px; text-transform: uppercase; letter-spacing: 1.2px; color: #8b95b3; font-weight: 700; }
 .score-value { font-size: 26px; font-weight: 800; color: #ffd166; line-height: 1.15; font-variant-numeric: tabular-nums; }
 /* Музыкальное имя комбо — строка под счётом: счёт принадлежит тональности, и
-   «сколько очков · где я» читается одним взглядом. Сама подсказка о пробеле
-   живёт в полосе комбо (ниже): там же, где видно маршрут по 24 ступеням. */
+   «сколько очков · где я» читается одним взглядом. Кнопка Space живёт в нижней
+   строке верхнего виджета (ниже): там же, где видно маршрут по 24 ступеням. */
 .score-key {
   margin-top: 1px; font-size: 10.5px; font-weight: 800; letter-spacing: 0.2px;
   color: #d0d7ee; white-space: nowrap;
@@ -48,22 +48,61 @@ canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
   color: #8b95b3; white-space: nowrap;
 }
 .score-plot[hidden] { display: none; }
-/* Подсказка о пробеле живёт в полосе комбо, под ячейками: до рубежа — сколько
-   очков осталось, после — что сделает пробел. Отдельного бокса у счёта больше
-   нет: счёт и маршрут читаются по разным местам. */
-.space-hint {
-  display: flex; align-items: center; gap: 5px;
-  font-size: 9px; font-weight: 700; line-height: 1; color: #7e88a6; white-space: nowrap;
+/* Переход в новое комбо живёт в верхнем виджете, под маршрутом: до 300 кнопка
+   показывает прогресс и выключена, после рубежа включается и пульсирует. Так
+   маршрут и следующий шаг читаются одним блоком, а под аккордами остаётся
+   место для мини-клавиатур. Необязательная карточка исследования
+   (`#researchAsk`) появляется уже после перехода. */
+#spaceNext {
+  align-self: stretch;
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+  min-height: 22px; margin-top: 1px; padding: 2px 7px 2px 3px;
+  font-family: inherit; font-size: 10px; font-weight: 700; line-height: 1;
+  color: #7e88a6; background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 6px;
+  cursor: pointer; opacity: 0.72; pointer-events: auto;
+  transition: opacity 0.15s, color 0.15s, border-color 0.15s,
+    background 0.15s, transform 0.12s, box-shadow 0.15s;
 }
-.space-hint b {
-  padding: 1px 4px; border-radius: 3px;
-  font-size: 8.5px; font-weight: 800; letter-spacing: 0.3px; color: #9aa4c2;
-  background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.12);
+#spaceNext:disabled { cursor: default; }
+#spaceNext:not(:disabled):hover {
+  opacity: 1; transform: translateY(-1px);
+  border-color: rgba(255, 209, 102, 0.72); background: rgba(255, 209, 102, 0.12);
 }
-.space-hint.ready { color: #ffd166; }
-.space-hint.ready b {
+#spaceNext .sn-key {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 43px; padding: 3px 6px; border-radius: 4px;
+  font-size: 9px; font-weight: 800; letter-spacing: 0.3px;
+  color: #c3cbe2; background: rgba(255, 255, 255, 0.09);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+#spaceNext .sn-label { color: #9aa4c2; white-space: nowrap; }
+#spaceNext .sn-progress {
+  color: #6bdfff; font-size: 9px; font-weight: 800;
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+#spaceNext.ready {
+  opacity: 1; color: #ffd166; border-color: rgba(255, 209, 102, 0.68);
+  background: rgba(255, 209, 102, 0.13);
+  animation: spaceReady 1.15s ease-in-out infinite;
+}
+#spaceNext.ready .sn-key {
   color: #12141d; background: linear-gradient(180deg, #ffe08a, #ffd166);
-  border-color: #ffd166; box-shadow: 0 0 8px rgba(255, 209, 102, 0.45);
+  border-color: #ffd166; box-shadow: 0 0 9px rgba(255, 209, 102, 0.5);
+}
+#spaceNext.ready .sn-label { color: #ffe3a0; }
+#spaceNext.ready .sn-progress { color: #ffd166; }
+@keyframes spaceReady {
+  0%, 100% { box-shadow: 0 0 0 rgba(255, 209, 102, 0); }
+  50% { box-shadow: 0 0 17px rgba(255, 209, 102, 0.62); }
+}
+/* Второе напоминание — сам виджет: он уже пульсирует, а после рубежа и на
+   каждом следующем рубеже (см. nudgeSpace) коротко подсвечивается. Пульсацию
+   это не отменяет: после снятия .attn возвращается spaceReady. */
+#spaceNext.ready.attn { animation: spaceNudge 0.72s ease-out 2; }
+@keyframes spaceNudge {
+  0%, 100% { transform: translateY(0); box-shadow: 0 0 0 rgba(255, 209, 102, 0); }
+  50% { transform: translateY(-2px); box-shadow: 0 0 20px rgba(255, 209, 102, 0.78); }
 }
 /* ===== Полоса прогресса по 24 комбо =====
    Верх сцены — единственное место, которое в игре видно всегда: в левом углу
@@ -325,6 +364,52 @@ canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
   0% { box-shadow: 0 0 0 0 rgba(255, 209, 102, 0.85); }
   100% { box-shadow: 0 0 0 20px rgba(255, 209, 102, 0); }
 }
+/* Мини-клавиатура под карточкой: один октавный ряд C–B. Ноты аккорда зажжены
+   голубым, корень — золотым; это только визуальный ориентир, поэтому события
+   мыши и фокус здесь не нужны. Пять клавиатур стоят точно под пятью карточками,
+   чтобы «до-ми-соль» можно было найти по рисунку, не читая названия. */
+#keyMap {
+  display: flex; justify-content: center; gap: 6px;
+  pointer-events: none;
+}
+.km-item {
+  width: 120px; flex: none; display: flex; justify-content: center;
+}
+.km-board {
+  position: relative; display: flex; width: 104px; height: 19px;
+  background: #0b0e16; border-radius: 0 0 4px 4px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+}
+.km-key { display: block; }
+.km-w {
+  flex: 1 1 0; height: 100%;
+  background: linear-gradient(180deg, #c9d2e8, #9aa4bd);
+  border-left: 1px solid rgba(10, 13, 20, 0.55);
+  border-radius: 0 0 2px 2px; opacity: 0.5;
+}
+.km-w:first-child { border-left: 0; }
+.km-b {
+  position: absolute; top: 0; left: calc((100% / 7) * var(--after) - 3.5px);
+  width: 7px; height: 11px; z-index: 2;
+  background: #141824; border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0 0 2px 2px;
+}
+.km-w.on {
+  opacity: 1; background: linear-gradient(180deg, #e8f6ff, #9fdcff);
+  box-shadow: inset 0 -2px 0 rgba(107, 223, 255, 0.75);
+}
+.km-b.on {
+  background: #6bdfff; border-color: #bfe9ff;
+  box-shadow: 0 0 5px rgba(107, 223, 255, 0.7);
+}
+.km-w.root {
+  background: linear-gradient(180deg, #ffe9a8, #ffd166);
+  box-shadow: inset 0 -2px 0 #ffb347, 0 0 7px rgba(255, 209, 102, 0.45);
+}
+.km-b.root {
+  background: #ffd166; border-color: #ffe3a1;
+  box-shadow: 0 0 6px rgba(255, 209, 102, 0.7);
+}
 
 .key-badge {
   font-family: inherit; background: rgba(255, 255, 255, 0.07);
@@ -350,60 +435,6 @@ canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
   transition: opacity 0.25s; white-space: normal;
 }
 #toast.show { opacity: 1; transform: translateY(-50%); }
-/* Переход в новое комбо: компактный Space под аккордами. До 300 он
-   показывает прогресс и выключен; после рубежа включается и пульсирует,
-   поэтому игра продолжается без модального окна и без мыши. Необязательная
-   карточка исследования (`#researchAsk`) появляется уже после перехода. */
-#spaceNext {
-  display: inline-flex; align-items: center; gap: 7px;
-  min-height: 23px; padding: 1px 8px 1px 3px;
-  font-family: inherit; font-size: 10px; font-weight: 700; line-height: 1;
-  color: #7e88a6; background: rgba(14, 17, 26, 0.72);
-  border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 7px;
-  cursor: pointer; opacity: 0.72;
-  transition: opacity 0.15s, color 0.15s, border-color 0.15s,
-    background 0.15s, transform 0.12s, box-shadow 0.15s;
-}
-#spaceNext:disabled { cursor: default; }
-#spaceNext:not(:disabled):hover {
-  opacity: 1; transform: translateY(-1px);
-  border-color: rgba(255, 209, 102, 0.72); background: rgba(255, 209, 102, 0.12);
-}
-#spaceNext .sn-key {
-  display: inline-flex; align-items: center; justify-content: center;
-  min-width: 43px; padding: 3px 6px; border-radius: 4px;
-  font-size: 9px; font-weight: 800; letter-spacing: 0.3px;
-  color: #c3cbe2; background: rgba(255, 255, 255, 0.09);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-}
-#spaceNext .sn-label { color: #9aa4c2; }
-#spaceNext .sn-progress {
-  color: #6bdfff; font-size: 9px; font-weight: 800;
-  font-variant-numeric: tabular-nums;
-}
-#spaceNext.ready {
-  opacity: 1; color: #ffd166; border-color: rgba(255, 209, 102, 0.68);
-  background: rgba(255, 209, 102, 0.13);
-  animation: spaceReady 1.15s ease-in-out infinite;
-}
-#spaceNext.ready .sn-key {
-  color: #12141d; background: linear-gradient(180deg, #ffe08a, #ffd166);
-  border-color: #ffd166; box-shadow: 0 0 9px rgba(255, 209, 102, 0.5);
-}
-#spaceNext.ready .sn-label { color: #ffe3a0; }
-#spaceNext.ready .sn-progress { color: #ffd166; }
-@keyframes spaceReady {
-  0%, 100% { box-shadow: 0 0 0 rgba(255, 209, 102, 0); }
-  50% { box-shadow: 0 0 17px rgba(255, 209, 102, 0.62); }
-}
-/* Второе напоминание — сама кнопка: она уже пульсирует, а после рубежа и на
-   каждом следующем рубеже (см. nudgeSpace) коротко подпрыгивает. Пульсацию
-   это не отменяет: после снятия .attn возвращается spaceReady. */
-#spaceNext.ready.attn { animation: spaceNudge 0.72s ease-out 2; }
-@keyframes spaceNudge {
-  0%, 100% { transform: translateY(0); box-shadow: 0 0 0 rgba(255, 209, 102, 0); }
-  50% { transform: translateY(-2px); box-shadow: 0 0 20px rgba(255, 209, 102, 0.78); }
-}
 /* Кому мигание не подходит — подсказка остаётся текстом и цветом. */
 @media (prefers-reduced-motion: reduce) {
   .combo-strip.attn, #spaceNext.ready.attn { animation: none; }
