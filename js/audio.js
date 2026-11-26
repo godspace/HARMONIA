@@ -581,6 +581,9 @@ function pianoNote(midi, vel, pan, when, hold) {
       Math.max(0.0002, level * (ratio < 2 ? 0.16 : 0.08)),
       t + attack + body * 0.66);
     env.gain.exponentialRampToValueAtTime(0.0001, t + attack + body);
+    // Осциллятор обязан пройти через свою огибающую: без этого узла голос
+    // замолкает сразу после молоточкового шума.
+    osc.connect(env);
     let tailNode = env;
     // Лёгкая ширина: расстроенная пара струн и корпус уходят в сторону от
     // основной ноты. Это не сдвигает высоту, только раскрывает голос.
