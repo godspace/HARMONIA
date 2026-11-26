@@ -35,7 +35,7 @@
 | `station` | характер станции: подача гармонии по паре комбо + реактивный сюжет + жест | `STATION_STYLES`, `STATION_NEUTRAL`, `STATION_TOUCH`, `STATION_GESTURES`, `STATION_PLOT_GESTURES`, `STATION_PLOT_PHASES`, `STATION_PLOT_ARCHETYPES`, `STATION_PLOT_BY_STYLE`, `stationStyleAt/For/ById`, `stationRegister`, `stationPadVoices`, `stationBassOffset`, `stationShape`, `stationGesture`, `stationGestureDelays`, `stationVoiceDelays`, `stationPlotPhase/ForChord/Archetype/Style/StyleForChord/WindowBias/Text/Advance/Reset`, `setStationStyle`, `setStationPlot`, `setStationGesture` |
 | `harmony` | аккорды комбо и весь лад | `HARMONY`, `PALETTE_SLOTS`, `INPUT`, `harmonicChords()`, `diatonicPalette()`, `handNoteBalls()`, `smartNoteWindow()`, `smartChordDegrees()`, `smartTargetDegree()`, `smartHarmonyForNote()`, `chordOnDegree()`, `classifyTriad()`, `describeTriad()`, `noteRole()` |
 | `state` | изменяемое состояние сессии | `state`, `state.adaptive`, `combo()`, `rootMidi()`, `playable()` |
-| `audio` | синтез и тракт | `initAudio`, `bell`, `noteChordPlan`, `noteChord`, `scheduleNoteChord`, `cancelPendingNoteChord`, `echoNote`, `holdStart/Stop`, `bass`, `drumHit`, `drumPlan`, `DRUM_TIMBRES`, `audioCaptureStream`, `releaseAudioCapture` |
+| `audio` | синтез и тракт | `initAudio`, `bell`, `noteChordPlan`, `noteChord`, `scheduleNoteChord`, `cancelPendingNoteChord`, `echoNote`, `pianoPlan`, `pianoNote`, `pianoRelease`, `pianoPedalUp`, `pianoAllOff`, `audioLatencyMs`, `holdStart/Stop`, `bass`, `drumHit`, `drumPlan`, `DRUM_TIMBRES`, `PIANO_TIMBRE`, `audioCaptureStream`, `releaseAudioCapture` |
 | `transport` | часы необязательной формы | `Transport.start/update/pause/resume/stop`, `beatsPerBar`, `countInBeats`, `setBpm`, `setMetronome` |
 | `groove` | необязательный грув (барабаны) | `Groove` (`on`, `preview`, `setOn`, `startPreview`, `setPattern`, `setBpm`, `update`, `setPaused`, `paint`, `statusText`, `_clockSource`, `bpm`, `meter`), `toggleGroove`, `groovePattern`, `grooveSteps`, `groovePlan`, `GROOVE_LANES` |
 | `composition` | драматургия и очки пьесы | `Composition.start/stop/restart`, `sectionForBar`, `targetForBar`, `onBeat`, `onNote`, `onChord`, `finishPiece` |
@@ -137,8 +137,11 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
   лежит на уровне `body`, вне `#game-container`: `fitStage()` масштабирует только
   сцену, иначе клавиши на телефоне сжимались бы до нечитаемых.
   MIDI-нота, запись и пьеса тоже входят через `beginFromOverlay()` — это
-  единственная точка старта сессии. `startSession()` при этом снимает режим
-  пробы (`setDrawerIntro(false)`): панели остаются свёрнутыми, а у краёв сцены
+  единственная точка старта сессии. Подключённая MIDI-клавиатура отменяет саму
+  пробу: `Midi.refresh()` прогревает аудио и сразу зовёт `beginFromOverlay()`,
+  поэтому человек с инструментом не проходит знакомство с компьютерными
+  клавишами. `startSession()` при этом снимает режим пробы
+  (`setDrawerIntro(false)`): панели остаются свёрнутыми, а у краёв сцены
   появляются табы — игрок сразу играет и открывает меню только по необходимости.
 - `drawers` (`ui-drawers.js`) — единственный источник правды о выдвижных панелях:
   `topbar`/`panel` хранят состояние панели (`false` по умолчанию: сессия
@@ -385,7 +388,8 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
   `noteChordPlan`), поэтому smoke-тест проверяет фигуры без аудио.
 - **Только ритм.** Барабаны не вызывают ни `Heard`, ни `noteChord`, ни
   `Composition.onNote`: MIDI-пэд канала 10 (`Midi.handle()`, `DRUM_MAP`) играет звук
-  и сразу выходит из обработчика. Для записи удар — отдельное событие `drums`:
+  и сразу выходит из обработчика. CC120/CC123 («all sound/notes off») и `Midi.panic()`
+  закрывают и ноты, и фортепианные голоса. Для записи удар — отдельное событие `drums`:
   `_fire()` передаёт `recordDrumAt(kind, vel, wall*1000)`, и дорожка хранит
   фактическое время звучания. Во время `state.replay`/`state.videoExport`/`state.audioExport`
   `Groove.update()` молчит, иначе записанные удары наложились бы на живой грув.
@@ -572,12 +576,20 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
   `CFG.pedalMaxVoices`, поэтому старые голоса не наслаиваются в «кашу».
 - `echoNote(midi, vel, hold)` — нота с MIDI: своя высота, панорама по питчу
   (`(midi−60)/48`), `latencyHint: 'interactive'` у AudioContext. Вызывается только
-  когда `state.echo`, иначе пианино звучит само.
-- `scheduleNoteChord(midi, vel, pan)` — путь клавиатуры и озвученного MIDI:
+  когда `state.echo`, иначе пианино звучит само. Внутри — `pianoNote()`:
+  аддитивные партиалы `pianoPlan()` (негармоничность, до 10 обертонов, тембр и
+  громкость от velocity), молоточковый шум и отдельный gain отпускания.
+  `note-off` вызывает `pianoRelease()`: без педали голос гаснет сразу, под CC64
+  помечается `pedaled` и ждёт подъёма педали; `pianoAllOff()` закрывает голоса
+  на паузе, смене комбо и выключении «Ноутбука».
+- `scheduleNoteChord(midi, vel, pan, source)` — путь клавиатуры и озвученного MIDI:
   нота сначала звучит одна, а через `CFG.noteChordSettleMs` (140 мс) получает
   автотрезвучие. Следующая нота, пауза, смена раскладки и `stopPlayback()`
   отменяют таймер (`cancelPendingNoteChord()`), поэтому быстрые арпеджио не
-  оставляют облако сменяющихся аккордов. Отдельного флага «Аккорды на нотах»
+  оставляют облако сменяющихся аккордов. Если игрок уже держит ещё одну
+  MIDI-ноту, автотрезвучие не добавляется: настоящий аккорд не дублируется.
+  Таймер также проверяет, что нота всё ещё в `Heard.midis()`; отпущенная нота
+  без педали не оставляет аккорд-сироту. Отдельного флага «Аккорды на нотах»
   нет: автотрезвучия всегда включены.
 - `noteChordPlan(midi, vel, pan)` — чистый план без AudioNode. В smart-режиме
   `smartHarmonyForNote(pc)` берёт последний диатонический аккорд левой руки;
@@ -599,6 +611,10 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
 
 Браузеры запускают AudioContext только после жеста, поэтому `initAudio()` вызывается
 из стартовой пробы (`introPreview`), `beginFromOverlay`, кнопок и первого note-on.
+`Midi.refresh()` дополнительно прогревает тракт при подключении устройства, а
+первый pointer/keydown (`unlockAudioOnGesture()` в `js/input.js`) будит контекст,
+если MIDI-сессия стартовала без клика по странице. `audioLatencyMs()` в консоли
+показывает сумму `baseLatency` и `outputLatency` для проверки задержки.
 
 ## Характер станции
 

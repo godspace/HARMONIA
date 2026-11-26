@@ -961,6 +961,36 @@ $post = @'
     HARMONIA.state.harmony.lastTriad = null;
   });
 
+  step('midi-piano', function () {
+    // MIDI-эхо — отдельный фортепианный голос, а не колокол. План обязан
+    // существовать для всех 88 клавиш, а velocity — менять и громкость, и тембр.
+    if (typeof HARMONIA.pianoPlan !== 'function') throw new Error('pianoPlan is missing');
+    var soft = HARMONIA.pianoPlan(60, 0.2);
+    var hard = HARMONIA.pianoPlan(60, 1);
+    if (!soft.partials.length || !hard.partials.length) throw new Error('piano partials are empty');
+    if (!(hard.peak > soft.peak)) throw new Error('velocity does not raise the piano peak');
+    if (!(hard.cutoff > soft.cutoff)) throw new Error('velocity does not open the piano tone');
+    if (hard.partials.length < 4) throw new Error('piano needs a few overtones: ' + hard.partials.length);
+    var low = HARMONIA.pianoPlan(21, 0.8), high = HARMONIA.pianoPlan(108, 0.8);
+    if (!(low.decay > high.decay)) throw new Error('low piano keys must ring longer');
+    for (var m = 0; m <= 127; m++) {
+      var p = HARMONIA.pianoPlan(m, 0.8);
+      if (p.note !== m || !p.partials.length || !(p.freq > 0)) {
+        throw new Error('piano plan is broken on MIDI ' + m);
+      }
+    }
+    // Граф голоса тоже должен собираться: не только план, но и release.
+    var voice = HARMONIA.echoNote(60, 0.8);
+    if (!voice || !voice.gain || !voice.oscs.length) {
+      throw new Error('piano voice graph was not created');
+    }
+    if (!HARMONIA.pianoRelease(60, false)) throw new Error('piano note-off did not release the voice');
+    HARMONIA.pianoAllOff();
+    // У подключённого MIDI экран знакомства должен пропускаться, но без
+    // устройства сессия не стартует сама: это проверяем на чистом состоянии.
+    if (HARMONIA.Midi.hasDevice()) throw new Error('smoke must not depend on real MIDI hardware');
+  });
+
   step('melody-octave-record', function () {
     function take(oct) {
       HARMONIA.P.noteOct = oct;
@@ -2505,6 +2535,29 @@ $post = @'
     R.clear();
     if (R.status().visits !== 0) throw new Error('clear did not remove the visits');
     if ($('researchAsk').classList.contains('show')) throw new Error('the rating card stayed open');
+  });
+
+  step('midi-auto-start', function () {
+    // Последний шаг: подменяем только имя устройства, чтобы проверить сам путь
+    // «MIDI подключён → знакомство не нужно → beginFromOverlay». Реальный Web MIDI
+    // в headless-прогоне не нужен, поэтому тест не зависит от железа.
+    var oldDev = HARMONIA.Midi.devName;
+    HARMONIA.Midi.devName = 'Smoke MIDI';
+    HARMONIA.state.started = false;
+    HARMONIA.state.running = false;
+    $('startOverlay').style.display = '';
+    try {
+      if (!HARMONIA.Midi.hasDevice()) throw new Error('hasDevice lost the active input');
+      if (!HARMONIA.Midi.skipKeyboardIntro()) throw new Error('MIDI did not skip the keyboard intro');
+      if (!HARMONIA.state.started || !HARMONIA.state.running) {
+        throw new Error('MIDI skip did not start the session');
+      }
+      if ($('startOverlay').style.display !== 'none') {
+        throw new Error('the keyboard intro stayed on screen after MIDI start');
+      }
+    } finally {
+      HARMONIA.Midi.devName = oldDev;
+    }
   });
 
   check('console-errors', window.__smokeErrors.length === 0, window.__smokeErrors.join(' | '));

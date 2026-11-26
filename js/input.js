@@ -83,6 +83,21 @@ window.addEventListener('keydown', (e) => {
   pressCode(e.code);
 });
 window.addEventListener('keyup', (e) => releaseCode(e.code));
+// ===== Аудио просыпается на первом жесте =====
+// MIDI-устройство может подключиться и запустить сессию до клика по странице.
+// Браузер в этом случае оставляет AudioContext suspended; первый pointer/key
+// будит его заранее, чтобы первая сыгранная нота не ждала разблокировки.
+function unlockAudioOnGesture() {
+  try { initAudio(); } catch (e) { return; }
+  window.removeEventListener('pointerdown', unlockAudioOnGesture, true);
+  window.removeEventListener('keydown', unlockAudioOnKey, true);
+}
+function unlockAudioOnKey(e) {
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  unlockAudioOnGesture();
+}
+window.addEventListener('pointerdown', unlockAudioOnGesture, true);
+window.addEventListener('keydown', unlockAudioOnKey, true);
 window.addEventListener('pointerup', stopChordHold);
 window.addEventListener('blur', () => {
   // Экспорт идёт по записанной дорожке: уход фокуса не ставит сессию на паузу,

@@ -592,6 +592,9 @@ function paintSoundChip() {
 function toggleSound(remember) {
   state.echo = !state.echo;
   if (remember && typeof Midi !== 'undefined') Midi.rememberEcho(state.echo);
+  // Выключили озвучку ноутбука — уже взятые фортепианные голоса не должны
+  // продолжать звучать поверх инструмента.
+  if (!state.echo && typeof pianoAllOff === 'function') pianoAllOff();
   paintSoundChip();
   toast(state.echo ? 'Звук нот: ноутбук' : 'Звук нот: пианино');
 }

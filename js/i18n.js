@@ -562,8 +562,8 @@ var I18N = (function () {
       'The browser waits for a user gesture — press any key or button to allow MIDI.',
     'Подключите клавиатуру — трезвучие станет аккордом, ноты — голосами.':
       'Connect a keyboard — a triad becomes a chord, its notes become voices.',
-    'Играйте: трезвучие становится аккордом, ноты — голосами. Педаль (CC64) держит звук, паника — CC123.':
-      'Play: a triad becomes a chord, its notes become voices. The pedal (CC64) holds the sound, panic is CC123.',
+    'Играйте: трезвучие становится аккордом, ноты — голосами. Педаль (CC64) держит звук, паника — CC120/CC123.':
+      'Play: a triad becomes a chord, its notes become voices. The pedal (CC64) holds the sound, panic is CC120/CC123.',
     'MIDI: вход не выбран': 'MIDI: no input selected',
     'MIDI не обнаружена': 'No MIDI device found',
     'Подключите клавиатуру — она подхватится автоматически.':

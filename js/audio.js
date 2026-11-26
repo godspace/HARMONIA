@@ -1,4 +1,4 @@
-/* HARMONIA · js/audio.js — тракт Web Audio: колокол, удержание, бас, реверб, mute
+/* HARMONIA · js/audio.js — тракт Web Audio: колокол, фортепиано MIDI, бас, реверб, mute
    Модуль без сборки: подключается <script> в index.html до main.js.
    Все модули делят глобальную область — имена функций/констант уникальны. */
 
@@ -17,6 +17,9 @@ let noteGain = null, chordGain = null, drumGain = null;
 let monitorGain = null, compressorNode = null, captureDest = null;
 // Активные «хвосты» под педалью: при выключении педали их можно погасить сразу.
 let pedalVoices = [];
+// Живые фортепианные голоса MIDI: note → голос. Карта нужна для note-off и
+// CC64: отпущенная клавиша гасит свой голос, а педаль оставляет его до подъёма.
+let midiVoices = new Map();
 // Отложенное автотрезвучие: быстрая арпеджио-фраза отменяет предыдущий аккорд,
 // поэтому под меняющимися нотами не остаётся слоёный гармонический «суп».
 let noteChordTimer = null, noteChordPending = null;
@@ -37,6 +40,63 @@ const BELL_TIMBRES = {
     partials: [[1, 1.00, 1.00], [2, 0.32, 0.55], [3, 0.16, 0.32], [4, 0.07, 0.20]]
   }
 };
+// ===== Фортепианный голос MIDI =====
+// Это не «ещё один колокол»: контроллер должен звучать привычно и управляемо.
+// Аддитивный синтез с лёгкой негармоничностью струн, молоточковым шумом и
+// раздельными огибающими партиалов даёт фортепианную атаку и хвост. Velocity
+// меняет три вещи одновременно — громкость, яркость среза и долю верхних
+// партиалов; поэтому тихая игра не просто тише, а мягче и темнее.
+const PIANO_TIMBRE = {
+  peak: 0.58,        // общий пик до шины нот (P.noteVol применяется дальше)
+  partials: 10,      // выше 17 кГц партиалы не создаются
+  inharmonicity: 0.00022,
+  wet: 0.20,
+  decayLow: 3.9,     // A0: длинная струна
+  decayHigh: 0.78,   // C8: короткая
+  cutoffLow: 560,
+  cutoffHigh: 6800
+};
+// Чистый план голоса без AudioNode: smoke-проверка может пройти все 88 клавиш
+// и убедиться, что сила нажатия меняет громкость и тембр, а не только число.
+function pianoPlan(midi, vel) {
+  const raw = Number(midi);
+  const note = clamp(Number.isFinite(raw) ? Math.round(raw) : 60, 0, 127);
+  const v = clamp(vel == null ? 0.8 : vel, 0.05, 1);
+  // 88-клавишный диапазон A0–C8 задаёт форму тембра; крайние MIDI-ноты
+  // получают ближайшую к нему окраску, но остаются своей высотой.
+  const key = clamp((note - 21) / 87, 0, 1);
+  const freq = midiToFreq(note);
+  const pan = clamp((note - 60) / 48, -0.8, 0.8);
+  // Низкие клавиши держат звук дольше, высокие гаснут быстрее — как струны.
+  const decay = PIANO_TIMBRE.decayLow +
+    (PIANO_TIMBRE.decayHigh - PIANO_TIMBRE.decayLow) * key;
+  const tone = typeof P !== 'undefined' && P.tone ? P.tone : 1;
+  // Сила нажатия открывает фильтр; верхний регистр и так ярче нижнего.
+  const cutoff = clamp(Math.max(freq * 1.6, (PIANO_TIMBRE.cutoffLow +
+    PIANO_TIMBRE.cutoffHigh * Math.pow(v, 1.35)) * (0.78 + 0.42 * key) * tone),
+    420, 16000);
+  const inharm = PIANO_TIMBRE.inharmonicity * (0.65 + key);
+  const partials = [];
+  for (let n = 1; n <= PIANO_TIMBRE.partials; n++) {
+    // Струна не идеальна: верхние обертоны чуть выше точных кратных.
+    const ratio = n * Math.sqrt(1 + inharm * n * n);
+    if (freq * ratio >= 17000) break;
+    // Верхние партиалы сильнее проявляются при жёстком ударе и гаснут раньше.
+    // После нормировки это меняет именно баланс, а не только общую громкость.
+    const highLift = n === 1 ? 0 : 0.55 * (v - 0.45);
+    const gain = Math.pow(n, -1.12) * (0.62 + 0.38 * v) * (1 + highLift);
+    const decayMul = 1 / (1 + 0.34 * (n - 1));
+    partials.push([ratio, gain, decayMul]);
+  }
+  const total = partials.reduce((sum, p) => sum + p[1], 0) || 1;
+  partials.forEach(p => { p[1] = p[1] / total; });
+  return {
+    note, freq, vel: v, pan,
+    peak: PIANO_TIMBRE.peak * (0.25 + 0.75 * Math.pow(v, 1.35)),
+    attack: 0.003 + 0.004 * (1 - v),
+    decay, cutoff, partials
+  };
+}
 function makeImpulse(ctx, seconds, decay) {
   const rate = ctx.sampleRate, len = Math.floor(rate * seconds);
   const buf = ctx.createBuffer(2, len, rate);
@@ -107,6 +167,9 @@ function initAudio() {
   wetGain = audioCtx.createGain();
   wetGain.gain.value = P.reverb;
   convolver.connect(wetGain); wetGain.connect(master);
+  // Шумовой буфер нужен и барабанам, и молоточковой атаке пианино. Готовим его
+  // вместе с трактом: первая нота не должна генерировать полсекунды шума.
+  if (!noiseBuffer) noiseBuffer = makeNoiseBuffer(audioCtx);
   if (audioCtx.state === 'suspended') audioCtx.resume();
 }
 // Поток для записи ролика: сигнал берётся после компрессора, но до monitorGain,
@@ -289,6 +352,8 @@ function dampPedalVoices() {
     });
   }
   pedalVoices = [];
+  // MIDI-ноты под CC64 живут в своей карте: подъём педали гасит и их.
+  pianoPedalUp();
 }
 // Педальный хвост: после короткого плато сам уходит в тишину. Это не «стоп»,
 // а именно затухание — педаль слышна, но новые аккорды не тонут в старых.
@@ -412,12 +477,125 @@ function bell(midi, vel, pan, when, timbreName, hold, shapeOverride) {
   routeVoice(out, pan || 0, timbre.wet * shapeWet,
     name === 'note' ? noteGain : chordGain, voiceVolume(name));
 }
-// Нота с MIDI: та же высота, что нажата (без октавных подмен), панорама — по высоте,
-// как за роялем: низкие слева, высокие справа. hold приходит от сустейн-педали.
-function echoNote(midi, vel, hold) {
+// Фортепианный голос: тело из партиалов, молоточковый шум и отдельный gain
+// отпускания. Голос запоминается по ноте, поэтому note-off гасит именно эту
+// клавишу, не трогая остальные. `when` оставлен для будущего планирования:
+// интерактивная MIDI-нота всегда стартует от текущего времени AudioContext.
+function pianoNote(midi, vel, pan, when, hold) {
+  if (!audioCtx || !noteGain) return null;
+  const plan = pianoPlan(midi, vel);
+  const t = when == null ? audioCtx.currentTime : Math.max(when, audioCtx.currentTime);
+  const old = midiVoices.get(plan.note);
+  if (old) pianoReleaseVoice(old, 0.02);
+  const sum = audioCtx.createGain();
+  sum.gain.value = 1;
+  const lp = audioCtx.createBiquadFilter();
+  lp.type = 'lowpass'; lp.Q.value = 0.35;
+  lp.frequency.setValueAtTime(plan.cutoff, t);
+  // Фильтр темнеет вместе с хвостом: верхние партиалы уходят первыми.
+  lp.frequency.exponentialRampToValueAtTime(
+    Math.max(420, plan.cutoff * 0.32), t + plan.decay * 1.15);
+  lp.connect(sum);
+  const oscs = [];
+  let endAt = t;
+  plan.partials.forEach(([ratio, gain, decayMul]) => {
+    const osc = audioCtx.createOscillator(), env = audioCtx.createGain();
+    const level = Math.max(0.0002, plan.peak * gain);
+    const attack = plan.attack * (ratio > 3 ? 0.82 : 1);
+    const body = plan.decay * decayMul;
+    const stopAt = t + attack + body + 0.12;
+    endAt = Math.max(endAt, stopAt);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(plan.freq * ratio, t);
+    env.gain.setValueAtTime(0.0001, t);
+    env.gain.exponentialRampToValueAtTime(level, t + attack);
+    // Две стадии, как у струны: быстрый спад после удара и длинный хвост.
+    env.gain.exponentialRampToValueAtTime(
+      Math.max(0.0002, level * 0.26), t + attack + body * 0.22);
+    env.gain.exponentialRampToValueAtTime(0.0001, t + attack + body);
+    osc.connect(env); env.connect(lp);
+    osc.start(t); osc.stop(stopAt);
+    oscs.push(osc);
+  });
+  // Молоток: короткий шумовой щелчок, тем ярче и громче, чем сильнее удар.
+  const noise = noiseSource();
+  if (noise) {
+    const band = audioCtx.createBiquadFilter(), env = audioCtx.createGain();
+    band.type = 'bandpass';
+    band.frequency.setValueAtTime(
+      clamp(900 + 4600 * plan.vel, 700, 12000), t);
+    band.Q.value = 0.75;
+    const level = Math.max(0.0002, plan.peak * 0.12 * Math.pow(plan.vel, 1.2));
+    env.gain.setValueAtTime(0.0001, t);
+    env.gain.exponentialRampToValueAtTime(level, t + 0.0025);
+    env.gain.exponentialRampToValueAtTime(0.0001, t + 0.045);
+    noise.connect(band); band.connect(env); env.connect(sum);
+    noise.start(t); noise.stop(t + 0.06);
+  }
+  // Отдельный выход отпускания: note-off не обрывает хвост щелчком, а гасит его.
+  const out = audioCtx.createGain();
+  out.gain.value = 1;
+  sum.connect(out);
+  const p = pan == null ? plan.pan : clamp(pan, -0.8, 0.8);
+  routeVoice(out, p, PIANO_TIMBRE.wet, noteGain, voiceVolume('note'));
+  const voice = {
+    note: plan.note, gain: out, oscs,
+    stopAt: endAt, pedaled: false, released: false
+  };
+  midiVoices.set(plan.note, voice);
+  // Карта не должна хранить давно остывший голос: следующая нота заменит его.
+  setTimeout(() => {
+    if (midiVoices.get(plan.note) === voice) midiVoices.delete(plan.note);
+  }, Math.max(250, (endAt - t + 0.4) * 1000));
+  // hold остаётся в подписи ради совместимости: длину под педалью теперь
+  // определяет не множитель, а реальный note-off/CC64.
+  return voice;
+}
+function pianoReleaseVoice(voice, fade) {
+  if (!voice || voice.released) return;
+  voice.released = true;
+  if (midiVoices.get(voice.note) === voice) midiVoices.delete(voice.note);
   if (!audioCtx) return;
-  const pan = clamp((midi - 60) / 48, -0.8, 0.8);
-  bell(midi, vel, pan, null, 'note', hold || 0);
+  const t = audioCtx.currentTime;
+  const sec = fade == null ? 0.08 : fade;
+  voice.gain.gain.cancelScheduledValues(t);
+  voice.gain.gain.setTargetAtTime(0.0001, t, Math.max(0.012, sec / 3));
+  voice.oscs.forEach(o => {
+    try { o.stop(t + sec + 0.05); } catch (e) { /* уже остановлен */ }
+  });
+}
+// Отпускание клавиши. Под педалью голос помечается и продолжает звучать до
+// CC64=0; без педали отпускание слышно сразу, как у настоящего инструмента.
+function pianoRelease(note, pedal) {
+  const raw = Number(note);
+  const voice = midiVoices.get(clamp(Number.isFinite(raw) ? Math.round(raw) : 60, 0, 127));
+  if (!voice) return false;
+  if (pedal) { voice.pedaled = true; return true; }
+  pianoReleaseVoice(voice);
+  return true;
+}
+function pianoPedalUp() {
+  Array.from(midiVoices.values()).forEach(v => {
+    if (v.pedaled) pianoReleaseVoice(v);
+  });
+}
+function pianoAllOff() {
+  Array.from(midiVoices.values()).forEach(v => pianoReleaseVoice(v, 0.04));
+  midiVoices.clear();
+}
+// Нота с MIDI: та же высота, что нажата (без октавных подмен), панорама — по
+// высоте, как за роялем: низкие слева, высокие справа.
+function echoNote(midi, vel, hold) {
+  if (!audioCtx) return null;
+  return pianoNote(midi, vel, null, null, hold);
+}
+// Оценка задержки тракта для диагностики: baseLatency — буфер графа,
+// outputLatency — оценка вывода браузера. В консоли это HARMONIA.audioLatencyMs().
+function audioLatencyMs() {
+  if (!audioCtx) return 0;
+  const base = Number(audioCtx.baseLatency);
+  const out = Number(audioCtx.outputLatency);
+  return Math.round(((isFinite(base) ? base : 0) + (isFinite(out) ? out : 0)) * 1000);
 }
 // Гармония под одиночной нотой. В smart-режиме приоритет у текущего аккорда
 // левой руки: трезвучие строится от его корня, а не от случайной ноты правой
@@ -472,15 +650,27 @@ function cancelPendingNoteChord() {
 // аккорде), через noteChordSettleMs под ней появляется трезвучие. Следующая
 // нота отменяет предыдущий план — это и убирает «музыкальный суп» из быстрых
 // арпеджио, где каждая нота тянула за собой сменяющийся аккорд.
-function scheduleNoteChord(midi, vel, pan) {
+function scheduleNoteChord(midi, vel, pan, source) {
   if (!audioCtx || state.replay) { cancelPendingNoteChord(); return; }
+  const fromMidi = source === 'midi';
+  // Если игрок уже держит ещё одну MIDI-ноту, он играет настоящий аккорд.
+  // Автотрезвучие под ним только дублировало бы голоса, поэтому умолкаем.
+  if (fromMidi && typeof Heard !== 'undefined' && Heard.notes.size > 0) {
+    cancelPendingNoteChord();
+    return;
+  }
   cancelPendingNoteChord();
-  noteChordPending = { midi, vel, pan };
+  noteChordPending = { midi, vel, pan, source };
   noteChordTimer = setTimeout(() => {
     const p = noteChordPending;
     noteChordTimer = null;
     noteChordPending = null;
     if (!p || !playable()) return;
+    // MIDI-нота могла отпуститься за эти 140 мс: не озвучиваем аккорд от
+    // клавиши, которой уже нет. Под педалью она остаётся в Heard.latched —
+    // тогда аккорд звучит. Клавиатура проверяется своим путём pressCode.
+    if (p.source === 'midi' && typeof Heard !== 'undefined' &&
+        Heard.midis().indexOf(p.midi) === -1) return;
     noteChord(p.midi, p.vel, p.pan);
   }, CFG.noteChordSettleMs);
 }

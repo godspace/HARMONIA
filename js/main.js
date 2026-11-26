@@ -47,7 +47,8 @@ window.HARMONIA = {
   scheduleAdaptiveApply, applyPendingAdaptiveAnchor,
   shiftNoteOctave, applyNoteLayout,
   noteChord, noteChordPlan, noteChordHarmony, scheduleNoteChord, cancelPendingNoteChord,
-  BELL_TIMBRES, DRUM_TIMBRES, voiceVolume, applyVoiceVolumes, drumHit, drumPlan,
+  echoNote, pianoPlan, pianoNote, pianoRelease, pianoPedalUp, pianoAllOff, audioLatencyMs,
+  PIANO_TIMBRE, BELL_TIMBRES, DRUM_TIMBRES, voiceVolume, applyVoiceVolumes, drumHit, drumPlan,
   // Характер станции: расположение голосов, бас, октава и тембр по паре комбо.
   STATION_STYLES, STATION_NEUTRAL, STATION_TOUCH, STATION_GESTURES, STATION_PLOT_GESTURES,
   stationStyleAt, stationStyleFor, stationStyleById, stationRegister, stationPadVoices,

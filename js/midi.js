@@ -5,7 +5,7 @@
 // ===== MIDI: клавиатура как слух приложения =====
 // Каждая нота звучит своей высотой (echoNote — если звучит ноутбук), регистрируется
 // в Heard и участвует в распознавании трезвучий. Note-off и CC64 ведут «хвосты»,
-// velocity — громкость. Расширение (послекасание, пэды) — в Midi.handle().
+// velocity — громкость и яркость фортепианного голоса. Пэды — в Midi.handle().
 function midiNoteName(note) {
   return sharpLabel(note) + (Math.floor(note / 12) - 1);
 }
@@ -46,6 +46,9 @@ const Midi = {
   activeId: null,
   devName: '',
   retryArmed: false,
+  noteFrame: 0,
+  lastNote: '',
+  optionSig: '',
   init() {
     if (!navigator.requestMIDIAccess) {
       setMidiStatus('error', 'Web MIDI не поддерживается браузером');
@@ -53,7 +56,9 @@ const Midi = {
       return;
     }
     if (this.access) return;
-    navigator.requestMIDIAccess().then(access => {
+    // sysex не нужен: доступ без него выдаётся быстрее и не пугает лишним
+    // разрешением. Сообщения note-on/off приходят тем же путём.
+    navigator.requestMIDIAccess({ sysex: false }).then(access => {
       this.access = access;
       access.onstatechange = () => this.refresh(); // горячее подключение/отключение
       this.refresh();
@@ -76,29 +81,75 @@ const Midi = {
     window.addEventListener('pointerdown', retry, true);
     window.addEventListener('keydown', retry, true);
   },
+  hasDevice() { return !!this.devName; },
+  // Аудиотракт лучше открыть до первой ноты: создание AudioContext и графа
+  // занимает время, и первый note-on не должен платить за него. Если браузер
+  // ещё ждёт жест, контекст останется suspended — его разбудит первый ввод.
+  warmAudio() {
+    if (!state.echo) return;
+    try { initAudio(); } catch (e) { /* браузер ждёт пользовательский жест */ }
+  },
+  // Знакомство с компьютерными клавишами нужно только тем, у кого их нет под
+  // рукой. Подключённая MIDI-клавиатура — уже готовый инструмент, поэтому
+  // стартовый экран не показываем, а входим в сессию тем же beginFromOverlay().
+  skipKeyboardIntro() {
+    if (state.started || !this.devName) return false;
+    if (typeof beginFromOverlay !== 'function') return false;
+    beginFromOverlay();
+    return true;
+  },
+  // Строка состояния не должна перестраивать DOM на каждую ноту: на быстрой
+  // игре это заметная работа в главном потоке. Один кадр — одна подпись.
+  flashNote(note) {
+    this.lastNote = midiNoteName(note);
+    if (this.noteFrame) return;
+    this.noteFrame = requestAnimationFrame(() => {
+      this.noteFrame = 0;
+      if (this.devName && this.lastNote) {
+        setMidiStatus('online', 'MIDI: ' + this.devName + ' · ' + this.lastNote);
+      }
+    });
+  },
   refresh() {
     if (!this.access) return;
     this.inputs = Array.from(this.access.inputs.values());
     const sel = $('pMidiIn');
-    sel.innerHTML = '<option value="">— нет —</option>' +
+    const options = '<option value="">— нет —</option>' +
       this.inputs.map(i => `<option value="${i.id}">${i.name || i.id}</option>`).join('');
+    const optionSig = this.inputs.map(i => `${i.id}|${i.name || i.id}`).join('\n');
+    if (optionSig !== this.optionSig) {
+      this.optionSig = optionSig;
+      sel.innerHTML = options;
+    }
     if (this.activeId && !this.inputs.some(i => i.id === this.activeId)) this.activeId = null;
     if (!this.activeId && this.inputs.length) this.activeId = this.inputs[0].id;
     sel.value = this.activeId || '';
+    // Слушаем только выбранный вход. Остальные отвязываются: лишний callback
+    // на каждом устройстве не нужен, а при смене входа старые ноты не звучат.
     this.inputs.forEach(input => {
-      if (input.__rithmBound) return;
-      input.__rithmBound = true;
-      input.onmidimessage = (msg) => this.handle(msg);
+      const active = input.id === this.activeId;
+      if (active && !input.__rithmBound) {
+        input.__rithmBound = true;
+        input.onmidimessage = (msg) => this.handle(msg);
+      } else if (!active && input.__rithmBound) {
+        input.__rithmBound = false;
+        input.onmidimessage = null;
+      }
     });
     const dev = this.inputs.find(i => i.id === this.activeId);
     this.devName = dev ? (dev.name || 'MIDI-вход') : '';
     if (dev) {
       this.resolveEcho(dev);
+      this.warmAudio();
+      this.skipKeyboardIntro();
       setMidiStatus('online', 'MIDI: ' + this.devName);
-      $('midiHint').textContent = 'Играйте: трезвучие становится аккордом, ноты — голосами. Педаль (CC64) держит звук, паника — CC123.';
+      $('midiHint').textContent = 'Играйте: трезвучие становится аккордом, ноты — голосами. Педаль (CC64) держит звук, паника — CC120/CC123.';
     } else {
-      // Устройство отключилось: «зажатые» ноты иначе остались бы в слухе навсегда.
+      // Устройство отключилось: «зажатые» ноты иначе остались бы в слухе навсегда,
+      // а фортепианные голоса — звучать без клавиатуры.
       Heard.clear();
+      if (typeof pianoAllOff === 'function') pianoAllOff();
+      this.lastNote = '';
       setMidiStatus('idle', this.inputs.length ? 'MIDI: вход не выбран' : 'MIDI не обнаружена');
       $('midiHint').textContent = 'Подключите клавиатуру — она подхватится автоматически.';
     }
@@ -117,11 +168,20 @@ const Midi = {
     if (!this.activeId) return;
     try { localStorage.setItem(ECHO_KEY + this.activeId, on ? '1' : '0'); } catch (e) { /* приватный режим */ }
   },
-  select(id) { this.activeId = id || null; Heard.clear(); this.refresh(); },
+  select(id) {
+    const next = id || null;
+    if (next === this.activeId) return;
+    Heard.clear();
+    if (typeof pianoAllOff === 'function') pianoAllOff();
+    this.activeId = next;
+    this.refresh();
+  },
   handle(msg) {
     if (!this.activeId || (msg.target && msg.target.id !== this.activeId)) return;
     if (exportBusy()) return;
-    const data = msg.data, type = data[0] & 0xf0;
+    const data = msg.data;
+    if (!data || data.length < 2) return;
+    const type = data[0] & 0xf0;
     // Канал 10 — ударные. Ветка стоит первой и выходит сразу: пэд не попадает
     // ни в слух (Heard), ни в распознавание трезвучий, ни в счёт. Для записи он
     // остаётся ритмическим событием и идёт в отдельную дорожку drums.
@@ -138,13 +198,16 @@ const Midi = {
     if (type === 0x90 && data[2] > 0) this.noteOn(data[1], data[2] / 127);
     else if (type === 0x80 || (type === 0x90 && data[2] === 0)) this.noteOff(data[1]);
     else if (type === 0xb0) {
-      // CC64 — сустейн-педаль, CC123 — all notes off («паника»).
+      // CC64 — сустейн-педаль, CC120/CC123 — all sound/notes off («паника»).
       if (data[1] === 64) this.pedal(data[2] >= 64);
-      else if (data[1] === 123) this.panic();
+      else if (data[1] === 120 || data[1] === 123) this.panic();
     }
   },
   pedal(on) {
     Heard.setSustain(on);
+    // Подъём педали должен быть слышен сразу: фортепианные голоса и хвосты
+    // автотрезвучий не ждут естественного затухания.
+    if (!on && typeof dampPedalVoices === 'function') dampPedalVoices();
     if (this.devName) setMidiStatus('online', 'MIDI: ' + this.devName + (on ? ' · педаль' : ''));
   },
   // Любая нажатая нота — это нота: своя высота, своя громкость, участие в
@@ -162,7 +225,7 @@ const Midi = {
     if (state.echo) {
       initAudio();
       echoNote(note, v, Heard.sustain ? CFG.echoHold : 0);
-      scheduleNoteChord(note, v, pan);
+      scheduleNoteChord(note, v, pan, 'midi');
     }
     Heard.on(note, v);
     // Запись хранит реальную высоту MIDI, а не октаву ближайшего шара.
@@ -186,10 +249,16 @@ const Midi = {
       // Хроматика вне лада: шара нет, но звук и «Слышу» работают.
       ripples.push({ x: RING_CX, y: RING_CY, color: '#b8c4e2', start: performance.now(), big: false });
     }
-    if (this.devName) setMidiStatus('online', 'MIDI: ' + this.devName + ' · ' + midiNoteName(note));
+    this.flashNote(note);
   },
   noteOff(note) {
     const pc = ((note % 12) + 12) % 12;
+    // Педаль решает судьбу голоса: под ней отпущенная клавиша продолжает
+    // звучать до CC64=0, без неё гаснет сразу после отпускания.
+    const pedal = Heard.sustain;
+    // Сначала отпускаем звук, потом обновляем «Слышу»: задержка release не
+    // должна зависеть от перерисовки HUD.
+    if (state.echo && typeof pianoRelease === 'function') pianoRelease(note, pedal);
     Heard.off(note);
     // Шар гаснет, только если эта ступень больше не держится ни в какой октаве.
     const stillHeld = Heard.midis().some(m => ((m % 12) + 12) % 12 === pc);
@@ -200,6 +269,9 @@ const Midi = {
   panic() {
     Heard.clear();
     if (typeof cancelPendingNoteChord === 'function') cancelPendingNoteChord();
+    if (typeof pianoAllOff === 'function') pianoAllOff();
+    if (typeof dampPedalVoices === 'function') dampPedalVoices();
+    this.lastNote = '';
     balls.forEach(b => { b.midiHeld = false; holdStop(b); });
     if (typeof scheduleAdaptiveApply === 'function') scheduleAdaptiveApply();
   }
