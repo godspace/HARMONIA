@@ -181,7 +181,7 @@ function initAudio() {
   if (audioCtx) { if (audioCtx.state === 'suspended') audioCtx.resume(); return; }
   // latencyHint числом, а не 'interactive': браузер просит минимальный буфер
   // (CFG.audioLatencyHint = 4 мс). Значение остаётся подсказкой — если железо
-  // не тянет, браузер сам выберет безопасный размер, но не наоборот.
+  // не тянет, браузер сам выберет безопасный размер.
   const hint = CFG && CFG.audioLatencyHint != null ? CFG.audioLatencyHint : 0.004;
   const Ctx = window.AudioContext || window.webkitAudioContext;
   try {
