@@ -75,6 +75,7 @@ const state = {
     bar: 0, beat: 0, countInBeat: 0,
     sectionId: null, sectionLabel: '',
     barChord: null, barHadChord: false, barTargetHit: false,
+    prepared: null,
     stats: null, summaries: [], points: 0, lastAward: null,
     // Мелодия пьесы: количество нот, диапазон и охват ступеней. Это не очки,
     // а краткая обратная связь в экране результата.

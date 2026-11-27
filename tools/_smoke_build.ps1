@@ -1063,6 +1063,99 @@ $post = @'
     if (HARMONIA.state.form.bar !== 1) throw new Error('first bar not reached: ' + HARMONIA.state.form.bar);
   });
 
+  step('form-cue', function () {
+    // Подсказка «сейчас → дальше» живёт только на карточках и мини-клавиатурах:
+    // верхний HUD прогресс показывает, но ступени не дублирует. В первой
+    // половине такта видна только текущая цель, поэтому взятый аккорд можно
+    // послушать; «дальше» появляется во второй половине и не перебивает «сейчас».
+    var H = HARMONIA, st = H.state;
+    if (!st.form.enabled || !st.form.running) throw new Error('form is not running');
+    if ($('formCue') || $('formCueHint') || $('formTarget')) {
+      throw new Error('the duplicate HUD cue is still in the DOM');
+    }
+    st.form.bar = 3;
+    st.form.beat = 1;
+    st.form.barTargetHit = false;
+    st.form.prepared = null;
+    H.updateHUD();
+    var target = H.Composition.targetForBar(3);
+    var next = H.Composition.nextTargetForBar(3);
+    if (!target || !next) throw new Error('bar 3 must have current and next targets');
+    var currentCard = document.querySelector('#chordPad .chord-card.form-current');
+    if (!currentCard || currentCard.dataset.pcsKey !== target.pcsKey) {
+      throw new Error('the current target card is not marked');
+    }
+    var currentCue = currentCard.querySelector('.cc-cue');
+    if (!currentCue || currentCue.textContent !== 'сейчас') {
+      throw new Error('the current card does not say "сейчас"');
+    }
+    if (document.querySelector('#chordPad .chord-card.form-next')) {
+      throw new Error('the next target appeared during the savor half');
+    }
+    if (document.body.classList.contains('form-prep')) {
+      throw new Error('prep started too early');
+    }
+    if (H.Composition.nextCueOpen()) throw new Error('next cue window is open too early');
+    // Попадание в начале такта: ✓ остаётся один, следующая карточка ещё скрыта.
+    st.form.barTargetHit = true;
+    H.updateHUD();
+    var hitCard = document.querySelector('#chordPad .chord-card.form-current');
+    if (!hitCard || hitCard.dataset.formCue !== 'hit' ||
+        !hitCard.querySelector('.cc-cue') ||
+        hitCard.querySelector('.cc-cue').textContent !== '✓') {
+      throw new Error('the hit target did not switch to the check badge');
+    }
+    if (document.querySelector('#chordPad .chord-card.form-next')) {
+      throw new Error('the next target rushed in right after the hit');
+    }
+    if (document.body.classList.contains('form-prep')) {
+      throw new Error('prep opened right after the hit');
+    }
+    // Раннее взятие следующего аккорда всё равно запоминается, даже пока бейдж
+    // «дальше» скрыт: это не визуальный призыв, а спокойная заготовка.
+    H.Composition.onChord(next);
+    if (!st.form.prepared || st.form.prepared.pcsKey !== next.pcsKey) {
+      throw new Error('the early next chord was not remembered');
+    }
+    st.form.prepared = null;
+    // Две доли до границы: появляется вторичная карточка и пунктир подготовки.
+    st.form.barTargetHit = false;
+    st.form.beat = 3;
+    H.updateHUD();
+    if (!H.Composition.nextCueOpen()) throw new Error('next cue window did not open');
+    if (!document.body.classList.contains('form-prep')) {
+      throw new Error('prep window did not open');
+    }
+    var nextCard = document.querySelector('#chordPad .chord-card.form-next');
+    if (!nextCard || nextCard.dataset.pcsKey !== next.pcsKey) {
+      throw new Error('the next target card is not marked');
+    }
+    var nextCue = nextCard.querySelector('.cc-cue');
+    if (!nextCue || nextCue.textContent !== 'дальше') {
+      throw new Error('the next card does not say "дальше"');
+    }
+    if (nextCard.getAttribute('data-form-cue') !== 'next') {
+      throw new Error('the next card lost its target mark in prep');
+    }
+    H.Composition.onChord(next);
+    if (!st.form.prepared || st.form.prepared.pcsKey !== next.pcsKey) {
+      throw new Error('the early next chord was not remembered in prep');
+    }
+    // Первая доля нового такта принимает подготовленный аккорд без повторного
+    // нажатия и без второго начисления.
+    H.Composition.onBeat(12);
+    if (st.form.bar !== 4 || !st.form.barTargetHit) {
+      throw new Error('the prepared target did not count at the bar line');
+    }
+    if (st.form.prepared) throw new Error('the prepared target was not cleared');
+    var credited = document.querySelector('#chordPad .chord-card.form-current');
+    if (!credited || credited.dataset.formCue !== 'hit' ||
+        !credited.querySelector('.cc-cue') ||
+        credited.querySelector('.cc-cue').textContent !== '✓') {
+      throw new Error('the credited target did not switch to the hit badge');
+    }
+  });
+
   step('count-in-two-bars', function () {
     var st = HARMONIA.state;
     var ci = $('formCountIn');
@@ -1583,9 +1676,9 @@ $post = @'
     var quiet = H.sunoPrompt({
       events: [],
       combo: { id: 13, mode: 'minor', keyNameLatin: 'A minor', chords: [['ля', 'до', 'ми']] },
-      form: { bpm: 72, beatsPerBar: 3 }, station: { touch: 'glass' }, drums: []
+      form: { bpm: 52, beatsPerBar: 3 }, station: { touch: 'glass' }, drums: []
     });
-    if (quiet.indexOf('A minor') === -1 || quiet.indexOf('72 BPM') === -1) {
+    if (quiet.indexOf('A minor') === -1 || quiet.indexOf('52 BPM') === -1) {
       throw new Error('the prompt lost the minor key or form tempo: ' + quiet);
     }
     if (quiet.indexOf('3/4') === -1) throw new Error('the prompt ignored the 3/4 meter');
@@ -1600,7 +1693,8 @@ $post = @'
     if (!legacy || /undefined|null/.test(legacy) || /[\u0400-\u04FF]/.test(legacy)) {
       throw new Error('the legacy prompt is not clean English: ' + legacy);
     }
-    if (legacy.indexOf('C major') === -1 || legacy.indexOf('84 BPM') === -1) {
+    if (legacy.indexOf('C major') === -1 ||
+        legacy.indexOf(HARMONIA.P.formBpm + ' BPM') === -1) {
       throw new Error('the legacy prompt lost its safe defaults: ' + legacy);
     }
     if (H.sunoPrompt(null) !== '') throw new Error('an empty recording must give an empty prompt');

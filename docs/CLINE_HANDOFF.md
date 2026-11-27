@@ -1,6 +1,6 @@
 # HARMONIA — handoff для нового таска Cline
 
-**Обновлено:** 2026-11-26
+**Обновлено:** 2026-11-27
 **Рабочая папка:** `C:\Users\godspace\Desktop\PROJECTS\HARMONIA`  
 **Репозиторий:** <https://github.com/godspace/HARMONIA>  
 **Ветка:** `main`  
@@ -69,6 +69,13 @@
   Под карточками аккордов — `#keyMap`: пять мини-клавиатур с зажжёнными нотами
   аккорда и золотым корнем, только для визуальной ориентации (`aria-hidden`,
   `pointer-events:none`). Smoke-шаги `space-hint`, `combo-strip`, `key-map`.
+- **Форма и темп:** пьеса стартует на 52 BPM (4,6 с на такт в 4/4), чтобы
+  аккорд можно было послушать и спокойно переставить пальцы. Цели идут по
+  «тёплому» кругу `I vi IV iii ii` / `i VI iv III` с плагальной кодой `IV–I`.
+  Подсказка **дальше** появляется только во второй половине такта
+  (`Composition.nextCueOpen()`), а после **✓** первая половина остаётся у
+  текущего аккорда; раннее взятие всё равно запоминается
+  (`prepWindowOpen()`). Smoke-шаг `form-cue`.
 - **MIDI-вход** больше не требует пробы компьютерных клавиш, но и не входит в
   игру молча: `Midi.refresh()` прогревает аудио и зовёт `MidiIntro.open()`.
   Экран `#midiCoach` — один экран без шагов: слева три карточки `I–IV–V`
@@ -194,7 +201,7 @@
   Smoke-шаги `station-auto-record-midi` и `record-drums-video`.
 - **Suno без API** — `js/suno.js`. `sunoPrompt(rec)` собирает только английский
   текст из `combo.keyNameLatin`, `bpm`/`form.bpm`, `beatsPerBar`,
-  `station.touch` и `drums`; старые записи получают `C major`, 84 BPM, 4/4,
+  `station.touch` и `drums`; старые записи получают `C major`, 52 BPM, 4/4,
   `warm piano`, `no drums`. Первый клик **🎛 Suno** копирует промпт и зовёт
   `startAudioExport(rec, {purpose:'suno', onDone})` — WAV и имя файла те же, что
   у **⬇ Аудио**. После сохранения кнопка становится **↗ Suno**; второй клик

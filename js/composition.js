@@ -24,6 +24,37 @@ const Composition = {
     return palette.find(h => h.degree === degree) || palette[0];
   },
 
+  // Следующая цель нужна HUD и карточкам ещё до границы такта: новичок видит,
+  // куда переставить пальцы, пока звучит текущий аккорд. На последнем такте
+  // следующей цели нет — возвращаем null.
+  nextTargetForBar(bar) {
+    const total = this.totalBars();
+    const n = Math.max(1, Math.round(Number(bar) || 1));
+    if (n >= total) return null;
+    return this.targetForBar(n + 1);
+  },
+
+  // Окно раннего взятия открыто либо после попадания в цель (остаток такта можно
+  // посвятить следующему аккорду), либо за две доли до границы. Раннее взятие
+  // засчитывается, но не подсвечивается сразу: визуальный бейдж «дальше» включает
+  // отдельный nextCueOpen(), чтобы после ✓ у игрока осталось время послушать аккорд.
+  prepWindowOpen() {
+    if (!state.form.enabled || !state.form.running || state.form.phase !== 'playing') return false;
+    return state.form.barTargetHit || this.nextCueOpen();
+  },
+
+  // Видимая подсказка «дальше» появляется только в последние ceil(bpb/2) доли.
+  // В 4/4 при 52 BPM это ~2,3 с: первая половина такта остаётся «смаком» текущего
+  // аккорда, вторая — спокойной подготовкой к следующему. Нажатие следующего
+  // аккорда раньше всё равно запоминается prepWindowOpen(), если цель уже взята.
+  nextCueOpen() {
+    if (!state.form.enabled || !state.form.running || state.form.phase !== 'playing') return false;
+    const bpb = Number(Transport.beatsPerBar) === 3 ? 3 : 4;
+    const beat = Math.max(1, Math.min(bpb, Number(state.form.beat) || 1));
+    const beatsLeft = bpb - beat + 1;
+    return beatsLeft <= Math.max(1, Math.ceil(bpb / 2));
+  },
+
   start() {
     if (!state.started) return false;
     this.stop();
@@ -38,6 +69,7 @@ const Composition = {
     state.form.barChord = null;
     state.form.barHadChord = false;
     state.form.barTargetHit = false;
+    state.form.prepared = null;
     state.form.stats = null;
     state.form.summaries = [];
     state.form.points = 0;
@@ -80,6 +112,7 @@ const Composition = {
     state.form.barChord = null;
     state.form.barHadChord = false;
     state.form.barTargetHit = false;
+    state.form.prepared = null;
     if (disable) {
       state.form.enabled = false;
       this.resetMelody();
@@ -122,17 +155,30 @@ const Composition = {
 
     if (bar !== state.form.bar) {
       const prev = state.form.bar;
+      const prepared = state.form.prepared;
       if (prev >= 1) this.finishBar(prev);
       state.form.bar = bar;
       state.form.beat = beat % bpb + 1;
       state.form.barChord = null;
       state.form.barHadChord = false;
       state.form.barTargetHit = false;
+      state.form.prepared = null;
 
       const section = this.sectionForBar(bar);
       if (section.id !== state.form.sectionId) {
         if (state.form.sectionId) this.finishSection(state.form.sectionId);
         this.beginSection(section);
+      }
+      // Аккорд, взятый в окне подготовки, считается на первой доле нового
+      // такта: новичку не нужно ждать границу и повторять движение. Очки
+      // начисляются один раз — повторный аккорд в этом такте цель не дублирует.
+      if (prepared && prepared.bar === prev) {
+        const target = this.targetForBar(bar);
+        if (target && prepared.pcsKey === target.pcsKey) {
+          state.form.barTargetHit = true;
+          if (state.form.stats) state.form.stats.hits += 1;
+          this.award(CFG.composition.targetBonus, 'цель ' + target.degree, prepared);
+        }
       }
       state.form.phase = 'playing';
       this.accentBeat();
@@ -197,6 +243,16 @@ const Composition = {
       state.form.barTargetHit = true;
       state.form.stats.hits += 1;
       this.award(CFG.composition.targetBonus, 'цель ' + target.degree, snapshot);
+    }
+    // Раннее взятие следующей цели: в окне подготовки (после попадания или за
+    // две доли до такта) аккорд запоминается и засчитается на первой доле.
+    // Если игрок после этого взял другой аккорд, подготовка снимается.
+    const next = this.nextTargetForBar(bar);
+    if (next && pcsKey && pcsKey === next.pcsKey && this.prepWindowOpen()) {
+      state.form.prepared = Object.assign({}, snapshot, { bar, at: performance.now() });
+    } else if (state.form.prepared && state.form.prepared.bar === bar &&
+               pcsKey !== state.form.prepared.pcsKey) {
+      state.form.prepared = null;
     }
     this.updateHUD();
   },
@@ -268,6 +324,7 @@ const Composition = {
     state.form.running = false;
     state.form.phase = 'done';
     state.form.stats = null;
+    state.form.prepared = null;
     Transport.stop();
     this.updateHUD();
     if (typeof showFormResult === 'function') showFormResult();

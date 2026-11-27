@@ -265,7 +265,6 @@ canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
 .form-bars i.current { opacity: 1; transform: scaleY(1.7); box-shadow: 0 0 7px var(--fc, #6bdfff); }
 .form-foot { margin-top: 5px; font-size: 9.5px; font-weight: 800; }
 .form-sec { color: #d0d7ee; }
-.form-target { color: #6bdfff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .form-beats { display: flex; gap: 3px; flex: none; }
 .form-beats i {
   width: 4px; height: 4px; border-radius: 50%;
@@ -273,6 +272,70 @@ canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
 }
 .form-beats i.on { background: #ffd166; box-shadow: 0 0 6px rgba(255, 209, 102, 0.75); }
 .form-award { min-height: 11px; margin-top: 1px; text-align: right; font-size: 9px; font-weight: 800; color: #74cc3d; }
+/* Подсказка «сейчас → дальше» живёт только на карточках и мини-клавиатурах:
+   верхний HUD показывает прогресс пьесы, но не повторяет ступени. */
+/* В пьесе взгляд должен держать только две цели. Остальные карточки остаются
+   кликабельными, но тише: шаг комбо, «следующий» от Guide и зелёные галочки
+   не спорят с текущей и будущей ступенью такта. */
+body.form-mode #homePanel { opacity: 0.82; transition: opacity 0.18s; }
+body.form-mode #homePanel.fresh, body.form-mode #homePanel.away { opacity: 1; }
+body.form-mode #chordPad .chord-card { opacity: 0.6; }
+body.form-mode #chordPad .chord-card:hover,
+body.form-mode #chordPad .chord-card.active { opacity: 0.9; }
+/* «Дальше» — вторичная цель: карточка приподнята только в окне подготовки и
+   никогда не спорит с «сейчас» ни заливкой, ни свечением. */
+body.form-mode #chordPad .chord-card.form-next { opacity: 0.78; }
+body.form-mode #chordPad .chord-card.form-current { opacity: 1; }
+body.form-mode #chordPad .chord-card.next:not(.form-current):not(.form-next) {
+  border-color: rgba(255, 255, 255, 0.13); box-shadow: none;
+}
+body.form-mode #chordPad .chord-card.next:not(.form-current):not(.form-next) .cc-deg,
+body.form-mode #chordPad .chord-card.next:not(.form-current):not(.form-next) .cc-key {
+  color: #8b95b3;
+}
+body.form-mode #chordPad .chord-card.guide-next {
+  outline: none; box-shadow: none;
+}
+body.form-mode #chordPad .chord-card.guide-next .cc-deg::after { content: none; }
+body.form-mode #chordPad .chord-card.form-current {
+  border-color: #7ee7ff; background: rgba(20, 46, 60, 0.94);
+  outline: 1px solid rgba(107, 223, 255, 0.28); outline-offset: 1px;
+  box-shadow: 0 0 20px rgba(107, 223, 255, 0.34), inset 0 3px 0 #6bdfff;
+}
+body.form-mode #chordPad .chord-card.form-current .cc-deg,
+body.form-mode #chordPad .chord-card.form-current .cc-key { color: #e4faff; }
+body.form-mode #chordPad .chord-card.form-current.form-hit {
+  border-color: #8bdc5a; background: rgba(24, 48, 27, 0.9);
+  outline-color: rgba(116, 204, 61, 0.24);
+  box-shadow: 0 0 18px rgba(116, 204, 61, 0.26), inset 0 3px 0 #74cc3d;
+}
+body.form-mode #chordPad .chord-card.form-next {
+  border-color: rgba(255, 255, 255, 0.16); background: rgba(48, 39, 18, 0.24);
+  outline: none; box-shadow: none;
+}
+body.form-mode #chordPad .chord-card.form-next .cc-deg,
+body.form-mode #chordPad .chord-card.form-next .cc-key { color: #dcc492; }
+/* Никакой оранжевой рамки: следующая цель говорит только тёплой подложкой и
+   бейджем «дальше». Главной остаётся заполненная карточка «сейчас»/«✓». */
+body.form-mode.form-prep #chordPad .chord-card.form-next {
+  border-color: rgba(255, 255, 255, 0.18);
+  outline: none;
+  background: rgba(48, 39, 18, 0.44); box-shadow: none;
+}
+body.form-mode #keyMap .km-item { opacity: 0.4; }
+body.form-mode #keyMap .km-item.form-current { opacity: 1; }
+body.form-mode #keyMap .km-item.form-next { opacity: 0.72; }
+body.form-mode #keyMap .km-item.form-current .km-board {
+  outline: 1px solid rgba(107, 223, 255, 0.85); outline-offset: 1px;
+}
+body.form-mode #keyMap .km-item.form-next .km-board {
+  outline: 1px solid rgba(255, 255, 255, 0.18); outline-offset: 1px;
+}
+body.form-mode.form-prep #keyMap .km-item.form-next .km-board {
+  outline: 1px solid rgba(255, 209, 102, 0.4);
+}
+body.form-mode #keyMap .km-item.form-current .km-w.on,
+body.form-mode #keyMap .km-item.form-next .km-w.on { filter: brightness(1.18); }
 #keyZone {
   position: absolute; bottom: 11px; left: 0; right: 0;
   display: flex; flex-direction: column; align-items: center; gap: 6px;
@@ -302,7 +365,7 @@ canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
   color: #dbe3f7; background: rgba(14, 17, 26, 0.78);
   border: 1px solid rgba(255, 255, 255, 0.13); border-radius: 9px;
   backdrop-filter: blur(7px);
-  transition: transform 0.08s, border-color 0.12s, background 0.12s, box-shadow 0.12s;
+  transition: transform 0.08s, opacity 0.18s, border-color 0.12s, background 0.12s, box-shadow 0.12s;
 }
 .chord-card .cc-head { display: flex; align-items: center; justify-content: space-between; width: 100%; gap: 4px; }
 .chord-card .cc-deg { font-size: 10px; font-weight: 800; color: #8b95b3; letter-spacing: 0.3px; }
@@ -321,6 +384,43 @@ canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
 }
 .chord-card.now .cc-key { display: none; }
 .chord-card.now .cc-now { display: inline-flex; }
+/* В пьесе та же клавиша карточки показывает одну цель: «сейчас» у текущего
+   такта и «дальше» у следующего. Это единственное место подсказки, поэтому
+   верхний HUD больше не дублирует ступени. */
+.chord-card .cc-cue {
+  display: none; align-items: center; justify-content: center;
+  padding: 1px 4px; border-radius: 3px;
+  font-size: 8.5px; font-weight: 900; line-height: 1.1; letter-spacing: 0;
+  color: #10131d; background: #6bdfff; box-shadow: 0 0 8px rgba(107, 223, 255, 0.5);
+  white-space: nowrap;
+}
+body.form-mode #chordPad .chord-card .cc-now { display: none; }
+body.form-mode #chordPad .chord-card.form-current .cc-key,
+body.form-mode #chordPad .chord-card.form-next .cc-key { display: none; }
+body.form-mode #chordPad .chord-card.form-current .cc-cue,
+body.form-mode #chordPad .chord-card.form-next .cc-cue { display: inline-flex; }
+body.form-mode #chordPad .chord-card.form-current .cc-cue {
+  background: #6bdfff; box-shadow: 0 0 10px rgba(107, 223, 255, 0.55);
+}
+body.form-mode #chordPad .chord-card.form-next .cc-cue {
+  background: rgba(255, 209, 102, 0.12); color: #f0d79a;
+  border: 1px solid rgba(255, 209, 102, 0.38); box-shadow: none;
+}
+body.form-mode #chordPad .chord-card.form-current.form-hit .cc-cue {
+  background: #74cc3d; box-shadow: 0 0 10px rgba(116, 204, 61, 0.5);
+}
+/* Звучащий «не тот» аккорд не должен спорить с целью такта: в пьесе маркер
+   «сейчас» остаётся только у текущей цели, а не у любой сыгранной карточки. */
+body.form-mode #chordPad .chord-card.now:not(.form-current) {
+  border-color: rgba(255, 255, 255, 0.13); background: rgba(14, 17, 26, 0.78);
+  box-shadow: none;
+}
+body.form-mode #chordPad .chord-card.now:not(.form-current) .cc-deg {
+  color: #8b95b3;
+}
+/* Комбо-галочки и рамка шага комбо в пьесе молчат: их роль играет цель такта. */
+body.form-mode #chordPad .chord-card.done { border-color: rgba(255, 255, 255, 0.13); }
+body.form-mode #chordPad .chord-card.done::after { display: none; }
 .chord-card .cc-name {
   font-size: 11px; font-weight: 800; white-space: nowrap; letter-spacing: 0.1px;
   color: #eef3ff;
@@ -413,6 +513,7 @@ canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
 }
 .km-item {
   width: 120px; flex: none; display: flex; justify-content: center;
+  transition: opacity 0.18s;
 }
 .km-board {
   position: relative; display: flex; width: 104px; height: 19px;

@@ -38,7 +38,7 @@
 | `audio` | синтез и тракт | `initAudio`, `makeLimiterCurve`, `bell`, `noteChordPlan`, `noteChord`, `scheduleNoteChord`, `cancelPendingNoteChord`, `echoNote`, `pianoPlan`, `pianoNote`, `pianoRelease`, `pianoPedalUp`, `pianoAllOff`, `audioLatencyMs`, `holdStart/Stop`, `bass`, `drumHit`, `drumPlan`, `DRUM_TIMBRES`, `PIANO_TIMBRE`, `audioCaptureStream`, `releaseAudioCapture` |
 | `transport` | часы необязательной формы | `Transport.start/update/pause/resume/stop`, `beatsPerBar`, `countInBeats`, `setBpm`, `setMetronome` |
 | `groove` | необязательный грув (барабаны) | `Groove` (`on`, `preview`, `setOn`, `startPreview`, `setPattern`, `setBpm`, `update`, `setPaused`, `paint`, `statusText`, `_clockSource`, `bpm`, `meter`), `toggleGroove`, `groovePattern`, `grooveSteps`, `groovePlan`, `GROOVE_LANES` |
-| `composition` | драматургия и очки пьесы | `Composition.start/stop/restart`, `sectionForBar`, `targetForBar`, `onBeat`, `onNote`, `onChord`, `finishPiece` |
+| `composition` | драматургия и очки пьесы | `Composition.start/stop/restart`, `sectionForBar`, `targetForBar`, `nextTargetForBar`, `prepWindowOpen`, `nextCueOpen`, `onBeat`, `onNote`, `onChord`, `finishPiece` |
 | `scene` | канвасы, семь шаров, частицы | `balls`, `buildBalls`, `applyPalette`, `clearPen` |
 | `viz` | геометрия и картинка режима | `VIZ`, `VIZ_ORDER`, `viz()`, `setViz`, `vizDebug` |
 | `game` | правила и счёт | `chordEvent`, `playChordAudio`, `playHarmonic`, `triggerBall`, `pressCode`, `setMode`, `advanceCombo`, `requestAdaptiveAnchor`, `setAdaptiveAnchor`, `resetAdaptive` |
@@ -53,7 +53,7 @@
 | `guide` | инлайн-подсказки: роли нот под бас и следующий аккорд на карточках | `Guide` (`onChord`, `paint`, `state`), `#chordPad .chord-card`, `.cc-note`, `.guide-next`, `CFG.guide` |
 | `ui-panel` | настройки | `bindRange`, `bindSelect`, `bindToggle`, `syncAll`, `togglePedal` |
 | `ui-drawers` | выдвижные панели | `drawers`, `drawerOpen`, `drawerIntro`, `setDrawer`, `toggleDrawer`, `setDrawerIntro`, `initDrawers` |
-| `ui-compose` | HUD/панель формы и результат | `buildFormHud`, `updateFormHUD`, `resetFormHud`, `setFormEnabled`, `showFormResult`, `initCompose` |
+| `ui-compose` | HUD/панель формы и результат | `buildFormHud`, `updateFormHUD`, `paintFormTargets`, `resetFormHud`, `setFormEnabled`, `showFormResult`, `initCompose` |
 | `input` | физический ввод | `runCommand`, `beginFromOverlay`, стартовая проба `INTRO_KEYS`/`introPress`/`introState`/`introStart`, стрелки `←/→` → `setMode`, `↑/↓` → комбо |
 | `midi` | Web MIDI | `Midi`, `MIDI_CONTROLLER`/`MIDI_PIANO`, `resolveEcho` |
 | `render` | кадр | `render`, `fitStage` |
@@ -358,6 +358,28 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
   секции. `targetForBar()` возвращает ступень из `CFG.composition.plans[state.mode]`
   и ищет её в актуальной `diatonicPalette()`, поэтому смена лада/комбо посреди пьесы
   не оставляет цель «из прошлой тональности».
+- **Тёплый план.** Секции используют ступени из того же «тёплого» круга, что
+  `Guide.HOLD_DEGREES`: в мажоре `I vi IV iii ii`, в миноре `i VI iv III`.
+  Доминанта встречается один раз как необязательный шаг, а кода заканчивается
+  плагальным `IV–I`. Поэтому шаги пьесы держатся на общих тонах и мягких
+  медиантах, а не на повторяющемся `V–I`.
+- **Переход такта.** `nextTargetForBar()` возвращает следующую ступень плана.
+  `updateFormHUD()` передаёт её в `paintFormTargets()`: тот ставит `.form-current`
+  на карточку текущей цели и `.form-next` на следующую, а в `.cc-cue` пишет
+  **сейчас** / **дальше** (после попадания — **✓**). Те же классы получают
+  мини-клавиатуры `#keyMap`, поэтому рисунок формы аккорда виден заранее.
+  `body.form-mode` приглушает остальные карточки и гасит конкурирующие маркеры
+  (`now`, `guide-next`, `done`). `body.form-prep` включает тёплую подложку и
+  бейдж **дальше** только во второй половине такта: `nextCueOpen()` открывает
+  визуальную подсказку за `ceil(bpb/2)` доли до границы. Первая половина такта
+  остаётся у текущего аккорда — после **✓** его можно послушать, не торопясь.
+  Верхний HUD показывает только прогресс пьесы, поэтому подсказка «сейчас → дальше»
+  существует в одном месте — внизу сцены, рядом с карточками и руками.
+  `prepWindowOpen()` шире визуального окна: после попадания в цель следующий
+  аккорд можно взять заранее, даже пока бейдж **дальше** скрыт. Такой аккорд
+  запоминается в `state.form.prepared` и на первой доле следующего такта
+  засчитывается как цель (`barTargetHit`, `stats.hits`, `targetBonus`), поэтому
+  новичку не нужно ждать границу и повторять движение.
 - **События.** `chordEvent()` зовёт `Composition.onChord()`, а `triggerBall()` /
   `Midi.noteOn()` — `Composition.onNote()`; оба пути пропускают replay и требуют
   `enabled`, `running`, `phase === 'playing'`. Поэтому аккорд или нота во время
@@ -545,7 +567,10 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
 - **Следующий аккорд.** Из тех же 2–3 ходов выбирается один: цель такта, затем
   `Развить`, `Держать`, `Контраст`. Если его `pcsKey` есть среди пяти карточек,
   карточка получает `.guide-next` с зелёной рамкой и стрелкой; иначе ряд не
-  подсвечивается, чтобы не обещать несуществующую кнопку.
+  подсвечивается, чтобы не обещать несуществующую кнопку. В пьесе
+  `body.form-mode` гасит зелёную рамку Guide: там ту же роль играют
+  `.form-current` / `.form-next` на карточках, чтобы у новичка была одна
+  визуальная иерархия внизу сцены, а не конкурирующие подсказки сверху и снизу.
 - **Слоты.** `Держать тепло` ищет общие тоны, плагальность и медианту в
   «тёплых» ступенях (`I ii iii IV vi` в мажоре, `i III iv VI` в миноре) и не
   предлагает V→I как «правильный» ход. `Развить` ценит `ii/IV→V`, `V→I`,
@@ -841,7 +866,7 @@ mute гасит его, а не `master`. Для рендера видео `audi
   `COMBOS` по id или аккорды), BPM из `rec.bpm`/`rec.form`, размер из
   `form.beatsPerBar`/`beatsPerBar`, тембр из `rec.station.touch` и строка
   `soft brushed drums` / `no drums` из `rec.drums`. Только английский текст, без
-  `undefined`: старые записи получают `C major`, 84 BPM, 4/4, `warm piano`.
+  `undefined`: старые записи получают `C major`, 52 BPM, 4/4, `warm piano`.
   Первый клик **🎛 Suno** копирует промпт и зовёт `startAudioExport(rec,
   {purpose:'suno', onDone})`; WAV и его имя не меняются. После сохранения
   `onDone` получает имя файла, `sunoReady = {id, prompt}` и кнопка становится
@@ -1008,6 +1033,7 @@ Translate через `translate.js` (тот же приём, что в сосе�
 | Громкость барабанов | `P.drumVol` + шина `drumGain` (`audio.js`, `voiceVolume('drum')`) |
 | Новый параметр панели | `DEFAULTS` → разметка `.prow` → `bindRange/bindToggle` |
 | Длина/секции/цели пьесы | `CFG.composition` (`bars`, `sections`, `plans`, бонусы) |
+| Подсказка «сейчас → дальше» | `Composition.nextTargetForBar/nextCueOpen/prepWindowOpen` + `paintFormTargets` (`ui-compose.js`), `.form-current/.form-next/.cc-cue`, `#keyMap`, `state.form.prepared` |
 | Темп, размер, отсчёт, метроном | `P.form*` + `Transport.start/setBpm/setMetronome` |
 | Отсчёт/повтор записи | `P.recCountIn` / `P.recLoop` + `startRecordCountIn()` / `startPlaybackCycle()` |
 | Мелодическая статистика пьесы | `Composition.onNote()` + `state.form.melody` + `showFormResult()` |
@@ -1083,6 +1109,12 @@ Translate через `translate.js` (тот же приём, что в сосе�
 - Форма: `HARMONIA.Composition.start()` → отсчёт, `state.form.phase === 'countin'`,
   затем `state.transport.bar === 1`; сыграть `targetForBar(1)` → `state.form.barTargetHit`;
   проверить финал, `#formResult.show`, блокировку `Esc` и возврат в джем.
+  Шаг `form-cue` проверяет `nextTargetForBar()`, отсутствие старого `#formCue`,
+  бейджи `.cc-cue`: **сейчас** в начале такта, **✓** после попадания без
+  немедленной подсказки, **дальше** только после `nextCueOpen()`. Там же
+  проверяются классы `.form-current` / `.form-next` на мини-клавиатурах,
+  `prepWindowOpen()` и раннее взятие `state.form.prepared` на первой доле
+  следующего такта.
 - Грув: `HARMONIA.Groove.setOn(true)` в джеме → `Groove.hits` растёт; `setPattern('waltz')`
   → `meter() === 3`; старт формы → `_clockSource() === 'form'`, `bpm()` равен
   `Transport.bpm`, `#pGrooveBpm.disabled`; возврат в джем → снова свои часы. Шаги

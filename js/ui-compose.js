@@ -53,6 +53,75 @@ function buildFormBeats() {
   }
 }
 
+function formTargetKey(h) {
+  if (!h) return '';
+  if (h.pcsKey) return h.pcsKey;
+  return Array.isArray(h.pcs) ? h.pcs.slice().sort((a, b) => a - b).join(',') : '';
+}
+// Подпись на карточке переводится сразу, а не ждёт MutationObserver: иначе
+// paintFormTargets() на каждой доле возвращал бы русское слово в английский DOM.
+function formTargetLabel(value) {
+  return typeof I18N !== 'undefined' && I18N.enabled() &&
+    typeof I18N.text === 'function' ? I18N.text(value) : value;
+}
+// Единственная подсказка «сейчас → дальше» живёт на карточках и
+// мини-клавиатурах внизу сцены:
+//   • current — цель звучащего такта, бейдж «сейчас»;
+//   • upcoming — следующая цель, бейдж «дальше»;
+//   • prep — вторая половина такта: у следующей карточки тёплая подложка;
+//   • hit — цель такта уже взята, бейдж «✓».
+// После попадания «дальше» не загорается сразу: первая половина такта остаётся
+// у текущего аккорда, чтобы его можно было послушать. Верхний HUD только
+// показывает прогресс, поэтому взгляд не раздваивается.
+// Ничего не звучит и не начисляется: paint только показывает состояние.
+function paintFormTargets(target, next, phase) {
+  const playing = phase === 'playing';
+  const countin = phase === 'countin';
+  const current = playing || phase === 'paused' ? target : null;
+  const upcoming = countin || playing ? (countin ? target : next) : null;
+  const currentKey = formTargetKey(current);
+  const nextKey = formTargetKey(upcoming);
+  const same = !!nextKey && nextKey === currentKey;
+  const hit = !!state.form.barTargetHit;
+  const cueOpen = typeof Composition !== 'undefined' &&
+    typeof Composition.nextCueOpen === 'function' && Composition.nextCueOpen();
+  const showNext = !!upcoming && !same && (countin || (playing && cueOpen));
+  document.body.classList.toggle('form-prep', showNext);
+
+  if (chordCards.length) {
+    chordCards.forEach(card => {
+      const key = card.dataset.pcsKey || '';
+      const isCurrent = !!currentKey && key === currentKey;
+      const isNext = !!nextKey && key === nextKey && !isCurrent;
+      const showCurrent = isCurrent && (playing || phase === 'paused');
+      card.classList.toggle('form-current', showCurrent);
+      card.classList.toggle('form-next', isNext && showNext);
+      card.classList.toggle('form-hit', isCurrent && hit && playing);
+      let label = '';
+      if (showCurrent) label = hit && playing ? '✓' : 'сейчас';
+      else if (isNext && showNext) label = 'дальше';
+      card.dataset.formCue = label === '✓' ? 'hit' :
+        label === 'сейчас' ? 'now' : label === 'дальше' ? 'next' : '';
+      const cue = card.querySelector('.cc-cue');
+      const shown = label ? formTargetLabel(label) : '';
+      if (cue && cue.textContent !== shown) cue.textContent = shown;
+    });
+  }
+  const kmHost = $('keyMap');
+  if (kmHost) {
+    const currentPcs = current && Array.isArray(current.pcs)
+      ? current.pcs.slice().sort((a, b) => a - b).join(',') : '';
+    const nextPcs = upcoming && Array.isArray(upcoming.pcs)
+      ? upcoming.pcs.slice().sort((a, b) => a - b).join(',') : '';
+    kmHost.querySelectorAll('.km-item').forEach(item => {
+      const key = item.dataset.pcs || '';
+      item.classList.toggle('form-current', !!currentPcs && key === currentPcs);
+      item.classList.toggle('form-next',
+        !!nextPcs && key === nextPcs && key !== currentPcs && showNext);
+    });
+  }
+}
+
 function paintFormToggle() {
   const on = !!(state.form && state.form.enabled);
   const btn = $('formBtn');
@@ -80,21 +149,25 @@ function updateFormHUD() {
   if (!hud) return;
   const on = !!(state.form && state.form.enabled);
   hud.classList.toggle('on', on);
+  document.body.classList.toggle('form-mode', on);
   if (!on) {
     const offStatus = $('formStatus');
     if (offStatus) offStatus.textContent = 'Свободный джем. Форма включится только по кнопке.';
+    paintFormTargets(null, null, 'off');
     return;
   }
 
   const phase = state.form.phase;
   const bpb = Number(state.transport.beatsPerBar) === 3 ? 3 : (Number(P.formMeter) === 3 ? 3 : 4);
   const totalBars = Composition.totalBars();
+  const cueBar = Math.max(1, state.form.bar || 1);
+  const cueTarget = Composition.targetForBar(phase === 'countin' ? 1 : cueBar);
+  const cueNext = phase === 'playing' ? Composition.nextTargetForBar(cueBar) : null;
   if (formBeatCells.length !== bpb) buildFormBeats();
 
   const tempo = $('formTempo');
   const pos = $('formPos');
   const secEl = $('formSection');
-  const targetEl = $('formTarget');
   const status = $('formStatus');
   const awardEl = $('formAward');
 
@@ -108,26 +181,21 @@ function updateFormHUD() {
       Number(Transport.countInBeats) || (Number(P.formCountIn) || 1) * bpb);
     if (pos) pos.textContent = `Отсчёт ${count}/${totalCount}`;
     if (secEl) secEl.textContent = 'Отсчёт';
-    if (targetEl) targetEl.textContent = 'приготовиться';
     if (status) status.textContent = `Отсчёт ${count}/${totalCount}. Пьеса начнётся с такта 1.`;
   } else if (phase === 'paused') {
     if (pos) pos.textContent = `Пауза · такт ${state.form.bar}/${totalBars}`;
     if (secEl) secEl.textContent = Composition.sectionForBar(Math.max(1, state.form.bar)).label;
-    if (targetEl) targetEl.textContent = 'пауза';
     if (status) status.textContent = `Пауза · такт ${state.form.bar}/${totalBars}. Продолжение — с того же места.`;
   } else if (phase === 'done') {
     if (pos) pos.textContent = `${totalBars}/${totalBars} · финал`;
     if (secEl) secEl.textContent = 'Кода';
-    if (targetEl) targetEl.textContent = 'пьеса сыграна';
     if (status) status.textContent = `Пьеса завершена · форма +${state.form.points}. Можно начать ещё раз или вернуться в джем.`;
   } else {
     const bar = Math.max(1, state.form.bar || 1);
     const sec = Composition.sectionForBar(bar);
-    const target = Composition.targetForBar(bar);
     if (pos) pos.textContent = `Такт ${bar}/${totalBars} · ${state.form.beat || 1}/${bpb}`;
     if (secEl) secEl.textContent = sec.label + (state.form.barTargetHit ? ' ✓' : '');
-    if (targetEl) targetEl.textContent = target ? `цель ${target.degree} · ${target.name}` : '';
-    if (status) status.textContent = `Пьеса: такт ${bar}/${totalBars} · ${sec.label} · цель ${target ? target.degree : '—'}.`;
+    if (status) status.textContent = `Пьеса: такт ${bar}/${totalBars} · ${sec.label}.`;
   }
 
   if (awardEl) {
@@ -152,6 +220,7 @@ function updateFormHUD() {
   formBeatCells.forEach((dot, i) => {
     dot.classList.toggle('on', phase !== 'done' && phase !== 'countin' && i < (state.form.beat || 0));
   });
+  paintFormTargets(cueTarget, cueNext, phase);
 }
 
 

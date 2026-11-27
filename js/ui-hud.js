@@ -153,7 +153,7 @@ function buildChordPad() {
     return `<button class="chord-card${h.tonic ? ' tonic' : ''}" data-code="${h.code}" ` +
       `data-deg="${h.degree.toLowerCase()}" data-root-pc="${h.rootPc == null ? '' : h.rootPc}" ` +
       `data-pcs-key="${pcsKey}" data-base-title="${escHtml(title)}" title="${escHtml(title)}">` +
-      `<span class="cc-head"><span class="cc-deg">${h.degree}</span><span class="cc-key">${KEY_CAP[h.code]}</span><span class="cc-now">сейчас</span></span>` +
+      `<span class="cc-head"><span class="cc-deg">${h.degree}</span><span class="cc-key">${KEY_CAP[h.code]}</span><span class="cc-now">сейчас</span><span class="cc-cue" aria-hidden="true"></span></span>` +
       `<span class="cc-name">${chordNotesHtml(h)}</span>` +
     `</button>`;
   }).join('');

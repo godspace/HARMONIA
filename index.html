@@ -167,14 +167,16 @@
         <!-- Пьеса — необязательный слой. В свободном джеме блок скрыт целиком. -->
         <div id="formHud" class="form-hud" role="group" aria-label="Ход пьесы">
           <div class="form-head">
-            <span id="formTempo">84 BPM · 4/4</span>
+            <span id="formTempo">52 BPM · 4/4</span>
             <span id="formPos">Такт 1/16</span>
           </div>
           <div class="form-sections" id="formSections"></div>
           <div class="form-bars" id="formBars" aria-hidden="true"></div>
+          <!-- Подсказка «сейчас → дальше» живёт только на карточках аккордов
+               и мини-клавиатурах внизу сцены. Верхний HUD показывает прогресс
+               пьесы, но не повторяет ступени: у новичка одно место для цели. -->
           <div class="form-foot">
             <span id="formSection" class="form-sec">Интро</span>
-            <span id="formTarget" class="form-target">цель I</span>
             <span id="formBeats" class="form-beats" aria-hidden="true"></span>
           </div>
           <div id="formAward" class="form-award"></div>
@@ -335,7 +337,7 @@
     <details class="pg" id="formPg" open>
       <summary>Форма · пьеса</summary>
       <button class="tg" id="formToggle" aria-pressed="false">Форма: свободный джем</button>
-      <div class="prow"><label for="formBpm">Темп</label><input type="range" id="formBpm" min="40" max="180" step="2" value="84"><output id="formBpmOut"></output></div>
+      <div class="prow"><label for="formBpm">Темп</label><input type="range" id="formBpm" min="40" max="180" step="2" value="52"><output id="formBpmOut"></output></div>
       <div class="prow"><label for="formMeter">Размер</label>
         <select id="formMeter"><option value="4" selected>4/4</option><option value="3">3/4</option></select>
       </div>

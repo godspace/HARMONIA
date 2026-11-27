@@ -10,15 +10,17 @@ $post = @'
   var st = HARMONIA.state;
   // Показываем smart-окно от доминанты, как после сыгранного V.
   HARMONIA.setAdaptiveAnchor(4);
-  st.transport.bpm = 84;
+  st.transport.bpm = 52;
   st.transport.beatsPerBar = 4;
   st.form.enabled = true;
   st.form.running = true;
   st.form.phase = 'playing';
-  st.form.bar = 9;
-  st.form.beat = 2;
-  st.form.sectionId = 'b';
-  st.form.sectionLabel = 'B';
+  // Такт 13 — единственная V в «тёплом» плане; вторая половина такта
+  // показывает одновременно ✓ у текущей цели и тихое «дальше» без рамки.
+  st.form.bar = 13;
+  st.form.beat = 3;
+  st.form.sectionId = 'ap';
+  st.form.sectionLabel = 'A′';
   st.form.barTargetHit = true;
   st.form.barChord = { degree: 'V', name: 'G-B-D', hint: '\u0434\u043e\u043c\u0438\u043d\u0430\u043d\u0442\u0430', tonic: false, rootPc: 7, pcsKey: '2,7,11' };
   st.form.points = 18;
