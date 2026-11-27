@@ -514,27 +514,19 @@ var I18N = (function () {
     'лад / комбо': 'mode / combo',
     'Пробел — начать игру; в игре — новое комбо после 300 очков':
       'Space — start the game; in play — a new combo after 300 points',
-    // MIDI-знакомство: расшифровка обозначений и три аккорда до старта.
-    'Сначала — три аккорда': 'First, three chords',
-    'Сыграйте тонику, субдоминанту и доминанту в любой октаве. Экран объяснит цвета и значки, которые встретятся в игре.':
-      'Play the tonic, subdominant and dominant in any octave. This screen explains the colours and symbols you will see in the game.',
-    'Как читать подсказки': 'How to read the cues',
-    'Цвета ролей нот': 'Note role colours',
-    'Корень — золотой, тоны аккорда — зелёные, мягкая краска — янтарная, трение — розовое, ноты вне лада — прохладные. Знак ♯ или ♭ стоит рядом с нотой и не теряется.':
-      'The root is gold, chord tones are green, a soft colour is amber, tension is rose, and notes outside the key are cool blue. The ♯ or ♭ sign sits next to its note and stays visible.',
-    'Три аккорда для старта': 'Three chords to start',
-    'Если аккорд не тот, ничего не сломается: просто попробуйте снова.':
-      'A wrong chord breaks nothing: just try again.',
+    // MIDI-знакомство: один экран с карточками и разбором выбранной.
     'Пропустить знакомство': 'Skip the introduction',
     'Играть с компьютерной клавиатуры': 'Play on the computer keyboard',
     'Начать': 'Start',
     'сейчас': 'now',
-    '— взятый аккорд на карточке': '— the chord currently playing',
-    '— следующий ход': '— the suggested next move',
-    '— возврат в тонику': '— a return to the tonic',
     'корень': 'root',
-    'Все три аккорда взяты — входим в симулятор…':
-      'All three chords are in — entering the simulator…',
+    'Жду первую ноту…': 'Waiting for the first note…',
+    'следующий': 'next',
+    'Начать игру': 'Start the game',
+    'Все три аккорда взяты. Нажмите «Начать игру» или Space.':
+      'All three chords are in. Press “Start the game” or Space.',
+    'MIDI работает: программа слышит ноты.': 'MIDI works: the app hears notes.',
+    'Взято целевых аккордов': 'Target chords taken',
     'MIDI отключена': 'MIDI disconnected',
     'MIDI отключена — подключите клавиатуру снова.':
       'MIDI disconnected — reconnect the keyboard.',
@@ -543,6 +535,80 @@ var I18N = (function () {
     '← — мажор': '← — major',
     '↓ — предыдущее комбо': '↓ — previous combo',
     '→ — минор': '→ — minor',
+    // Один экран MIDI-знакомства: карточки, разбор и обратная связь.
+    'Карточка аккорда — это подсказка': 'A chord card is a clue',
+    'Нажмите на карточку, чтобы разобрать её знаки. Затем сыграйте три аккорда — экран объяснит, что изменилось.':
+      'Click a card to unpack its symbols. Then play three chords — the screen explains what changed.',
+    'Три аккорда для входа': 'Three chords to get in',
+    'Обозначения состояний': 'State markers',
+    '✓ взят': '✓ done',
+    'взят': 'done',
+    'Ноты — в любой октаве. Аккорд — это три разные ноты одновременно.':
+      'Notes in any octave. A chord is three different notes at once.',
+    'Разбор карточки': 'Card breakdown',
+    'Нажмите на карточку': 'Click a card',
+    'Карточка показывает ступень, ноты и их роли. Выберите любую — здесь появится объяснение.':
+      'A card shows the degree, its notes and their roles. Pick any card — the explanation appears here.',
+    'Мини-клавиатура показывает форму аккорда; играйте в любой октаве. Буквы Q/W/E/R/F — только для компьютера.':
+      'The mini keyboard shows the chord shape; play in any octave. The Q/W/E/R/F letters are for the computer keyboard only.',
+    'Сыграйте аккорд на MIDI — здесь появится разбор результата.':
+      'Play a chord on the MIDI keyboard — the result appears here.',
+    'Сыграйте три аккорда. Карточки можно нажимать, чтобы разобрать их знаки.':
+      'Play three chords. Click any card to unpack its symbols.',
+    'Выбрали': 'You picked',
+    'Этот аккорд уже взят.': 'This chord is already done.',
+    'Это следующий шаг: сыграйте три ноты одновременно.':
+      'This is the next step: play three notes together.',
+    'Сыграйте три ноты одновременно — аккорд засчитается.':
+      'Play three notes together — the chord will count.',
+    'Одна нота': 'One note',
+    'Для аккорда нужны ещё две разные ноты.':
+      'A chord needs two more different notes.',
+    'Две ноты': 'Two notes',
+    'Добавьте третью — и экран проверит трезвучие.':
+      'Add the third — and the screen checks the triad.',
+    'Прозвучал': 'Sounding',
+    'Для входа нужны': 'To get in, play',
+    'Попробуйте': 'Try',
+    'Взято': 'Done',
+    'Осталось': 'Left',
+    'Три ноты, но это не трезвучие: нужны корень, терция и квинта.':
+      'Three notes, but not a triad: it needs a root, a third and a fifth.',
+    'Сыграйте оставшийся:': 'Play the remaining one:',
+    'Ноты сброшены. Сыграйте аккорд снова.':
+      'Notes cleared. Play the chord again.',
+    'Ступень': 'Degree',
+    'Состав': 'Shape',
+    'Состояние': 'State',
+    'аккорд лада': 'a chord of the key',
+    'Корень + терция + квинта: три разные ноты.':
+      'Root + third + fifth: three different notes.',
+    'Этот аккорд уже взят. Можно повторить в любой октаве.':
+      'This chord is done. You can play it again in any octave.',
+    'Следующий шаг: сыграйте три ноты одновременно.':
+      'Next step: play three notes together.',
+    'Можно выбрать и разобрать в любой момент.':
+      'You can select and unpack it at any time.',
+    'Три ноты:': 'Three notes:',
+    'Золотая — корень, зелёные — тоны аккорда.':
+      'Gold is the root, green are the chord tones.',
+    'Играйте их одновременно в любой октаве.':
+      'Play them together in any octave.',
+    'Тоника: дом. С неё начинают и к ней возвращаются.':
+      'Tonic: home. You start here and return here.',
+    'Субдоминанта: уводит от дома и готовит доминанту.':
+      'Subdominant: leaves home and prepares the dominant.',
+    'Доминанта: напряжение, которое тянет назад в тонику.':
+      'Dominant: tension that pulls back to the tonic.',
+    'Супертоника: мягкий шаг к доминанте.':
+      'Supertonic: a soft step towards the dominant.',
+    'Медианта: мягкая тень между тоникой и субдоминантой.':
+      'Mediant: a soft shadow between tonic and subdominant.',
+    'Субмедианта: мягкий уход, из которого легко вернуться.':
+      'Submediant: a soft detour that is easy to return from.',
+    'Аккорд лада: помогает услышать, как работает гармония.':
+      'A chord of the key: helps you hear how harmony works.',
+
     // Подсказки на схеме (data-tip): клавиша и её роль одной строкой.
     'Enter — барабаны: включить или выключить грув':
       'Enter — drums: turn the groove on or off',

@@ -44,7 +44,7 @@
 | `game` | правила и счёт | `chordEvent`, `playChordAudio`, `playHarmonic`, `triggerBall`, `pressCode`, `setMode`, `advanceCombo`, `requestAdaptiveAnchor`, `setAdaptiveAnchor`, `resetAdaptive` |
 | `listen` | слух приложения | `Heard` (`notes`, `latched`, `sustain`, `recognize()`) |
 | `ui-hud` | отображение состояния | `updateHUD`, `updateHomeIndicator`, `renderPalette`, `renderHint`, `updateHeardChip`, `paintSoundChip`, `renderKeyMap`, `noteLabelHtml`, `paintNowChordCards` |
-| `midi-intro` | стартовое знакомство для MIDI: легенда и три аккорда | `MidiIntro` (`open`, `close`, `enter`, `skip`, `deviceLost`, `noteOn/off`, `panic`, `refresh`, `state`), `#midiCoach` |
+| `midi-intro` | стартовое знакомство для MIDI: живые карточки, разбор и три аккорда | `MidiIntro` (`open`, `go`, `close`, `enter`, `skip`, `deviceLost`, `noteOn/off`, `panic`, `refresh`, `state`), `#midiCoach`, `#miTargets`, `#miTeach` |
 | `recorder` | запись, автозапись станции, прослушивание, MIDI и общие имена файлов | `recordChord/Note`, `recordDrum/recordDrumAt`, `recordingTimeline`, `startRecording`, `stopRecording`, `autoRecordStart/Finalize/Status`, `setAutoRecord`, `playSelected`, `deleteSelectedRecording`, `recordingById`, `recordingTonic/Title/FileName`, `buildMidiFile`, `midiRecordingEvents`, `exportSelectedMidi` |
 | `video` | рендер записи в WebM | `startVideoExport(rec)`, `cancelVideoExport`, `videoExportStatus`, `videoSupported`, `videoFileName`, `videoDuration`, `videoSize`, `videoCaption`, `copyVideoCaption`, `videoLegacyWarning`, `videoMediaElapsed`, `videoStepVisual`, `videoMarkTonic`, `videoSyncVisual`, `videoFrameStep`, `paintVideoFrame` |
 | `audio-export` | сохранение записи в WAV | `startAudioExport(rec, {purpose, onDone})`, `cancelAudioExport`, `audioExportStatus` (`id`, `purpose`), `audioSupported`, `audioFileName`, `audioDuration`, `audioPcmToWav`, `#recAudio`/`#researchAskAudio`/`#audioExport` |
@@ -140,12 +140,19 @@ updateHUD() + updateFormHUD() + render()  (один rAF-цикл, dt = 0 на п
   MIDI-нота, запись и пьеса тоже входят через `beginFromOverlay()` — это
   единственная точка старта сессии. Подключённая MIDI-клавиатура отменяет саму
   пробу компьютерных клавиш, но не знакомство: `Midi.refresh()` прогревает
-  аудио и зовёт `MidiIntro.open()`. Экран `#midiCoach` объясняет цвета нот и
-  бейдж «сейчас», затем ждёт три аккорда `I–IV–V` (в миноре `i–iv–V`). Ноты до
-  старта идут в `MidiIntro.noteOn/off`, а не в `Heard`, запись или счёт; после
-  третьего аккорда кнопка **Начать** (или Space) вызывает
-  `beginFromOverlay()`. Пропуск и возврат к компьютерной клавиатуре — явные
-  кнопки, `Esc` тоже пропускает. `startSession()` снимает режим пробы
+  аудио и зовёт `MidiIntro.open()`. Экран `#midiCoach` — один экран без шагов:
+  слева сетка `#miTargets` из трёх живых карточек `I–IV–V` (в миноре `i–iv–V`)
+  с мини-клавиатурой и состояниями **следующий**, **сейчас**, **✓ взят**;
+  справа панель `#miTeach` разбирает выбранную карточку — ступень, состав,
+  состояние, ноты и роли. Клик, тап, Enter или Space выбирают карточку.
+  Статус `#miCheck` и полоса `#miLive` реагируют на первую же ноту, а полное
+  трезвучие в любой октаве засчитывает цель и двигает прогресс `0 / 3`; две
+  ноты и чужая гармония ничего не ломают. Ноты до старта идут в
+  `MidiIntro.noteOn/off`, а не в `Heard`, запись или счёт.
+  После третьего аккорда автоперехода нет: кнопка **Начать игру** (или Space)
+  явно вызывает `beginFromOverlay()`, поэтому новичок успевает прочитать
+  «готово». Пропуск и возврат к компьютерной клавиатуре — явные кнопки, `Esc`
+  тоже пропускает. `startSession()` снимает режим пробы
   (`setDrawerIntro(false)`): панели остаются свёрнутыми, а у краёв сцены
   появляются табы — игрок сразу играет и открывает меню только по необходимости.
 - `drawers` (`ui-drawers.js`) — единственный источник правды о выдвижных панелях:
@@ -1051,8 +1058,12 @@ Translate через `translate.js` (тот же приём, что в сосе�
   появляется `.ready` с подсвеченным `Space` и подсказкой `.ip-after`, а сессия
   стартует после пробела (`.fade`, затем `CFG.introFadeMs`). Шаг `chord-now`
   проверяет бейдж **сейчас** на звучащей карточке, `aria-current` и отдельный
-  `.note-acc` для `♯/♭`, а `midi-intro` — три цели `I,IV,V`, распознавание
-  только полного трезвучия и вход в сессию после третьего аккорда. Шаги `default-sound`,
+  `.note-acc` для `♯/♭`, а `midi-intro` — три карточки с тремя клавишами,
+  `aria-current` у выбранной карточки и `aria-pressed` только у взятых,
+  обновление `#miTeachTitle` и `#miFeedback` по клику, реакцию `#miCheck` и
+  `#miLive` на ноту, прогресс `0 / 3 → 1 / 3 → ready`, три цели `I,IV,V`,
+  запрет входа до третьего аккорда, распознавание только полного трезвучия и
+  явный вход в сессию. Шаги `default-sound`,
   `melody-layout`,
   `space-combo-advance`, `smart-hand-window`, `smart-resume-window`,
   `diminished-anchor`, `smart-form-target`, `adaptive-defer` и

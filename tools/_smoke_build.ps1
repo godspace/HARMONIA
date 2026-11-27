@@ -2595,7 +2595,7 @@ $post = @'
 
   step('midi-intro', function () {
     // Последний шаг: подменяем только имя устройства, чтобы проверить путь
-    // «MIDI подключён → знакомство с обозначениями → три аккорда → сессия».
+    // «MIDI подключён → один экран с карточками → три аккорда → сессия».
     // Реальный Web MIDI в headless-прогоне не нужен.
     var H = HARMONIA;
     var oldDev = H.Midi.devName;
@@ -2620,6 +2620,45 @@ $post = @'
       if (st.targets.map(function (t) { return t.degree; }).join(',') !== 'I,IV,V') {
         throw new Error('wrong start chords: ' + st.targets.map(function (t) { return t.degree; }));
       }
+      // Один экран: карточки, разбор и обратная связь видны сразу, шагов нет.
+      var cards = $('miTargets').querySelectorAll('.mi-target');
+      if (cards.length !== 3) throw new Error('the card grid did not render three targets');
+      if (cards[0].querySelectorAll('.km-key.on').length !== 3) {
+        throw new Error('a target card does not show three chord keys');
+      }
+      if (!/I/.test($('miTeachTitle').textContent)) {
+        throw new Error('the explanation panel did not select the first chord');
+      }
+      if ($('miProgress').textContent.replace(/\s/g, '') !== '0/3') {
+        throw new Error('the chord progress did not start at 0 / 3');
+      }
+      if ($('miStart').hidden || !$('miStart').disabled) {
+        throw new Error('the Start button must wait for all three chords');
+      }
+      if (cards[0].getAttribute('aria-current') !== 'true') {
+        throw new Error('the first card must be marked as selected');
+      }
+      if (cards[0].getAttribute('aria-pressed') !== 'false') {
+        throw new Error('an untouched card must not report itself as done');
+      }
+      // Карточка — кнопка: клик выбирает её и переписывает разбор.
+      cards[1].click();
+      if (!/IV/.test($('miTeachTitle').textContent) || !/\bIV\b/.test($('miFeedback').textContent)) {
+        throw new Error('clicking a card did not update the explanation');
+      }
+      if (cards[1].getAttribute('aria-current') !== 'true' ||
+        cards[0].hasAttribute('aria-current')) {
+        throw new Error('card selection did not move aria-current');
+      }
+      // Нота включает «Слышу» и зелёный статус, но аккорд не засчитывает.
+      H.Midi.noteOn(60, 0.8);
+      if (!H.MidiIntro.state().heardAny || !$('miCheck').classList.contains('ok')) {
+        throw new Error('the connection check did not react to a note');
+      }
+      if (!$('miLive').classList.contains('live')) {
+        throw new Error('the live note bar stayed idle');
+      }
+      H.Midi.noteOff(60);
       // Две ноты ещё не трезвучие: цель не должна закрыться раньше времени.
       var first = st.targets[0];
       H.Midi.noteOn(60 + first.pcs[0], 0.8);
@@ -2632,13 +2671,36 @@ $post = @'
       if (!H.MidiIntro.state().targets[0].done) {
         throw new Error('the first target chord was not recognised');
       }
+      if ($('miProgress').textContent.replace(/\s/g, '') !== '1/3') {
+        throw new Error('the first chord did not move the progress');
+      }
+      var afterOne = $('miTargets').querySelectorAll('.mi-target');
+      if (!afterOne[0].classList.contains('done') ||
+        afterOne[0].getAttribute('aria-pressed') !== 'true') {
+        throw new Error('the taken target did not get the done state');
+      }
+      if (afterOne[1].getAttribute('aria-pressed') !== 'false') {
+        throw new Error('a pending target reported itself as done');
+      }
       // Остальные два аккорда — тем же путём, в любой октаве.
       st.targets.slice(1).forEach(function (t) {
         t.pcs.forEach(function (pc) { H.Midi.noteOn(72 + pc, 0.8); });
         t.pcs.forEach(function (pc) { H.Midi.noteOff(72 + pc); });
       });
       if (!H.MidiIntro.completed) throw new Error('three chords did not complete the introduction');
+      if ($('miProgress').classList.contains('ready') === false) {
+        throw new Error('the completed progress lost its ready state');
+      }
       if ($('miStart').disabled) throw new Error('the Start button stayed disabled');
+      var doneCards = $('miTargets').querySelectorAll('.mi-target.done');
+      if (doneCards.length !== 3) {
+        throw new Error('not every target card shows the done state');
+      }
+      if (Array.prototype.some.call(doneCards, function (el) {
+        return el.getAttribute('aria-pressed') !== 'true';
+      })) {
+        throw new Error('a done card does not report aria-pressed');
+      }
       $('miStart').click();
       if (!H.state.started || !H.state.running) {
         throw new Error('the MIDI introduction did not enter the simulator');

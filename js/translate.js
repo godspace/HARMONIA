@@ -100,7 +100,13 @@ var Translate = (function () {
     // пересобираются в C-D-E, и словарь переводит уже их. Потом — сам словарь.
     if (typeof applyLanguageNotation === 'function') applyLanguageNotation(code);
     if (typeof refreshNotation === 'function') refreshNotation();
-    return I18N.enable(code);
+    const ok = I18N.enable(code);
+    // Экран MIDI-знакомства собирает подписи и ноты из строк: после смены
+    // языка его нужно перерисовать, иначе до первой ноты останутся старые.
+    if (ok && typeof MidiIntro !== 'undefined' && MidiIntro.active) {
+      MidiIntro.refresh();
+    }
+    return ok;
   }
 
   function readCookie(name) {
